@@ -270,6 +270,12 @@ confirmation — signing back in is cheap and nothing is lost).
 
 ## 11. Known issues and risks
 
+- **CI fixed after the first push**: `supabase status -o env` double-quotes values and
+  `$GITHUB_ENV` keeps the quotes, so `SUPABASE_SERVICE_ROLE_KEY` arrived as `"eyJ…"` and every
+  `authAdmin()` call failed with "could not base64 decode header … byte 0" (latent since Phase 00;
+  anon-only tests were unaffected). The workflow now `eval`s the lines and asserts both keys are
+  non-empty. Reproduced and verified locally.
+
 - **Per-IP limits are skipped for loopback.** Correct behind Vercel/any proxy that sets
   `x-forwarded-for`; on a bare deployment without that header every client shares the `unknown`
   bucket (over-limiting, never under). Revisit with the shared store in Phase 12.

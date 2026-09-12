@@ -59,12 +59,12 @@ jobs:
       - name: start local Supabase
         run: pnpm supabase:start
       - name: export Supabase keys
+        # `-o env` double-quotes values and $GITHUB_ENV keeps them literally, so strip the quotes.
         run: |
-          supabase status -o env | grep -E '^(ANON_KEY|SERVICE_ROLE_KEY)=' >> "$GITHUB_ENV"
-      - name: set key env vars
-        run: |
+          eval "$(supabase status -o env | grep -E '^(ANON_KEY|SERVICE_ROLE_KEY)=')"
           echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY" >> "$GITHUB_ENV"
           echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY" >> "$GITHUB_ENV"
+          test -n "$ANON_KEY" && test -n "$SERVICE_ROLE_KEY"
       - run: pnpm db:migrate
       - run: pnpm db:seed
       - run: pnpm test
