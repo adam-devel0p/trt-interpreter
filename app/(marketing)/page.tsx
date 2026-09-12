@@ -34,7 +34,7 @@ export default function LandingPage() {
         </p>
         <div className="mt-8">
           <Button asChild size="lg">
-            <Link href="/home">Start your first reading</Link>
+            <Link href="/sign-up">Start your first reading</Link>
           </Button>
         </div>
       </main>

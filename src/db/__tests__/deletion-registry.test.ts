@@ -9,9 +9,11 @@ describe('deletion registry', () => {
   });
 
   it('reads Drizzle tables structurally (sanity check on the detector)', () => {
-    expect(coveredTables()).toEqual(new Set(['jobs', 'smoke_notes']));
+    expect(coveredTables()).toEqual(
+      new Set(['jobs', 'profiles', 'user_flags', 'reminder_settings']),
+    );
     // Simulate a new user-owned table that nobody registered.
-    const fake = { ...schema, ghost: cloneWithName(schema.smokeNotes, 'ghost_table') };
+    const fake = { ...schema, ghost: cloneWithName(schema.reminderSettings, 'ghost_table') };
     expect(userOwnedTablesMissingFromRegistry(fake)).toEqual(['ghost_table']);
   });
 

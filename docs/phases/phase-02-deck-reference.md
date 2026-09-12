@@ -25,6 +25,19 @@ Tables per [../DATA_MODEL.md](../DATA_MODEL.md#deck-reference-layer--phase-02). 
 world-readable to `authenticated` **and** `anon` (public pages), writable only by service role. Indexes
 for `(deck_id, sort_order)`, trigram on `cards.name` and `card_aliases.alias`.
 
+From Phase 01 (see [completed/phase-01-report.md](completed/phase-01-report.md) §13):
+- Add the FK `profiles.default_deck_id → decks(id)` (column exists, unconstrained) and add `decks`,
+  `cards`, `card_archetypes`, `card_aliases`, built-in `spreads` to `REFERENCE_TABLES` in
+  `src/domain/privacy/deletionRegistry.ts` so the lint gate does not flag them.
+- Enable the two "Deck preferences" rows in `app/(app)/profile/page.tsx` (replace `comingIn` with
+  real controls: default deck, reversals on/off) writing through `updateProfile()` in
+  `src/db/queries/profile.ts`; `profilePatchSchema` already accepts `default_deck_id` and
+  `use_reversals`.
+- `drizzle-kit generate` prompts on a TTY only when a table is dropped; plain additions run
+  non-interactively. Hand-written SQL (triggers, grants) goes after a `-- Hand-written` marker.
+- RLS tests for reference tables: assert `anon` **can** read (opposite of the isolation harness) and
+  `authenticated` cannot write.
+
 ### 2. Deck seed data — the substance of this phase
 `src/db/seed/decks/rws.ts` and `.../thoth.ts`, idempotent via `pnpm db:seed`.
 

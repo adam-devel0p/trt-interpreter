@@ -12,7 +12,7 @@ const buttonVariants = cva(
         secondary: 'bg-surface text-fg hairline hover:bg-surface-2',
         ghost: 'text-fg hover:bg-surface-2',
         destructive: 'bg-danger text-on-accent hover:opacity-90',
-        link: 'min-h-0 px-0 text-accent underline-offset-4 hover:underline',
+        link: 'min-h-0 px-0 text-accent underline underline-offset-4',
       },
       size: {
         default: '',

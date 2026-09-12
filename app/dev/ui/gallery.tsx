@@ -10,6 +10,10 @@ import { EmptyState } from '@/ui/components/empty-state';
 import { ErrorState } from '@/ui/components/error-state';
 import { InferredChip } from '@/ui/components/inferred-chip';
 import { PageHeader } from '@/ui/components/page-header';
+import { ChoiceButton } from '@/ui/components/choice-button';
+import { Field, FormMessage } from '@/ui/components/field';
+import { SettingsRow, SettingsSection } from '@/ui/components/settings';
+import { Switch } from '@/ui/components/switch';
 import { Skeleton, SkeletonCard } from '@/ui/components/skeleton';
 
 type Theme = 'system' | 'light' | 'dark';
@@ -179,6 +183,51 @@ export function Gallery() {
           confirmLabel="Delete reading"
           onConfirm={() => note('confirmed delete')}
         />
+      </Section>
+
+      <Section title="Field / FormMessage (Phase 01)">
+        <form className="flex max-w-sm flex-col gap-4" onSubmit={(e) => e.preventDefault()}>
+          <Field id="g-email" name="email" type="email" label="Email" hint="We never share it." />
+          <Field
+            id="g-password"
+            name="password"
+            type="password"
+            label="Password"
+            error="Use at least 8 characters."
+          />
+          <FormMessage tone="error">That email and password don&apos;t match.</FormMessage>
+          <FormMessage tone="info">
+            If that address can receive mail from us, a link is on its way.
+          </FormMessage>
+        </form>
+      </Section>
+
+      <Section title="ChoiceButton (Phase 01)">
+        <form className="flex max-w-sm flex-col gap-3" onSubmit={(e) => e.preventDefault()}>
+          <ChoiceButton title="I draw digitally" description="Shuffle and draw in the app." />
+          <ChoiceButton
+            title="I use my own deck"
+            description="Log the cards you drew by hand."
+            selected
+          />
+          <ChoiceButton title="Both" />
+        </form>
+      </Section>
+
+      <Section title="Settings / Switch (Phase 01)">
+        <SettingsSection title="AI & privacy">
+          <SettingsRow
+            label="AI interpretation"
+            labelId="g-consent"
+            description="On. Readings can be sent to a model for interpretation."
+            control={<Switch aria-labelledby="g-consent" defaultChecked />}
+          />
+          <SettingsRow
+            label="Delete AI artifacts"
+            description="Keep your own words."
+            comingIn="Phase 05"
+          />
+        </SettingsSection>
       </Section>
 
       <Section title="BottomNav (static preview)">

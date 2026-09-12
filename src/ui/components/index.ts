@@ -8,3 +8,8 @@ export { ErrorState } from './error-state';
 export { InferredChip } from './inferred-chip';
 export { PageHeader } from './page-header';
 export { Skeleton, SkeletonCard } from './skeleton';
+export { ChoiceButton } from './choice-button';
+export { Field, FormMessage } from './field';
+export { FocusHeading } from './focus-heading';
+export { SettingsRow, SettingsSection } from './settings';
+export { Switch } from './switch';

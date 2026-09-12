@@ -7,8 +7,7 @@ import {
   type RlsFixture,
 } from '@/__tests__/rls/harness';
 
-// THROWAWAY (Phase 00): proves the harness. Phase 01 replaces this with profiles.
-describe('RLS: smoke_notes', () => {
+describe('RLS: reminder_settings', () => {
   let f: RlsFixture;
   beforeAll(async () => {
     f = await createRlsFixture();
@@ -21,9 +20,9 @@ describe('RLS: smoke_notes', () => {
   it('isolates rows between users and hides them from anon', async () => {
     await expectRlsIsolation(
       f,
-      'smoke_notes',
-      (userId) => ({ user_id: userId, body: 'note for rls' }),
-      { mutableColumn: 'body', mutatedValue: 'overwritten by B' },
+      'reminder_settings',
+      (userId) => ({ user_id: userId, weekly_reflection: true }),
+      { mutableColumn: 'weekly_reflection', mutatedValue: false },
     );
   });
 });

@@ -28,6 +28,12 @@ create type outcome_status   as enum ('happened','partly','did_not_happen','unre
 create type entity_kind      as enum ('person','organization','place','project','object','other');
 create type journey_status   as enum ('suggested','active','dormant','closed');
 create type job_status       as enum ('queued','running','succeeded','failed','dead');
+-- Phase 01 (identity & preferences)
+create type usage_style       as enum ('digital','physical','both');
+create type experience_level  as enum ('beginner','comfortable','experienced');
+create type explanation_depth as enum ('brief','standard','deep');
+create type flag_set_by       as enum ('user','admin','rollout');
+create type reminder_channel  as enum ('push','email','none');
 ```
 
 `fact_status` is the spine of §9.2. See [AI_LAYER.md](AI_LAYER.md#write-gate) for enforcement.
@@ -37,16 +43,33 @@ create type job_status       as enum ('queued','running','succeeded','failed','d
 ## Identity & preferences — Phase 01
 
 **`profiles`** — 1:1 with `auth.users`. Deliberately holds no journal content (§11: separate identity
-from content).
-`id (pk, fk auth.users)`, `locale`, `timezone`, `usage_style enum('digital','physical','both')`,
-`experience_level enum('beginner','comfortable','experienced')`, `default_deck_id fk decks`,
-`use_reversals boolean default true`, `ai_consent_at timestamptz`, `ai_explanation_depth enum('brief','standard','deep')`,
-`onboarding_completed_at`, `plan text default 'free'`, `created_at`.
+from content). **Created by trigger** `on_auth_user_created` (after insert on `auth.users`), so a
+profile always exists; migration `0002_auth_profiles` also backfills pre-existing users.
+`id (pk, fk auth.users on delete cascade)`, `locale default 'en'`, `timezone default 'UTC'`,
+`usage_style enum('digital','physical','both') null`,
+`experience_level enum('beginner','comfortable','experienced') null`,
+`default_deck_id uuid null` (FK to `decks` added in Phase 02), `use_reversals boolean default true`,
+`ai_consent_at timestamptz null` (null = not consented; a timestamp, never a boolean),
+`ai_explanation_depth enum('brief','standard','deep') default 'standard'`,
+`onboarding_step smallint default 0` (index into the §6.1 step order; a drop-off resumes here),
+`onboarding_completed_at timestamptz null`, `plan text default 'free'`, `created_at`, `updated_at`.
+RLS: select/insert/update keyed on `id = auth.uid()`; **no delete policy** (account deletion is a
+service-role job, Phase 12). **`plan` is read-only for users**: the `profiles_protect_plan` trigger
+raises `42501` when the `authenticated` role changes it; service role and direct connections may.
 
-**`user_flags`** — `user_id`, `flag text`, `enabled boolean`, `set_by enum('user','admin','rollout')`.
+**`user_flags`** — `id`, `user_id`, `flag text`, `enabled boolean`,
+`set_by enum('user','admin','rollout') default 'rollout'`, `created_at`, `updated_at`; unique
+`(user_id, flag)`. RLS: **select own only** — writes are service-role only, so a rollout control
+cannot be flipped by the person it gates. Read by `src/flags/index.ts` after the env default.
 
-**`reminder_settings`** — Phase 11. `user_id`, `revisit_reminders bool`, `weekly_reflection bool`,
-`monthly_retrospective bool`, `quiet_hours_start/end`, `channel enum('push','email','none')`.
+**`reminder_settings`** — created in Phase 01 (UI in Phase 11). `id`, `user_id unique`,
+`revisit_reminders bool default true`, `weekly_reflection bool default false`,
+`monthly_retrospective bool default false`, `quiet_hours_start/end time null`,
+`channel enum('push','email','none') default 'none'`, `created_at`, `updated_at`. Standard
+four-policy RLS.
+
+All three tables have a `BEFORE UPDATE` trigger on the shared `public.set_updated_at()` function;
+later phases attach the same function to any table with `updated_at`.
 
 ---
 
@@ -214,8 +237,8 @@ claim query uses `for update skip locked` and reclaims `running` rows whose lock
 **`analytics_events`** — Phase 11/12. `id`, `user_id`, `name text`, `props jsonb`, `created_at`.
 Props are validated against a per-event allowlist schema; free text is rejected at the type level
 (FR-28, §19: no raw journal content in analytics).
-**`smoke_notes`** — Phase 00, THROWAWAY. `id`, `user_id`, `body`, `created_at` with the standard
-four-policy RLS set. Exists only to prove the RLS harness; **Phase 01 drops it.**
+**`smoke_notes`** — Phase 00 throwaway; **dropped in Phase 01** (`0002_auth_profiles`). The RLS
+harness now runs on `profiles`.
 
 **`safety_flags`** — Phase 04. `user_id`, `object_type`, `object_id`, `category`, `severity`,
 `surfaced_at`, `resource_shown text`.
@@ -235,6 +258,11 @@ create policy <t>_insert on <t> for insert with check (user_id = auth.uid());
 create policy <t>_update on <t> for update using (user_id = auth.uid()) with check (user_id = auth.uid());
 create policy <t>_delete on <t> for delete using (user_id = auth.uid());
 ```
+
+Variants used so far: `profiles` is keyed on `id = auth.uid()` and has no delete policy;
+`user_flags` has a select policy only (service-role writes); `jobs` has RLS enabled with no
+policies. Column-level rules that RLS cannot express (old vs new row, e.g. `profiles.plan`) are
+`BEFORE UPDATE` triggers that check `auth.role()`.
 
 Child tables without their own `user_id` (e.g. `reading_cards`) use an `exists` policy against the
 parent **and** carry a denormalised `user_id` where the table is large enough for the join to matter.

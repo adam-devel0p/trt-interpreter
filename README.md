@@ -29,6 +29,13 @@ can run alongside another local Supabase project. `.env.example` already points 
 
 First-time Playwright: `pnpm exec playwright install chromium`.
 
+Auth runs on Supabase Auth. Email/password and magic links work out of the box locally (mail lands
+in Mailpit at `http://127.0.0.1:55324`). Google sign-in needs
+`SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` / `_SECRET` exported before `pnpm supabase:start`
+(see `.env.example`); without them the button shows a neutral "not available" message.
+`pnpm demo:seed` creates `demo-ana@tarot.local` / `demo-ben@tarot.local` (password
+`demo-password-123`) with onboarding complete — Ana consented to AI, Ben declined.
+
 ## Commands
 
 | Command | What it does |

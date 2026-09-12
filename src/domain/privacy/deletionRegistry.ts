@@ -5,8 +5,8 @@
  * every table in the Drizzle schema that carries a `user_id` column and fails if it is not
  * covered here — adding a user-owned table without registering its deletion path breaks CI.
  *
- * Phase 00: no product objects exist yet; only the platform `jobs` table and the throwaway
- * `smoke_notes` table are registered, both under the `user` root.
+ * Phase 01: no product objects exist yet; the platform `jobs` table and the identity tables
+ * (`profiles`, `user_flags`, `reminder_settings`) are registered under the `user` root.
  */
 
 export type RootType = 'reading' | 'life_event' | 'journey' | 'entity' | 'user';
@@ -25,7 +25,13 @@ export const DELETION_REGISTRY: Record<RootType, readonly CascadeTarget[]> = {
   entity: [],
   user: [
     { table: 'jobs', via: 'cascade', note: 'auth.users FK; payloads carry only IDs' },
-    { table: 'smoke_notes', via: 'cascade', note: 'THROWAWAY — dropped in Phase 01' },
+    {
+      table: 'profiles',
+      via: 'cascade',
+      note: 'keyed by id = auth.users.id; holds no journal content',
+    },
+    { table: 'user_flags', via: 'cascade' },
+    { table: 'reminder_settings', via: 'cascade' },
   ],
 };
 

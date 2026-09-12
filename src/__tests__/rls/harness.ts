@@ -53,24 +53,47 @@ export async function destroyRlsFixture(f: RlsFixture): Promise<void> {
 
 export type RowFactory = (userId: string) => Record<string, unknown>;
 
+export interface IsolationOptions {
+  /** The column B attempts to overwrite. */
+  mutableColumn: string;
+  mutatedValue: unknown;
+  /** Column holding the owner's auth.uid(). Default `user_id`; `profiles` is keyed by `id`. */
+  ownerColumn?: string;
+  /**
+   * The row already exists for A (created by a trigger, e.g. `profiles`). The harness then reads
+   * it instead of inserting, skips the spoofed insert (a PK conflict would mask the RLS check) and
+   * asserts that A *cannot* delete it (no delete policy: account deletion is service-role only).
+   */
+  preexisting?: boolean;
+}
+
 /**
  * Full isolation assertion for one table:
- *   - A can insert and read own row; B and anon see nothing.
- *   - B cannot insert a row claiming A's user_id.
+ *   - A can insert (or already owns) and read own row; B and anon see nothing.
+ *   - B cannot insert a row claiming A's ownership.
  *   - B cannot update or delete A's row (0 rows affected, row unchanged).
- *   - A can delete own row.
- * `mutableColumn` is the column B attempts to overwrite.
+ *   - A can delete own row (or, for preexisting rows, cannot).
  */
 export async function expectRlsIsolation(
   f: RlsFixture,
   table: string,
   rowFactory: RowFactory,
-  opts: { mutableColumn: string; mutatedValue: unknown },
+  opts: IsolationOptions,
 ): Promise<void> {
-  const rowA = rowFactory(f.a.id);
-  const ins = await f.a.client.from(table).insert(rowA).select('*').single();
-  expect(ins.error, `A insert into ${table}`).toBeNull();
-  const id = (ins.data as { id: string }).id;
+  const owner = opts.ownerColumn ?? 'user_id';
+  let rowA: Record<string, unknown>;
+  let id: string;
+  if (opts.preexisting) {
+    const existing = await f.a.client.from(table).select('*').eq(owner, f.a.id).single();
+    expect(existing.error, `A must already own a ${table} row`).toBeNull();
+    rowA = existing.data as Record<string, unknown>;
+    id = rowA.id as string;
+  } else {
+    rowA = rowFactory(f.a.id);
+    const ins = await f.a.client.from(table).insert(rowA).select('*').single();
+    expect(ins.error, `A insert into ${table}`).toBeNull();
+    id = (ins.data as { id: string }).id;
+  }
 
   const ownRead = await f.a.client.from(table).select('id').eq('id', id);
   expect(ownRead.data).toHaveLength(1);
@@ -82,8 +105,10 @@ export async function expectRlsIsolation(
   const anonRead = await f.anon.from(table).select('id');
   expect(anonRead.data ?? [], `anon must read nothing from ${table}`).toHaveLength(0);
 
-  const bSpoof = await f.b.client.from(table).insert(rowFactory(f.a.id));
-  expect(bSpoof.error, `B must not insert a row owned by A in ${table}`).not.toBeNull();
+  if (!opts.preexisting) {
+    const bSpoof = await f.b.client.from(table).insert(rowFactory(f.a.id));
+    expect(bSpoof.error, `B must not insert a row owned by A in ${table}`).not.toBeNull();
+  }
 
   const bUpdate = await f.b.client
     .from(table)
@@ -102,7 +127,55 @@ export async function expectRlsIsolation(
   expect(stillThere.data).toHaveLength(1);
 
   const aDelete = await f.a.client.from(table).delete().eq('id', id).select('id');
-  expect(aDelete.data).toHaveLength(1);
+  if (opts.preexisting) {
+    expect(aDelete.data ?? [], `A must not delete own ${table} row`).toHaveLength(0);
+  } else {
+    expect(aDelete.data).toHaveLength(1);
+  }
+}
+
+/**
+ * For tables users may read but only the service role writes (e.g. `user_flags`): rows are
+ * seeded through `seed`, then A sees only own rows, B and anon see none of A's, and A cannot
+ * insert, update or delete even own rows.
+ */
+export async function expectReadOwnOnly(
+  f: RlsFixture,
+  table: string,
+  rowFactory: RowFactory,
+  seed: (row: Record<string, unknown>) => Promise<{ id: string }>,
+  opts: { mutableColumn: string; mutatedValue: unknown },
+): Promise<void> {
+  const rowA = rowFactory(f.a.id);
+  const { id } = await seed(rowA);
+
+  const ownRead = await f.a.client.from(table).select('id').eq('id', id);
+  expect(ownRead.error).toBeNull();
+  expect(ownRead.data, `A must read own ${table} row`).toHaveLength(1);
+
+  const bRead = await f.b.client.from(table).select('id').eq('id', id);
+  expect(bRead.data ?? [], `B must not read A's ${table} row`).toHaveLength(0);
+  const anonRead = await f.anon.from(table).select('id');
+  expect(anonRead.data ?? [], `anon must read nothing from ${table}`).toHaveLength(0);
+
+  const aInsert = await f.a.client.from(table).insert(rowFactory(f.a.id)).select('id');
+  expect(aInsert.error, `A must not insert into ${table}`).not.toBeNull();
+
+  const aUpdate = await f.a.client
+    .from(table)
+    .update({ [opts.mutableColumn]: opts.mutatedValue })
+    .eq('id', id)
+    .select('id');
+  expect(aUpdate.data ?? [], `A must not update ${table}`).toHaveLength(0);
+  const after = await f.a.client.from(table).select(opts.mutableColumn).eq('id', id).single();
+  expect((after.data as unknown as Record<string, unknown>)[opts.mutableColumn]).toEqual(
+    rowA[opts.mutableColumn],
+  );
+
+  const aDelete = await f.a.client.from(table).delete().eq('id', id).select('id');
+  expect(aDelete.data ?? [], `A must not delete from ${table}`).toHaveLength(0);
+  const stillThere = await f.a.client.from(table).select('id').eq('id', id);
+  expect(stillThere.data).toHaveLength(1);
 }
 
 /** For service-role-only tables: authenticated users and anon can neither read nor write. */

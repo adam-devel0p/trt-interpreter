@@ -41,3 +41,14 @@ export const entityKind = pgEnum('entity_kind', [
 ]);
 export const journeyStatus = pgEnum('journey_status', ['suggested', 'active', 'dormant', 'closed']);
 export const jobStatus = pgEnum('job_status', ['queued', 'running', 'succeeded', 'failed', 'dead']);
+
+// ── Identity & preferences (Phase 01, docs/DATA_MODEL.md#identity--preferences--phase-01) ──
+export const usageStyle = pgEnum('usage_style', ['digital', 'physical', 'both']);
+export const experienceLevel = pgEnum('experience_level', [
+  'beginner',
+  'comfortable',
+  'experienced',
+]);
+export const explanationDepth = pgEnum('explanation_depth', ['brief', 'standard', 'deep']);
+export const flagSetBy = pgEnum('flag_set_by', ['user', 'admin', 'rollout']);
+export const reminderChannel = pgEnum('reminder_channel', ['push', 'email', 'none']);

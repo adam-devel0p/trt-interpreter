@@ -1,4 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
+import { config } from 'dotenv';
+
+// Specs create users through the admin API and read Mailpit; keys come from .env.local.
+config({ path: '.env.local', quiet: true });
 
 /**
  * E2E: mobile (390px) and desktop projects, axe wired per spec. Runs against a production build

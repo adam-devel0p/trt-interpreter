@@ -20,8 +20,11 @@ checks were actually performed.
   has a test that uses it.
 - **RLS is tested against the real database with real JWTs**, not mocked. Two fixture users, A and B,
   created per test file via `createRlsFixture()` in `src/__tests__/rls/harness.ts`;
-  `expectRlsIsolation(fixture, table, rowFactory, { mutableColumn, mutatedValue })` covers
-  select/insert/update/delete + anon, and `expectNoUserAccess()` covers service-role-only tables.
+  `expectRlsIsolation(fixture, table, rowFactory, { mutableColumn, mutatedValue, ownerColumn?,
+  preexisting? })` covers select/insert/update/delete + anon (`ownerColumn: 'id'` for `profiles`;
+  `preexisting: true` for trigger-created rows, which also asserts the owner *cannot* delete),
+  `expectReadOwnOnly()` covers read-own/service-role-write tables (`user_flags`), and
+  `expectNoUserAccess()` covers service-role-only tables (`jobs`).
   File naming selects the suite: `*.test.ts` unit · `*.integration.test.ts` integration ·
   `*.rls.test.ts` RLS.
 - **Invariant tests** — a dedicated `src/__tests__/invariants/` directory asserts the §21 list
@@ -39,6 +42,11 @@ checks were actually performed.
   - `no-journal-content-in-logs.test.ts`
   - `raw-text-never-overwritten.test.ts`
   - `alias-merge-preserves-historical-roles.test.ts`
+- **E2E users are real.** Specs sign up through the UI, or call `createReadyUser()` (admin API,
+  onboarding pre-completed) from `e2e/_helpers.ts`; email links are read from Mailpit
+  (`latestEmailLink()`), so magic link and password reset are exercised end to end. Playwright
+  loads `.env.local` for the keys. Per-IP auth rate limits are skipped for loopback, so repeated
+  local runs never trip them; per-email limits still apply (use `freshEmail()`).
 - **Accessibility is tested, not reviewed.** Playwright + `@axe-core/playwright` on every primary
   screen; zero serious/critical violations is a gate.
 - **Demo data is test infrastructure.** `pnpm demo:seed` must produce a database in which every

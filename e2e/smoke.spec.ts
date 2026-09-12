@@ -1,13 +1,5 @@
-import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
-
-async function expectNoSeriousA11y(page: Page) {
-  const results = await new AxeBuilder({ page }).analyze();
-  const serious = results.violations.filter(
-    (v) => v.impact === 'serious' || v.impact === 'critical',
-  );
-  expect(serious, JSON.stringify(serious, null, 2)).toEqual([]);
-}
+import { expect, test } from '@playwright/test';
+import { createReadyUser, expectNoSeriousA11y, signInViaUi } from './_helpers';
 
 test('/ renders with primary nav and no serious axe violations', async ({ page }) => {
   await page.goto('/');
@@ -31,7 +23,8 @@ test('/api/health reports ok with DB and migration status', async ({ request }) 
 });
 
 test('/home shows the 5-tab bottom nav, keyboard reachable', async ({ page }) => {
-  await page.goto('/home');
+  const user = await createReadyUser('smoke');
+  await signInViaUi(page, user.email);
   const nav = page.getByRole('navigation', { name: 'Primary' });
   await expect(nav.getByRole('link')).toHaveCount(5);
   await expect(nav.getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page');
