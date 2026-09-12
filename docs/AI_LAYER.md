@@ -9,10 +9,15 @@ Provider-agnostic boundary (§9.4). Nothing outside `src/ai/` may talk to a mode
 // src/ai/provider.ts
 export interface AiProvider {
   readonly id: string;                       // 'anthropic' | 'openai-embeddings' | 'mock'
-  generateObject<T>(req: ObjectRequest<T>): Promise<ObjectResult<T>>;
-  generateStream(req: StreamRequest): AsyncIterable<StreamChunk>;
-  embed(req: EmbedRequest): Promise<EmbedResult>;   // throws Unsupported if N/A
+  generateObject<T>(req: ObjectRequest<T>, call: ResolvedCall): Promise<ObjectResult<T>>;
+  generateStream(req: StreamRequest, call: ResolvedCall): AsyncIterable<StreamChunk>;
+  embed(req: EmbedRequest): Promise<EmbedResult>;   // throws AiProviderError('unsupported') if N/A
 }
+
+// run.ts resolves the model and owns policy; a provider makes ONE attempt per call and throws
+// AiProviderError with a content-free errorClass ('timeout' | 'rate_limited' | 'server_error' |
+// 'invalid_output' | 'refusal' | 'unsupported' | 'unknown').
+export interface ResolvedCall { modelId: string; tier: ModelTier; signal: AbortSignal; }
 
 export interface ObjectRequest<T> {
   task: TaskId;
@@ -37,6 +42,12 @@ export interface ObjectResult<T> {
 Callers never pass a model ID. They pass a `task`; `registry.ts` resolves task → model tier → concrete
 model ID, so model migration is a one-file change (§9.4).
 
+Callers go through `src/ai/run.ts` (`createAiRunner(...).runObject(req)`), never the provider
+directly. It returns a `RunResult<T>` — `{ ok: true, value, meta, attempts }` or
+`{ ok: false, status, errorClass, attempts }` with `status` ∈ `invalid_output | timeout |
+provider_error | budget_denied | refusal` — and **never throws for a model problem**. The server
+entry point is `getAiRunner()` in `src/ai/index.ts`.
+
 ## Task catalogue
 
 Each task is a directory `src/ai/tasks/<task>/` containing `prompt.ts`, `schema.ts`,
@@ -58,8 +69,8 @@ Each task is a directory `src/ai/tasks/<task>/` containing `prompt.ts`, `schema.
 | `journey_narrative` | 10 | standard | one-sentence header + progression labels | §6.5 narrative header |
 | `build_retrieval_document` | 09 | fast | compact §8.3 text | Deterministic template first, model only to compress |
 
-**Model routing** (`registry.ts`, overridable per-environment):
-`fast` → Claude Haiku · `standard` → Claude Sonnet · `deep` → Claude Opus.
+**Model routing** (`registry.ts`, overridable per-environment via `AI_MODEL_FAST/STANDARD/DEEP`):
+`fast` → `claude-haiku-4-5` · `standard` → `claude-sonnet-5` · `deep` → `claude-opus-5`.
 Embeddings → `text-embedding-3-small`. Routing is data, asserted by a test that every `TaskId` has a
 tier and every tier has a model.
 
@@ -118,7 +129,14 @@ const MODEL_ALLOWED: FactStatus[] = ['INFERRED_EVENT','TAROT_INTERPRETATION',
 | 429 / 5xx | Exponential backoff with jitter, max 3 attempts; circuit breaker opens per provider for 60s after 5 consecutive failures. |
 | Provider outage | Feature degrades: reading is already saved (transaction precedes AI); UI shows "Interpretation unavailable — retry" with a manual retry that re-enqueues. |
 | Budget exceeded | `budget_denied`; user sees a clear limit message, never a crash; content still saves. |
-| Refusal | Treated as a valid terminal state, surfaced honestly, reading preserved. |
+| Refusal | Treated as a valid terminal state (`status: 'refusal'`), surfaced honestly, reading preserved. |
+
+Implemented in `src/ai/run.ts` (Phase 00) and tested branch-by-branch in `src/ai/__tests__/run.test.ts`
+against the mock provider. Timeout policy detail: the first timeout retries at the same tier, the
+second downgrades one tier (`deep → standard → fast`), a third fails soft; at `fast` there is no
+downgrade so it is retry-once-then-fail. Rate-limit backoff is `500ms · 2^n` ±50% jitter, capped
+at 8s. The breaker counts 429/5xx/unknown failures across runs and, while open, returns
+`errorClass: 'circuit_open'` without calling the provider.
 
 Every branch is covered by a test using the mock provider's fault injection
 (`mock.failWith('timeout' | 'invalid_json' | 'refusal' | '429')`).

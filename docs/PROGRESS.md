@@ -2,14 +2,16 @@
 
 The first thing to read in any new session. Update it at the end of every phase.
 
-**Current state:** planning complete, no code written.
-**Next phase:** [Phase 00 — Foundations & Rails](phases/phase-00-foundations.md)
+**Current state:** Phase 00 complete — app boots locally, all five test suites wired and green, CI
+defined, layering lint proven, RLS + AI mock harnesses proven on a throwaway table.
+**Next phase:** [Phase 01 — Auth, profile, onboarding](phases/phase-01-auth-onboarding.md)
+(Phase 02 is independent and may be done first.)
 
 ## Phase status
 
 | # | Phase | Status | Report | Notes |
 |---|---|---|---|---|
-| 00 | [Foundations & rails](phases/phase-00-foundations.md) | ⬜ not started | — | |
+| 00 | [Foundations & rails](phases/phase-00-foundations.md) | ⚠️ complete with deferrals | [report](phases/completed/phase-00-report.md) | 2026-09-12 · local Supabase on ports 55321–55329 |
 | 01 | [Auth, profile, onboarding](phases/phase-01-auth-onboarding.md) | ⬜ not started | — | |
 | 02 | [Deck reference: RWS + Thoth](phases/phase-02-deck-reference.md) | ⬜ not started | — | |
 | 03 | [Reading loop (no AI)](phases/phase-03-reading-loop.md) | ⬜ not started | — | |
@@ -52,6 +54,8 @@ Add anything a phase discovered but could not settle. Remove when resolved.
 - Thoth artwork: shipping text/typographic treatment only. Revisit if licensed or commissioned art
   becomes available (Phase 02 decision, §6.7 artwork rights).
 - Pricing numbers are placeholders until retention data exists (§14).
+- Local Supabase runs on ports 55321–55329 (another project owns 54xxx on the dev machine).
+  `.env.example`/README/CI all use 55xxx; nothing depends on the defaults.
 
 ## Deferred items backlog
 
@@ -59,3 +63,7 @@ Phases append here when they defer something, so nothing is lost between session
 
 | Item | Deferred in | Moved to | Reason |
 |---|---|---|---|
+| Install PWA on a physical phone, verify offline shell | 00 | 01 | No device in session; manifest/SW verified by e2e only |
+| `ai_calls` write in `telemetry.ts` | 00 | 04 | Table lands in 04; sink interface + memory sink in place |
+| Real per-user budgets (`BudgetPolicy`) | 00 | 11 | `usage_counters` lands in 11; hook wired and tested |
+| Sentry source-map upload | 00 | 12 | Scrubbing proven without it |

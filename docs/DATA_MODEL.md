@@ -200,10 +200,12 @@ Check constraint + test: a summary may never cite another summary as its sole ev
 ## Platform tables
 
 **`jobs`** — Phase 00. `id`, `user_id null`, `kind`, `payload jsonb`, `status job_status`,
-`attempts`, `max_attempts`, `run_after`, `locked_at`, `last_error_class`, `created_at`.
+`attempts`, `max_attempts`, `run_after`, `locked_at`, `last_error_class`, `created_at`, `updated_at`.
+RLS enabled with **no policies**: service-role only. Index `(status, run_after)` for claiming;
+claim query uses `for update skip locked` and reclaims `running` rows whose lock is > 10 min old.
 **`ai_calls`** — Phase 04. `id`, `user_id null`, `task`, `model_id`, `prompt_version`,
 `schema_version`, `tokens_in`, `tokens_out`, `cost_micros`, `latency_ms`,
-`status enum('ok','invalid_output','timeout','provider_error','budget_denied')`, `error_class`,
+`status enum('ok','invalid_output','timeout','provider_error','budget_denied','refusal')`, `error_class`,
 `object_refs jsonb`, `created_at`. **No prompt or completion text. Ever.**
 **`usage_counters`** — Phase 11. `user_id`, `period_start date`, `task`, `calls`, `tokens`,
 `cost_micros`. Unique `(user_id, period_start, task)`.
@@ -212,6 +214,9 @@ Check constraint + test: a summary may never cite another summary as its sole ev
 **`analytics_events`** — Phase 11/12. `id`, `user_id`, `name text`, `props jsonb`, `created_at`.
 Props are validated against a per-event allowlist schema; free text is rejected at the type level
 (FR-28, §19: no raw journal content in analytics).
+**`smoke_notes`** — Phase 00, THROWAWAY. `id`, `user_id`, `body`, `created_at` with the standard
+four-policy RLS set. Exists only to prove the RLS harness; **Phase 01 drops it.**
+
 **`safety_flags`** — Phase 04. `user_id`, `object_type`, `object_id`, `category`, `severity`,
 `surfaced_at`, `resource_shown text`.
 **`deletion_receipts`** — Phase 05/12. `user_id`, `scope`, `requested_at`, `completed_at`,

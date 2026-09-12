@@ -19,7 +19,11 @@ checks were actually performed.
   `'invalid_json'`, `'refusal'`, `'429'`. Every AI failure path in [AI_LAYER.md](AI_LAYER.md#failure-handling-13-ai-resilience)
   has a test that uses it.
 - **RLS is tested against the real database with real JWTs**, not mocked. Two fixture users, A and B,
-  created per test file.
+  created per test file via `createRlsFixture()` in `src/__tests__/rls/harness.ts`;
+  `expectRlsIsolation(fixture, table, rowFactory, { mutableColumn, mutatedValue })` covers
+  select/insert/update/delete + anon, and `expectNoUserAccess()` covers service-role-only tables.
+  File naming selects the suite: `*.test.ts` unit · `*.integration.test.ts` integration ·
+  `*.rls.test.ts` RLS.
 - **Invariant tests** — a dedicated `src/__tests__/invariants/` directory asserts the §21 list
   directly, one test file per invariant, named after it. These are the tests that must never be
   weakened to make a feature pass:

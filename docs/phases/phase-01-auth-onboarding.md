@@ -29,9 +29,22 @@ but the Profile screen reserves their place with disabled, labeled entries.
 ### 2. Profiles and flags
 - Migration: `profiles`, `user_flags`, `reminder_settings` (columns per
   [../DATA_MODEL.md](../DATA_MODEL.md#identity--preferences--phase-01)) with RLS policies.
-- Drop the `smoke_notes` table from Phase 00 and move the RLS harness onto `profiles`.
+- Drop the `smoke_notes` table from Phase 00 and move the RLS harness onto `profiles`. Concretely:
+  delete `src/db/schema/smoke.ts`, remove it from `src/db/schema/index.ts`, generate a migration
+  (`pnpm db:generate --name auth_profiles`) that drops it, delete
+  `src/db/__tests__/smoke-notes.rls.test.ts`, remove `smoke_notes` from
+  `src/domain/privacy/deletionRegistry.ts` and from `PLATFORM_TABLES` in
+  `src/__tests__/integration/setup.ts`. Reuse `expectRlsIsolation()` from
+  `src/__tests__/rls/harness.ts` for `profiles`/`user_flags`/`reminder_settings` (note: `profiles`
+  is keyed by `id`, not `user_id` — extend the harness with an `ownerColumn` option).
+- Register the three new tables in `src/domain/privacy/deletionRegistry.ts` (the lint gate
+  `check-deletion-registry` fails otherwise).
 - `src/db/queries/profile.ts`; server actions for each preference with Zod validation.
-- Wire `src/flags/` to read `user_flags` overrides.
+- Wire `src/flags/` to read `user_flags` overrides — the read path already exists in
+  `src/flags/index.ts` (`readUserOverride`, tolerates the missing table); it only needs the table.
+- Add the `users`/`profiles` seeder to `scripts/seed-demo.ts` (`SEEDERS` array).
+- Drizzle's `authUsers` (`drizzle-orm/supabase`) is how Phase 00 references `auth.users`; keep it.
+- Scripts that import server-only modules run as `tsx --conditions=react-server` (see package.json).
 
 ### 3. Onboarding (§6.1 — five screens, each skippable except consent)
 Exactly this sequence, nothing added:

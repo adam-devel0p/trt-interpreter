@@ -1,0 +1,8 @@
+# pnpm settings (pnpm ≥ 10 reads these here, not from package.json).
+# Only these packages may run install scripts; everything else is blocked by default.
+# @sentry/cli only downloads a binary for source-map upload, which we do not use yet.
+allowBuilds:
+  esbuild: true
+  sharp: true
+  unrs-resolver: true
+  '@sentry/cli': false

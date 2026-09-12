@@ -1,0 +1,9 @@
+node_modules
+.next
+pnpm-lock.yaml
+playwright-report
+test-results
+src/db/migrations/meta
+public/sw.js
+*.md
+supabase/.temp

@@ -1,0 +1,106 @@
+/*
+ * Design tokens — the only place a colour is defined (docs/DESIGN_SYSTEM.md).
+ * Paper and ink. Full light palette on :root; dark redefines the same tokens under the system
+ * preference (guarded so an explicit light choice wins) and under [data-theme="dark"].
+ * Deck accent is a token set swapped by [data-deck]. Components never hard-code a colour
+ * (eslint: local/no-hardcoded-colors).
+ */
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --bg: #f5efe4;
+  --surface: #fcf9f3;
+  --surface-2: #ece4d5;
+  --surface-ai: #efe8db; /* subtly tinted container for model-derived content */
+
+  /* Ink */
+  --fg: #1e1a16;
+  --fg-muted: #5e564c;
+  --fg-faint: #6f675d; /* AA on bg (4.9:1); use for de-emphasised text, not on surface-2 */
+  --hairline: #d8cdbb;
+  --hairline-strong: #bfb29d;
+
+  /* Deck accents (RWS: warm gold · Thoth: cool violet). Default is RWS. */
+  --accent-rws: #7f560a;
+  --accent-rws-soft: #e9d9b6;
+  --accent-thoth: #54418f;
+  --accent-thoth-soft: #d9d1f0;
+  --accent: var(--accent-rws);
+  --accent-soft: var(--accent-rws-soft);
+  --on-accent: #ffffff;
+
+  /* Semantic */
+  --danger: #993a2e;
+  --danger-soft: #f1d6d1;
+  --focus: var(--accent);
+
+  /* Type */
+  --font-serif:
+    'Newsreader Variable', 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+  --font-sans:
+    'DM Sans Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial,
+    sans-serif;
+
+  /* Shape & motion */
+  --radius-card: 12px;
+  --radius-control: 8px;
+  --radius-chip: 999px;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-fast: 150ms;
+  --dur-base: 220ms;
+  --shadow-hairline: 0 0 0 1px var(--hairline);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg: #121010;
+    --surface: #1b1816;
+    --surface-2: #242019;
+    --surface-ai: #1f1c17;
+    --fg: #ede6da;
+    --fg-muted: #a79e92;
+    --fg-faint: #948b7e;
+    --hairline: #332d28;
+    --hairline-strong: #4a423a;
+    --accent-rws: #d9a64a;
+    --accent-rws-soft: #3a2d14;
+    --accent-thoth: #b4a3ee;
+    --accent-thoth-soft: #2b2542;
+    --on-accent: #121010;
+    --danger: #e4877a;
+    --danger-soft: #3d1f1a;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #121010;
+  --surface: #1b1816;
+  --surface-2: #242019;
+  --surface-ai: #1f1c17;
+  --fg: #ede6da;
+  --fg-muted: #a79e92;
+  --fg-faint: #948b7e;
+  --hairline: #332d28;
+  --hairline-strong: #4a423a;
+  --accent-rws: #d9a64a;
+  --accent-rws-soft: #3a2d14;
+  --accent-thoth: #b4a3ee;
+  --accent-thoth-soft: #2b2542;
+  --on-accent: #121010;
+  --danger: #e4877a;
+  --danger-soft: #3d1f1a;
+}
+
+/* Deck accent swap. Applied on <html>, a page, or any subtree. */
+[data-deck='rws'] {
+  --accent: var(--accent-rws);
+  --accent-soft: var(--accent-rws-soft);
+}
+[data-deck='thoth'] {
+  --accent: var(--accent-thoth);
+  --accent-soft: var(--accent-thoth-soft);
+}
