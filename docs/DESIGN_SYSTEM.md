@@ -110,3 +110,12 @@ orientation-aware) · `CardPicker` (fast deck-native search-select for physical 
 · `PaywallSheet` · `EmptyState` · `Skeleton` · `ErrorState` · `ConfirmDestructive`.
 
 Each ships with a story/preview route under `/dev/ui` (dev-only), light + dark, and an axe check.
+
+Phase 02 built `Card`, `CardPicker`, `SpreadLayout` (plus `CardDetail` and `DeckBrowser` for the
+reference pages). `Card` renders bundled art through a `<picture>` with AVIF/WebP srcsets or, when
+a row has no `art_asset_path`, the **typographic face**: a per-size em-scaled composition of
+numeral/rank, deck-native name and title, suit glyph, element sigil, Hebrew letter and astrological
+glyphs inside a double hairline frame on a radial accent-soft ground. It is the Thoth deck's
+first-class rendering, not a placeholder (see [LICENSING.md](LICENSING.md)). Reversal is shown by
+rotation **and** a visible "Reversed" chip; alt text is always deck-native
+("Lust — Thoth", "Strength, reversed — Rider–Waite–Smith").

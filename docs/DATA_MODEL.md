@@ -48,7 +48,7 @@ profile always exists; migration `0002_auth_profiles` also backfills pre-existin
 `id (pk, fk auth.users on delete cascade)`, `locale default 'en'`, `timezone default 'UTC'`,
 `usage_style enum('digital','physical','both') null`,
 `experience_level enum('beginner','comfortable','experienced') null`,
-`default_deck_id uuid null` (FK to `decks` added in Phase 02), `use_reversals boolean default true`,
+`default_deck_id uuid null` (FK to `decks`, on delete set null), `use_reversals boolean default true`,
 `ai_consent_at timestamptz null` (null = not consented; a timestamp, never a boolean),
 `ai_explanation_depth enum('brief','standard','deep') default 'standard'`,
 `onboarding_step smallint default 0` (index into the §6.1 step order; a drop-off resumes here),
@@ -75,32 +75,56 @@ later phases attach the same function to any table with `updated_at`.
 
 ## Deck reference layer — Phase 02
 
-Global, not user-owned → readable by all authenticated users, writable only by service role.
+Global, not user-owned → readable by `anon` **and** `authenticated` (public reference pages),
+writable only by the service role (the seeder, `src/db/seed/reference.ts`, idempotent upserts keyed
+on slugs). Seed content lives in `src/db/seed/decks/*.ts`, validated by the Zod schemas in
+`src/domain/decks/types.ts`.
 
-**`decks`** — `id`, `slug`, `name`, `system deck_system`, `tradition_notes`,
+**`decks`** — `id`, `slug` (unique), `name`, `system deck_system`, `tradition_notes`,
 `supports_reversals boolean`, `art_strategy enum('bundled_public_domain','original_commissioned','text_only')`,
-`license_note text`. Seeded: `rws-classic` (public-domain 1909 artwork), `thoth` (**text/original
-treatment only unless artwork rights are verified — §6.7 artwork rights**).
+`license_note`, `sort_order`, `created_at`. Seeded: `rws-classic` (public-domain 1909 artwork,
+reversals on) and `thoth` (**text-only treatment, `supports_reversals = false`** — the deck reads by
+dignity and position; see [LICENSING.md](LICENSING.md)).
 
 **`cards`** — `id`, `deck_id`, `slug`, `name` (deck-native: *Adjustment*, *Lust*, *Art*, *The Aeon*,
-*The Universe*), `arcana enum('major','minor')`, `suit`, `rank_label` (deck-native court terms:
-RWS Page/Knight/Queen/King vs Thoth Princess/Prince/Queen/Knight), `number smallint`,
-`element`, `astrology`, `qabalah jsonb`, `keywords_upright text[]`, `keywords_reversed text[]`,
-`meaning_upright text`, `meaning_reversed text`, `symbolism text`, `correspondences jsonb`,
-`art_asset_path text null`, `sort_order`.
-Unique `(deck_id, slug)`. 78 rows per deck.
+*The Universe*), `title` (deck-native small-card title, e.g. Thoth "Dominion"; null for RWS),
+`arcana enum('major','minor')`, `suit` (machine key: `wands|cups|swords|pentacles|disks` — Disks and
+Pentacles are different keys on purpose), `suit_label` (display, deck vocabulary), `rank_label`
+(RWS Page/Knight/Queen/King · Thoth Princess/Prince/Queen/Knight), `number smallint` (Majors 0–21,
+pips 1–10, null for courts), `numeral` (Majors), `element`, `astrology`, `keywords_upright text[]`,
+`keywords_reversed text[]`, `meaning_upright`, `meaning_reversed null` (**null for every Thoth
+card**; UI handles null), `symbolism`, `correspondences jsonb` (typed keys: `element`,
+`sub_element`, `planet`, `zodiac`, `decan`, `rulership`, `sephira`, `path`, `hebrew_letter`,
+`hebrew_letter_meaning`, `esoteric_title`, `numerology`, `notes` — the planned separate `qabalah`
+column was folded into this bag), `art_asset_path null` (`/cards/rws/<slug>`; renderer prefers art
+when present), `sort_order` (0–77 within a deck).
+Unique `(deck_id, slug)`; index `(deck_id, sort_order)`; GIN trigram on `name`. 78 rows per deck.
 
-**`card_archetypes`** + **`card_archetype_members`** — optional structural mapping across decks
-(§6.7: "mapping is metadata, not interpretation"). Used only for search and analytics; **never for
-rendering names or meanings.** A DB comment and a unit test both state this.
+**`card_archetypes`** + **`card_archetype_members`** — 78 structural slots (`key` like `major.08`,
+`minor.earth.02`, `minor.fire.court_4`; neutral `label`; `arcana`, `suit_slot fire|water|air|earth`,
+`rank_slot`, `number`, `sort_order`) and one membership per card (`card_id` unique, `mapping_note`
+explaining structural-not-interpretive correspondences). **Metadata only** (§6.7): used for search,
+analytics and cross-deck aggregation, **never for rendering names or meanings.** A DB comment, the
+schema doc comment and the invariant test `thoth-never-substitutes-rws.test.tsx` (which also scans
+the render paths' source) all state this.
 
-**`card_aliases`** — `card_id`, `alias`, `kind enum('search','cross_deck','historical')`. Powers
-"Strength" finding Thoth *Lust* without renaming anything (FR-03C).
+**`card_aliases`** — `card_id`, `alias`, `kind enum('search','cross_deck','historical')`, `note`;
+unique `(card_id, alias)`; GIN trigram on `alias`. Powers "Strength" finding Thoth *Lust* without
+renaming anything (FR-03C). Alias text never equals another card's name in the same deck, so a
+deck-scoped search for "Knight" cannot surface a different card under that name.
 
 **`spreads`** — `id`, `user_id null` (null = built-in), `slug`, `name`, `description`,
-`positions jsonb` `[{index, key, name, prompt}]`, `is_builtin`, `deck_scope null|deck_system`,
-`layout jsonb` (relative coordinates for rendering). Seeded: one-card, three-card
-(past/present/future), situation–advice–outcome, decision (two paths), Celtic-cross-lite (5 positions).
+`positions jsonb` `[{index, key, name, prompt}]`, `layout jsonb`
+`{aspect, slots: [{index, x, y, w, rotate?}]}` (relative units: `x`,`y` slot centre as a fraction of
+the canvas, `w` card width as a fraction of canvas width, card aspect 3:5), `is_builtin`,
+`deck_scope null|deck_system`, `card_count`, `sort_order`, `created_at`, `updated_at`
+(`set_updated_at` trigger). Unique `slug` where `user_id is null`; unique `(user_id, slug)` otherwise.
+RLS: select `user_id is null or user_id = auth.uid()` to anon + authenticated; insert/update require
+`user_id = auth.uid() and is_builtin = false`; delete own. Seeded: `one-card`, `three-card`
+(Past/Present/Future), `situation-advice-outcome`, `decision` (5: centre + two paths × opens/asks),
+`celtic-cross-lite` (5).
+
+`profiles.default_deck_id` now has its FK to `decks(id)` (`on delete set null`).
 
 ---
 
@@ -266,6 +290,8 @@ policies. Column-level rules that RLS cannot express (old vs new row, e.g. `prof
 
 Child tables without their own `user_id` (e.g. `reading_cards`) use an `exists` policy against the
 parent **and** carry a denormalised `user_id` where the table is large enough for the join to matter.
-Reference tables (`decks`, `cards`, `card_aliases`, `card_archetypes`, built-in `spreads`) are
+Reference tables (`decks`, `cards`, `card_aliases`, `card_archetypes`, `card_archetype_members`) are
 `for select using (true)` to `authenticated` + `anon` (public reference pages) and writable only by
-the service role. Every policy set gets a test in `pnpm test:rls`.
+the service role — tested with `expectPublicReadOnly()`. `spreads` is mixed: built-in rows
+(`user_id is null`) are public and immutable to users; custom rows carry the standard four policies
+(`expectRlsIsolation(…, { hasPublicRows: true })`). Every policy set gets a test in `pnpm test:rls`.

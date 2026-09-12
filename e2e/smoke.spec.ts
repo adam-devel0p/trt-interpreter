@@ -49,7 +49,7 @@ test('/dev/ui renders every component in light and dark at this viewport', async
   // Explicit toggles set the attributes the tokens key on.
   await page.getByRole('button', { name: 'dark', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  await page.getByRole('button', { name: 'Thoth' }).click();
+  await page.getByRole('button', { name: 'Thoth', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-deck', 'thoth');
   // Destructive confirmation is keyboard-operable and closes on Escape.
   await page.getByRole('button', { name: 'Delete this reading' }).click();

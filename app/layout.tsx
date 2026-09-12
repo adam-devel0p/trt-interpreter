@@ -2,11 +2,13 @@ import type { Metadata, Viewport } from 'next';
 import '@fontsource-variable/newsreader';
 import '@fontsource-variable/dm-sans';
 import './globals.css';
+import { clientEnv } from '@/config/env';
 import { MotionProvider } from '@/ui/motion';
 import { THEME_COLORS } from '@/ui/theme-colors';
 import { ServiceWorkerRegistration } from '@/ui/components/sw-registration';
 
 export const metadata: Metadata = {
+  metadataBase: new URL(clientEnv().NEXT_PUBLIC_SITE_URL),
   title: { default: 'Tarot Journal', template: '%s · Tarot Journal' },
   description: 'A private tarot journal that remembers your readings over time.',
   applicationName: 'Tarot Journal',

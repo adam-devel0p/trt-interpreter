@@ -28,7 +28,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-export function Gallery() {
+export function Gallery({ deckSections }: { deckSections?: React.ReactNode }) {
   const [theme, setTheme] = React.useState<Theme>('system');
   const [deck, setDeck] = React.useState<Deck>('rws');
   const [log, setLog] = React.useState<string[]>([]);
@@ -229,6 +229,8 @@ export function Gallery() {
           />
         </SettingsSection>
       </Section>
+
+      {deckSections}
 
       <Section title="BottomNav (static preview)">
         <div className="relative h-16 overflow-hidden rounded-card">

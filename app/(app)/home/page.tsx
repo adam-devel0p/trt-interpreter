@@ -15,9 +15,12 @@ export default function Page() {
   return (
     <>
       <PageHeader title="Home" />
-      <div className="mb-8">
+      <div className="mb-8 flex flex-col gap-3">
         <Button asChild size="lg" className="w-full">
           <Link href={FIRST_READING_PATH}>Start a reading</Link>
+        </Button>
+        <Button asChild variant="ghost" size="sm" className="self-start">
+          <Link href="/decks">Browse the decks</Link>
         </Button>
       </div>
       <section aria-labelledby="unresolved-heading" className="mb-8">

@@ -47,3 +47,15 @@ export async function setExplanationDepthAction(
     updateProfile(client, userId, { ai_explanation_depth: parsed.data }),
   );
 }
+
+/** Default deck (FR-03A). The FK to `decks` rejects anything that is not a real deck id. */
+export async function setDefaultDeckAction(_prev: PrefState, fd: FormData): Promise<PrefState> {
+  const parsed = z.string().uuid().safeParse(fd.get('deck'));
+  if (!parsed.success) return { status: 'error', message: FAILED };
+  return run((client, userId) => updateProfile(client, userId, { default_deck_id: parsed.data }));
+}
+
+/** Reversals on/off. Decks that do not read reversals (Thoth) ignore this by design (§6.7). */
+export async function setUseReversalsAction(enabled: boolean): Promise<PrefState> {
+  return run((client, userId) => updateProfile(client, userId, { use_reversals: enabled }));
+}

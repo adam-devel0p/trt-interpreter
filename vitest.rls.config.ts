@@ -4,6 +4,8 @@ import { alias } from './vitest.shared.ts';
 /** Authorization suite: real database, real JWTs, two fixture users per file. */
 export default defineConfig({
   resolve: { alias },
+  // tsconfig says jsx: preserve (Next); component tests need the automatic runtime here.
+  oxc: { jsx: { runtime: 'automatic' } },
   test: {
     name: 'rls',
     environment: 'node',

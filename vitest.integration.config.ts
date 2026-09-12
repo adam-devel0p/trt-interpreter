@@ -4,6 +4,8 @@ import { alias } from './vitest.shared.ts';
 /** Integration suite: runs against local Supabase, truncates platform tables between tests. */
 export default defineConfig({
   resolve: { alias },
+  // tsconfig says jsx: preserve (Next); component tests need the automatic runtime here.
+  oxc: { jsx: { runtime: 'automatic' } },
   test: {
     name: 'integration',
     environment: 'node',

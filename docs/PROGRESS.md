@@ -2,11 +2,13 @@
 
 The first thing to read in any new session. Update it at the end of every phase.
 
-**Current state:** Phase 01 complete — sign up / in / out / reset (email+password, magic link,
-Google), 4-step resumable onboarding with a real decline-AI path, `profiles` / `user_flags` /
-`reminder_settings` with RLS proven, Profile screen with real consent + depth controls and labelled
-placeholders, Home shell, two demo users. Full gate green (56 e2e × 6 runs).
-**Next phase:** [Phase 02 — Deck reference: RWS + Thoth](phases/phase-02-deck-reference.md)
+**Current state:** Phase 02 complete — both decks seeded deck-natively (156 cards, Thoth with
+Knight/Queen/Prince/Princess, Disks, Atu names and titles, no reversals), archetypes as metadata
+only, 161 search aliases that never rename, 5 laid-out spreads, public-domain RWS art bundled and
+Thoth rendered typographically, `Card` / `CardPicker` / `SpreadLayout`, `/decks` in-app and public
+`/cards` + `/spreads` pages, Profile deck preferences, invariant `thoth-never-substitutes-rws` live.
+Full gate green (72 e2e × 4 runs).
+**Next phase:** [Phase 03 — Reading loop (no AI)](phases/phase-03-reading-loop.md)
 
 ## Phase status
 
@@ -14,7 +16,7 @@ placeholders, Home shell, two demo users. Full gate green (56 e2e × 6 runs).
 |---|---|---|---|---|
 | 00 | [Foundations & rails](phases/phase-00-foundations.md) | ⚠️ complete with deferrals | [report](phases/completed/phase-00-report.md) | 2026-09-12 · local Supabase on ports 55321–55329 |
 | 01 | [Auth, profile, onboarding](phases/phase-01-auth-onboarding.md) | ⚠️ complete with deferrals | [report](phases/completed/phase-01-report.md) | 2026-09-12 · Google OAuth needs owner credentials to finish end to end |
-| 02 | [Deck reference: RWS + Thoth](phases/phase-02-deck-reference.md) | ⬜ not started | — | |
+| 02 | [Deck reference: RWS + Thoth](phases/phase-02-deck-reference.md) | ✅ complete | [report](phases/completed/phase-02-report.md) | 2026-09-12 · Thoth text-only + no reversals by design; RWS art committed (27 MB) |
 | 03 | [Reading loop (no AI)](phases/phase-03-reading-loop.md) | ⬜ not started | — | |
 | 04 | [AI boundary + interpretation](phases/phase-04-ai-interpretation.md) | ⬜ not started | — | |
 | 05 | [Journal, search, export](phases/phase-05-journal-search.md) | ⬜ not started | — | ← shippable journal |
@@ -36,7 +38,7 @@ Each must be unskipped by the phase shown and never weakened afterwards. See
 | Test | Unskipped in | Status |
 |---|---|---|
 | `opening-reading-makes-no-ai-call` | 03 | ⬜ |
-| `thoth-never-substitutes-rws` | 02 | ⬜ |
+| `thoth-never-substitutes-rws` | 02 | ✅ |
 | `model-cannot-create-confirmed-fact` | 04 | ⬜ |
 | `reading-survives-ai-failure` | 04 | ⬜ |
 | `raw-text-never-overwritten` | 05 | ⬜ |
@@ -52,8 +54,12 @@ Each must be unskipped by the phase shown and never weakened afterwards. See
 
 Add anything a phase discovered but could not settle. Remove when resolved.
 
-- Thoth artwork: shipping text/typographic treatment only. Revisit if licensed or commissioned art
-  becomes available (Phase 02 decision, §6.7 artwork rights).
+- Thoth artwork: shipping the typographic treatment only (see `docs/LICENSING.md`). Schema and
+  renderer accept per-card art (`art_asset_path`, `art_strategy = 'original_commissioned'`) if
+  licensed or commissioned art becomes available (§6.7 artwork rights).
+- Thoth reversals: `supports_reversals = false` and null reversed meanings (deck reads by dignity).
+  If Thoth readers who do use reversals ask for them, it is a data change plus authored text, not
+  a schema change.
 - Pricing numbers are placeholders until retention data exists (§14).
 - Google OAuth credentials: not present in any environment yet. The flow is wired and tested up to
   the provider redirect; the owner must create a Google OAuth client and export
@@ -70,8 +76,10 @@ Phases append here when they defer something, so nothing is lost between session
 | Install PWA on a physical phone, verify offline shell | 00 → 01 | 03 | No device in either session; manifest/SW verified by e2e only |
 | Google OAuth end to end with real credentials | 01 | owner / 12 | No client ID/secret available; wired and tested to the provider redirect |
 | Shared auth rate-limit store (in-memory today, per instance) | 01 | 12 | `RateLimitStore` interface ready; Supabase Auth limits sit behind it |
-| `profiles.default_deck_id` FK to `decks` | 01 | 02 | `decks` table does not exist yet |
+| ~~`profiles.default_deck_id` FK to `decks`~~ | 01 | 02 ✅ | done in `0003_deck_reference` |
 | Purge `%@test.local` users created by e2e runs | 01 | 12 | Harmless locally; CI DB is ephemeral |
 | `ai_calls` write in `telemetry.ts` | 00 | 04 | Table lands in 04; sink interface + memory sink in place |
 | Real per-user budgets (`BudgetPolicy`) | 00 | 11 | `usage_counters` lands in 11; hook wired and tested |
 | Sentry source-map upload | 00 | 12 | Scrubbing proven without it |
+| Live deck switch inside a flow (no navigation) | 02 | 03 | Reference page switches by link; the reading flow is where it matters |
+| `fixtures/decks/` recorded fixtures | 02 | 04 | Purity tests use the pure seed modules; recorded fixtures belong with the first AI task |

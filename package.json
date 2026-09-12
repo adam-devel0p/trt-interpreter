@@ -30,7 +30,8 @@
     "typecheck": "tsc --noEmit",
     "check:prompt-versions": "tsx scripts/check-prompt-versions.ts",
     "check:client-bundle": "tsx scripts/check-client-bundle.ts",
-    "icons:generate": "tsx scripts/gen-icons.ts"
+    "icons:generate": "tsx scripts/gen-icons.ts",
+    "art:build": "tsx scripts/build-card-art.ts"
   },
   "dependencies": {
     "@fontsource-variable/dm-sans": "^5.3.0",

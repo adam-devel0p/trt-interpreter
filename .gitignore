@@ -26,3 +26,6 @@ supabase/.branches
 .DS_Store
 *.tsbuildinfo
 *.log
+
+# card art download cache (outputs are committed under public/cards)
+.cache

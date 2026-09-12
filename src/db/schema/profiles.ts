@@ -11,6 +11,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { authUid, authenticatedRole, authUsers } from 'drizzle-orm/supabase';
+import { decks } from './decks';
 import { experienceLevel, explanationDepth, flagSetBy, reminderChannel, usageStyle } from './enums';
 
 /**
@@ -33,8 +34,8 @@ export const profiles = pgTable(
     timezone: text('timezone').notNull().default('UTC'),
     usageStyle: usageStyle('usage_style'),
     experienceLevel: experienceLevel('experience_level'),
-    /** FK to decks lands in Phase 02 (the table does not exist yet). */
-    defaultDeckId: uuid('default_deck_id'),
+    /** Remembered deck preference (FR-03A). Null until chosen; cleared if the deck is removed. */
+    defaultDeckId: uuid('default_deck_id').references(() => decks.id, { onDelete: 'set null' }),
     useReversals: boolean('use_reversals').notNull().default(true),
     /** Null = AI processing not consented (declined or not yet asked). */
     aiConsentAt: timestamp('ai_consent_at', { withTimezone: true }),

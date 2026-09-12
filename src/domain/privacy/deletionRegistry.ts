@@ -7,6 +7,8 @@
  *
  * Phase 01: no product objects exist yet; the platform `jobs` table and the identity tables
  * (`profiles`, `user_flags`, `reminder_settings`) are registered under the `user` root.
+ * Phase 02: deck reference tables are global (no user rows) and listed in `REFERENCE_TABLES`;
+ * `spreads` carries a nullable `user_id` for custom spreads, so it is registered.
  */
 
 export type RootType = 'reading' | 'life_event' | 'journey' | 'entity' | 'user';
@@ -32,11 +34,22 @@ export const DELETION_REGISTRY: Record<RootType, readonly CascadeTarget[]> = {
     },
     { table: 'user_flags', via: 'cascade' },
     { table: 'reminder_settings', via: 'cascade' },
+    {
+      table: 'spreads',
+      via: 'cascade',
+      note: 'custom spreads only; built-in rows have user_id null and are never deleted',
+    },
   ],
 };
 
 /** Tables that are global reference data (no user rows) and therefore exempt from the check. */
-export const REFERENCE_TABLES: readonly string[] = [];
+export const REFERENCE_TABLES: readonly string[] = [
+  'decks',
+  'cards',
+  'card_archetypes',
+  'card_archetype_members',
+  'card_aliases',
+];
 
 /** Every table named anywhere in the registry. */
 export function coveredTables(): Set<string> {

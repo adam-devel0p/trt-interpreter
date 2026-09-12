@@ -65,6 +65,11 @@ export interface IsolationOptions {
    * asserts that A *cannot* delete it (no delete policy: account deletion is service-role only).
    */
   preexisting?: boolean;
+  /**
+   * The table also holds public rows (built-in `spreads`), so anon legitimately reads *some*
+   * rows; the assertion becomes "anon cannot see A's row" instead of "anon reads nothing".
+   */
+  hasPublicRows?: boolean;
 }
 
 /**
@@ -102,8 +107,13 @@ export async function expectRlsIsolation(
   expect(bRead.error).toBeNull();
   expect(bRead.data, `B must not read A's ${table} row`).toHaveLength(0);
 
-  const anonRead = await f.anon.from(table).select('id');
-  expect(anonRead.data ?? [], `anon must read nothing from ${table}`).toHaveLength(0);
+  if (opts.hasPublicRows) {
+    const anonRow = await f.anon.from(table).select('id').eq('id', id);
+    expect(anonRow.data ?? [], `anon must not read A's ${table} row`).toHaveLength(0);
+  } else {
+    const anonRead = await f.anon.from(table).select('id');
+    expect(anonRead.data ?? [], `anon must read nothing from ${table}`).toHaveLength(0);
+  }
 
   if (!opts.preexisting) {
     const bSpoof = await f.b.client.from(table).insert(rowFactory(f.a.id));
@@ -193,5 +203,49 @@ export async function expectNoUserAccess(
     const write = await client.from(table).insert(row).select('id');
     expect(write.error ?? write.data?.length === 0, `${who} must not write ${table}`).toBeTruthy();
     expect(write.data ?? []).toHaveLength(0);
+  }
+}
+
+/**
+ * For global reference tables (`decks`, `cards`, …): anon and authenticated users can read
+ * every row; neither can insert, update or delete anything. `sampleRow` is what a user would
+ * try to insert; `mutableColumn` is what they would try to change on an existing row.
+ */
+export async function expectPublicReadOnly(
+  f: RlsFixture,
+  table: string,
+  sampleRow: Record<string, unknown>,
+  opts: { mutableColumn: string; mutatedValue: unknown },
+): Promise<void> {
+  for (const [who, client] of [
+    ['A', f.a.client],
+    ['anon', f.anon],
+  ] as const) {
+    const read = await client.from(table).select('id').limit(5);
+    expect(read.error, `${who} read ${table}`).toBeNull();
+    expect(read.data?.length ?? 0, `${who} must read ${table}`).toBeGreaterThan(0);
+    const id = (read.data![0] as { id: string }).id;
+
+    const ins = await client.from(table).insert(sampleRow).select('id');
+    expect(
+      ins.error ?? ins.data?.length === 0,
+      `${who} must not insert into ${table}`,
+    ).toBeTruthy();
+    expect(ins.data ?? []).toHaveLength(0);
+
+    const before = await client.from(table).select(opts.mutableColumn).eq('id', id).single();
+    const upd = await client
+      .from(table)
+      .update({ [opts.mutableColumn]: opts.mutatedValue })
+      .eq('id', id)
+      .select('id');
+    expect(upd.data ?? [], `${who} must not update ${table}`).toHaveLength(0);
+    const after = await client.from(table).select(opts.mutableColumn).eq('id', id).single();
+    expect(after.data).toEqual(before.data);
+
+    const del = await client.from(table).delete().eq('id', id).select('id');
+    expect(del.data ?? [], `${who} must not delete from ${table}`).toHaveLength(0);
+    const still = await client.from(table).select('id').eq('id', id);
+    expect(still.data).toHaveLength(1);
   }
 }

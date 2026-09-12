@@ -15,6 +15,7 @@ export const PROTECTED_PREFIXES = [
   '/profile',
   '/onboarding',
   '/reading',
+  '/decks',
 ] as const;
 
 export const AUTH_ROUTES = ['/sign-in', '/sign-up', '/forgot-password'] as const;

@@ -52,3 +52,12 @@ export const experienceLevel = pgEnum('experience_level', [
 export const explanationDepth = pgEnum('explanation_depth', ['brief', 'standard', 'deep']);
 export const flagSetBy = pgEnum('flag_set_by', ['user', 'admin', 'rollout']);
 export const reminderChannel = pgEnum('reminder_channel', ['push', 'email', 'none']);
+
+// ── Deck reference layer (Phase 02, docs/DATA_MODEL.md#deck-reference-layer--phase-02) ──
+export const arcana = pgEnum('arcana', ['major', 'minor']);
+export const artStrategy = pgEnum('art_strategy', [
+  'bundled_public_domain',
+  'original_commissioned',
+  'text_only',
+]);
+export const aliasKind = pgEnum('alias_kind', ['search', 'cross_deck', 'historical']);

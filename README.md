@@ -20,7 +20,7 @@ cp .env.example .env.local
 pnpm supabase:start            # boots Postgres/Auth/Storage/Studio in Docker (ports 55321–55329)
 pnpm supabase:status           # prints keys — copy ANON_KEY and SERVICE_ROLE_KEY into .env.local
 pnpm db:migrate                # applies src/db/migrations
-pnpm db:seed                   # reference data (no-op until Phase 02)
+pnpm db:seed                   # deck/spread reference data (RWS + Thoth), idempotent
 pnpm dev                       # http://localhost:3000
 ```
 
@@ -44,7 +44,8 @@ in Mailpit at `http://127.0.0.1:55324`). Google sign-in needs
 | `pnpm supabase:start` / `supabase:stop` / `supabase:status` | Local Supabase stack |
 | `pnpm db:migrate` | Apply Drizzle SQL migrations from `src/db/migrations` |
 | `pnpm db:generate` | Generate a migration from `src/db/schema` (then review the SQL, add RLS) |
-| `pnpm db:seed` | Deck/spread reference data, idempotent (Phase 02) |
+| `pnpm db:seed` | Deck/spread reference data (156 cards, archetypes, aliases, 5 spreads), idempotent |
+| `pnpm art:build` | Re-encode the public-domain RWS scans into `public/cards/rws` (outputs are committed; only needed when the pipeline changes) |
 | `pnpm demo:seed --months 6` | Fictional multi-month journal for UI testing (extended every phase) |
 | `pnpm jobs:run` | Process one batch of background jobs locally (stands in for Vercel cron) |
 | `pnpm test` | Vitest unit **and** integration suites (integration needs Supabase running) |

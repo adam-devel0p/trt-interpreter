@@ -23,15 +23,18 @@ checks were actually performed.
   `expectRlsIsolation(fixture, table, rowFactory, { mutableColumn, mutatedValue, ownerColumn?,
   preexisting? })` covers select/insert/update/delete + anon (`ownerColumn: 'id'` for `profiles`;
   `preexisting: true` for trigger-created rows, which also asserts the owner *cannot* delete),
-  `expectReadOwnOnly()` covers read-own/service-role-write tables (`user_flags`), and
-  `expectNoUserAccess()` covers service-role-only tables (`jobs`).
+  `expectReadOwnOnly()` covers read-own/service-role-write tables (`user_flags`),
+  `expectNoUserAccess()` covers service-role-only tables (`jobs`), and `expectPublicReadOnly()`
+  covers global reference tables (`decks`, `cards`, …: anon **can** read, nobody but the service
+  role writes). Tables that mix public and owned rows (`spreads`) pass `hasPublicRows: true` to the
+  isolation harness so the anon check becomes "cannot see A's row".
   File naming selects the suite: `*.test.ts` unit · `*.integration.test.ts` integration ·
   `*.rls.test.ts` RLS.
 - **Invariant tests** — a dedicated `src/__tests__/invariants/` directory asserts the §21 list
   directly, one test file per invariant, named after it. These are the tests that must never be
   weakened to make a feature pass:
   - `model-cannot-create-confirmed-fact.test.ts`
-  - `thoth-never-substitutes-rws.test.ts`
+  - `thoth-never-substitutes-rws.test.tsx` (live since Phase 02: seed data, a source scan of every render path for archetype references, and the rendered `Card` markup)
   - `opening-reading-makes-no-ai-call.test.ts` (spies on the provider; asserts zero calls)
   - `reading-survives-ai-failure.test.ts`
   - `card-overlap-alone-never-correlates.test.ts`
@@ -54,8 +57,9 @@ checks were actually performed.
 
 ## Fixtures
 
-- `fixtures/decks/` — a handful of real RWS and Thoth cards with full correspondences, used by
-  interpretation and deck-purity tests.
+- `fixtures/decks/` — reserved for recorded interpretation fixtures (Phase 04). Deck-purity tests
+  use the real seed modules in `src/db/seed/decks/` directly; they are pure TypeScript and need no
+  database.
 - `fixtures/history/` — hand-authored user histories (a relationship arc, a career arc, a relocation
   arc) with expected entity resolutions, journey clusters and correlation verdicts. These are the
   ground truth for §8 behaviour and are extended as thresholds are tuned.

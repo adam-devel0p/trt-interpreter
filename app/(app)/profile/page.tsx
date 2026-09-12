@@ -2,11 +2,12 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { signOutAction } from '@/auth/actions';
 import { getSessionClient, requireUser } from '@/auth/session';
+import { listDecks } from '@/db/queries/decks';
 import { getProfile, hasAiConsent } from '@/db/queries/profile';
 import { Button } from '@/ui/components/button';
 import { PageHeader } from '@/ui/components/page-header';
 import { SettingsRow, SettingsSection } from '@/ui/components/settings';
-import { ConsentToggle, DepthSelect } from './controls';
+import { ConsentToggle, DeckSelect, DepthSelect, ReversalsToggle } from './controls';
 
 export const metadata = { title: 'Profile' };
 export const dynamic = 'force-dynamic';
@@ -18,9 +19,12 @@ export const dynamic = 'force-dynamic';
  */
 export default async function ProfilePage() {
   const user = await requireUser();
-  const profile = await getProfile(await getSessionClient(), user.id);
+  const client = await getSessionClient();
+  const [profile, decks] = await Promise.all([getProfile(client, user.id), listDecks(client)]);
   if (!profile) redirect('/sign-in');
   const consented = hasAiConsent(profile);
+  const defaultDeck = decks.find((d) => d.id === profile.default_deck_id) ?? decks[0];
+  const noReversalDecks = decks.filter((d) => !d.supports_reversals).map((d) => d.name);
 
   return (
     <>
@@ -42,10 +46,35 @@ export default async function ProfilePage() {
 
       <SettingsSection
         title="Deck preferences"
-        description="Rider-Waite-Smith and Thoth are both first-class. Pick a default once decks arrive."
+        description="Rider–Waite–Smith and Thoth are both first-class. You can still pick either deck for any reading."
       >
-        <SettingsRow label="Default deck" comingIn="Phase 02" />
-        <SettingsRow label="Reversals" description="Currently on" comingIn="Phase 02" />
+        <SettingsRow
+          label="Default deck"
+          labelId="deck-label"
+          description={
+            defaultDeck
+              ? `${defaultDeck.name} is offered first when you start a reading.`
+              : undefined
+          }
+          control={
+            <DeckSelect
+              labelId="deck-label"
+              value={profile.default_deck_id}
+              decks={decks.map((d) => ({ id: d.id, name: d.name }))}
+            />
+          }
+        />
+        <SettingsRow
+          label="Reversals"
+          labelId="reversals-label"
+          description={
+            (profile.use_reversals
+              ? 'On: a card can be drawn or entered upside down. '
+              : 'Off: every card is read upright. ') +
+            (noReversalDecks.length ? `${noReversalDecks.join(', ')} never uses reversals.` : '')
+          }
+          control={<ReversalsToggle labelId="reversals-label" enabled={profile.use_reversals} />}
+        />
       </SettingsSection>
 
       <SettingsSection title="AI & privacy">

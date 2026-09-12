@@ -19,6 +19,23 @@ slot. Journal list/search (05). Extraction/entities/journeys (06/07).
 
 ## Tasks
 
+From Phase 02 (see [completed/phase-02-report.md](completed/phase-02-report.md) §13):
+- Deck data comes from `src/db/queries/decks.ts` (`listDecks`, `listCards(client, deck)` →
+  `PickerCard[]` with aliases, `getCardBySlug`, `listSpreads`). Never join the archetype tables in a
+  render path; the invariant test scans `app/(app)/decks`, `app/(marketing)/cards|spreads` and the
+  `card*.tsx` components — add any new reading routes to its `RENDER_PATHS` list.
+- Effective reversals for a reading = `deck.supports_reversals && profile.use_reversals`. Thoth is
+  `supports_reversals = false` with null `meaning_reversed`; never draw or enter a reversed Thoth card.
+- `CardPicker` takes the active deck's `PickerCard[]` (78 rows, fetched once per reading) and is
+  deck-scoped by construction; pass `disabledIds` for already-placed cards and `recentIds` from the
+  user's recent readings once those exist. `SpreadLayout` takes `positions` + `layout` from the
+  `spreads` row and a `renderSlot(position, index)`; slot heights derive from card aspect 3:5.
+- `Card` props: `card: CardView`, `orientation`, `size xs|sm|md|lg`, `caption`, `loading`, `priority`.
+  Alt text is deck-native via `cardAltText()`. Set `data-deck` on the reading page root so the accent
+  follows the chosen deck (`Card` sets it on itself too).
+- `spreads` already supports user-owned rows with RLS (`user_id`, `is_builtin=false`); the layout
+  shape is `spreadLayoutSchema` in `src/domain/decks/types.ts`.
+
 ### 1. Schema
 `readings` and `reading_cards` per [../DATA_MODEL.md](../DATA_MODEL.md#readings--phase-03), with RLS on
 both (`reading_cards` via parent-exists policy **plus** denormalised `user_id`). Add user-owned
