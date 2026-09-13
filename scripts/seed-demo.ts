@@ -1,7 +1,7 @@
 import './_env';
 import { parseArgs } from 'node:util';
 import { authAdmin, closeAdmin, platformSql } from '../src/db/admin';
-import { seedReadings } from './seed-demo-readings';
+import { seedBulkReadings, seedReadings } from './seed-demo-readings';
 import { seedInterpretations } from './seed-demo-interpretations';
 
 /**
@@ -19,6 +19,8 @@ export interface SeedContext {
   months: number;
   /** Deterministic RNG seed so demo data is reproducible across runs. */
   seed: number;
+  /** Phase 05: generated readings for the bulk user (0 = none). */
+  bulk: number;
   ids: Record<string, string[]>;
 }
 
@@ -33,6 +35,8 @@ export interface Seeder {
  * same for both so the e2e suite and a developer can sign in: `demo-password-123`.
  *   demo-ana@tarot.local   consented to AI, digital reader, comfortable, onboarding done
  *   demo-ben@tarot.local   declined AI, physical deck, experienced, onboarding done
+ *   demo-cleo@tarot.local  Phase 05: a generated 1000-reading journal (`--bulk`), for the
+ *                          journal's performance and scroll checks; declined AI
  * Later seeders find their IDs in ctx.ids.users (same order).
  */
 export const DEMO_USERS = [
@@ -48,7 +52,14 @@ export const DEMO_USERS = [
     experience_level: 'experienced',
     ai_consent: false,
   },
+  {
+    email: 'demo-cleo@tarot.local',
+    usage_style: 'both',
+    experience_level: 'comfortable',
+    ai_consent: false,
+  },
 ] as const;
+export const BULK_USER_INDEX = 2;
 export const DEMO_PASSWORD = 'demo-password-123';
 
 async function seedUsers(ctx: SeedContext): Promise<void> {
@@ -83,10 +94,18 @@ async function seedUsers(ctx: SeedContext): Promise<void> {
   }
 }
 
+async function seedBulk(ctx: SeedContext): Promise<void> {
+  const userId = ctx.ids.users?.[BULK_USER_INDEX];
+  if (!userId) throw new Error('seedBulk needs the users seeder first');
+  const ids = await seedBulkReadings(userId, ctx.bulk, ctx.seed);
+  console.log(`  ${ids.length} generated readings for ${DEMO_USERS[BULK_USER_INDEX].email}`);
+}
+
 const SEEDERS: Seeder[] = [
   { name: 'users', phase: '01', run: seedUsers },
   { name: 'readings', phase: '03', run: seedReadings },
   { name: 'interpretations', phase: '04', run: seedInterpretations },
+  { name: 'bulk readings', phase: '05', run: seedBulk },
 ];
 
 async function main() {
@@ -94,14 +113,17 @@ async function main() {
     options: {
       months: { type: 'string', default: '6' },
       seed: { type: 'string', default: '42' },
+      bulk: { type: 'string', default: '1000' },
     },
   });
   const ctx: SeedContext = {
     months: Number(values.months),
     seed: Number(values.seed),
+    bulk: Number(values.bulk),
     ids: {},
   };
   if (!Number.isFinite(ctx.months) || ctx.months < 1) throw new Error('--months must be ≥ 1');
+  if (!Number.isFinite(ctx.bulk) || ctx.bulk < 0) throw new Error('--bulk must be ≥ 0');
 
   if (SEEDERS.length === 0) {
     console.log(`nothing to seed yet (months=${ctx.months}) — seeders register from Phase 01`);

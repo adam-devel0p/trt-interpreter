@@ -28,7 +28,9 @@ export async function enqueue(
       kind,
       payload: parsed as Record<string, unknown>,
       userId: opts.userId ?? null,
-      runAfter: opts.runAfter ?? new Date(),
+      // Default to the database's own now(): a host clock a few ms ahead of the DB would
+      // otherwise leave a fresh job "due in the future" for the very next claim.
+      ...(opts.runAfter ? { runAfter: opts.runAfter } : {}),
       maxAttempts: opts.maxAttempts ?? 5,
     })
     .returning({ id: jobs.id });

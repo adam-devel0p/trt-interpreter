@@ -210,3 +210,26 @@ on Continue with a 2.5 s client timeout, consent-gated on both sides.
 - Statistical test (`draw.test.ts`, 100k three-card draws): every card within 5σ of uniform in
   every position, no duplicate card within a spread, reversal rate within 0.005 of 0.5.
 
+## 7. Journal search (FR-21, Phase 05)
+
+One Postgres function, `search_readings(p jsonb)`, so text, cards, filters, sort and cursor
+compose in a single planner-visible query (docs/DATA_MODEL.md#readings--phase-03). A free-text
+query `q` matches a reading when **any** of these hold:
+
+1. `search_vector @@ websearch_to_tsquery('english', q)` — the generated FTS column over
+   `question || user_notes` (stemming, phrases in quotes, `-` exclusion);
+2. the reading contains a card whose deck-native name, title or alias matches `q` — ids are
+   resolved **by the caller** with the pure `searchCards()` from Phase 02 over both decks
+   (exact / prefix / alias hits only, score ≥ 50; never fuzzy, so "money" does not become a card
+   search), and passed as `q_card_ids`. "strength" therefore finds RWS *Strength* and Thoth *Lust*,
+   and each result shows its own name — the alias makes it findable, never renames it (FR-03C);
+3. `q <% question` or `q <% user_notes` — pg_trgm word similarity at 0.5 (function-level GUC),
+   the fallback for short or misspelled queries ("pentacels").
+
+Filters are ANDed: date range (the viewer's local days, converted to instants by the caller),
+deck, spread, source, follow-up status, has-notes, has-interpretation (EXISTS on a complete,
+non-superseded row), explicit `card_ids`. Sort is `newest` (`occurred_at desc, id desc`),
+`oldest`, or `edited` (`updated_at desc, id desc`); pagination is a keyset on the sort key + id
+(`after_key`, `after_id`, base64url in the URL), never an offset, so rows inserted between pages
+neither shift nor duplicate. Search results keep the chosen sort rather than a relevance rank —
+a journal is read in time. Measured at 1000 readings (Phase 05 report): p95 13–81 ms.

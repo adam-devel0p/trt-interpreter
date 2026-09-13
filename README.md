@@ -33,8 +33,11 @@ Auth runs on Supabase Auth. Email/password and magic links work out of the box l
 in Mailpit at `http://127.0.0.1:55324`). Google sign-in needs
 `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` / `_SECRET` exported before `pnpm supabase:start`
 (see `.env.example`); without them the button shows a neutral "not available" message.
-`pnpm demo:seed` creates `demo-ana@tarot.local` / `demo-ben@tarot.local` (password
-`demo-password-123`) with onboarding complete — Ana consented to AI, Ben declined.
+`pnpm demo:seed` creates `demo-ana@tarot.local` / `demo-ben@tarot.local` / `demo-cleo@tarot.local`
+(password `demo-password-123`) with onboarding complete — Ana consented to AI, Ben declined, and
+Cleo carries a generated 1000-reading journal (`--bulk N`, default 1000) for the journal's
+performance and scroll checks. Delete + export run their jobs straight away; `pnpm jobs:run`
+is the retry path.
 
 ## Commands
 
@@ -46,7 +49,7 @@ in Mailpit at `http://127.0.0.1:55324`). Google sign-in needs
 | `pnpm db:generate` | Generate a migration from `src/db/schema` (then review the SQL, add RLS) |
 | `pnpm db:seed` | Deck/spread reference data (156 cards, archetypes, aliases, 5 spreads), idempotent |
 | `pnpm art:build` | Re-encode the public-domain RWS scans into `public/cards/rws` (outputs are committed; only needed when the pipeline changes) |
-| `pnpm demo:seed --months 6` | Fictional multi-month journal for UI testing (extended every phase) |
+| `pnpm demo:seed --months 6 --bulk 1000` | Fictional multi-month journal for UI testing (extended every phase); `--bulk` sizes demo-cleo's generated journal |
 | `pnpm jobs:run` | Process one batch of background jobs locally (stands in for Vercel cron) |
 | `pnpm test` | Vitest unit **and** integration suites (integration needs Supabase running) |
 | `pnpm test:unit` / `test:integration` | Either suite alone |

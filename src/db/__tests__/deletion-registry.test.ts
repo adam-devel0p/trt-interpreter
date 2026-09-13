@@ -23,6 +23,9 @@ describe('deletion registry', () => {
         'safety_flags',
         'question_embeddings',
         'ai_calls',
+        'reading_note_revisions',
+        'deletion_receipts',
+        'exports',
       ]),
     );
     // Simulate a new user-owned table that nobody registered.

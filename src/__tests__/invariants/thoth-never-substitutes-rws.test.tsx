@@ -134,7 +134,11 @@ describe('thoth-never-substitutes-rws', () => {
     it('the deck and reading query modules never select from the archetype tables', () => {
       for (const [file, allowed] of [
         ['src/db/queries/decks.ts', ['decks', 'cards', 'card_aliases', 'spreads']],
-        ['src/db/queries/readings.ts', ['readings', 'reading_cards', 'reading_drafts']],
+        [
+          'src/db/queries/readings.ts',
+          ['readings', 'reading_cards', 'reading_drafts', 'reading_note_revisions'],
+        ],
+        ['src/db/queries/journal.ts', ['readings']],
       ] as const) {
         const src = readFileSync(path.resolve(file), 'utf8');
         const fromCalls = [...src.matchAll(/\.from\('([a-z_]+)'\)/g)].map((m) => m[1]);

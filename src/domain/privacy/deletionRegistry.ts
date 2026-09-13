@@ -14,6 +14,11 @@
  * Phase 04: `interpretations`, `question_embeddings` (cascade from the reading and the user),
  * `safety_flags` (user cascade; keyed by object id, purged with the object in Phase 05's job)
  * and the platform `ai_calls` (user_id set null on account deletion — it holds no content).
+ * Phase 05: `reading_note_revisions` (cascade from the reading and the user),
+ * `deletion_receipts` (user_id set null — a receipt outlives the account and holds only
+ * counts), `exports` (cascade; the archive in the `exports` bucket is removed by the job).
+ * The `purge_deleted` job (`src/privacy/purge.ts`) is driven by the `reading` root of this
+ * registry and a test asserts its receipt names every table listed here.
  */
 
 export type RootType = 'reading' | 'life_event' | 'journey' | 'entity' | 'user';
@@ -33,7 +38,12 @@ export const DELETION_REGISTRY: Record<RootType, readonly CascadeTarget[]> = {
     {
       table: 'safety_flags',
       via: 'job',
-      note: 'keyed by (object_type, object_id); the Phase 05 purge job removes them with the reading',
+      note: 'keyed by (object_type, object_id); the purge job removes them with the reading',
+    },
+    {
+      table: 'reading_note_revisions',
+      via: 'cascade',
+      note: 'FK readings.id on delete cascade; every previous value of the user text',
     },
   ],
   life_event: [],
@@ -68,8 +78,27 @@ export const DELETION_REGISTRY: Record<RootType, readonly CascadeTarget[]> = {
       via: 'cascade',
       note: 'user_id set null on delete; rows hold counts and classes, no content',
     },
+    { table: 'reading_note_revisions', via: 'cascade' },
+    {
+      table: 'deletion_receipts',
+      via: 'cascade',
+      note: 'user_id set null on delete; counts and IDs only, so the receipt outlives the account',
+    },
+    {
+      table: 'exports',
+      via: 'job',
+      note: 'rows cascade from auth.users; the archives under exports/<user_id>/ are storage objects the account-deletion job (Phase 12) must remove',
+    },
   ],
 };
+
+/**
+ * Storage prefixes that hold user-owned bytes. Not tables, so the structural check cannot see
+ * them; listed here so the account-deletion job has one place to read.
+ */
+export const STORAGE_PREFIXES: readonly { bucket: string; prefix: (userId: string) => string }[] = [
+  { bucket: 'exports', prefix: (userId) => `${userId}/` },
+];
 
 /** Tables that are global reference data (no user rows) and therefore exempt from the check. */
 export const REFERENCE_TABLES: readonly string[] = [

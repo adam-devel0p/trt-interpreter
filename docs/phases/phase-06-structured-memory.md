@@ -18,6 +18,37 @@ extraction (08), retrieval (09).
 
 ## Tasks
 
+From Phase 05 (see [completed/phase-05-report.md](completed/phase-05-report.md) §13):
+- The journal reads through `searchJournal(client, filters, opts)` (`src/db/queries/journal.ts`)
+  → `{ items, nextCursor, matchedCardIds }`, backed by the `search_readings(p jsonb)` Postgres
+  function. An entity/theme filter is: a key in `journalFiltersSchema` + `URL_KEYS`
+  (`src/domain/journal/filters.ts`), a parameter + `EXISTS` clause in the function (new
+  migration), and a select in `app/(app)/journal/filters.tsx`. The URL, cursor and list need
+  nothing else. Nothing on that route may import `src/ai/` (invariant scan).
+- **The deletion registry is executable.** Every new table under the `reading` root needs a
+  counter in `READING_DEPENDENT_COUNTERS` (`src/privacy/purge.ts`), and `via: 'job'` targets a
+  remover, or `deleting-reading-purges-derived` fails. `entity` root tables need the same
+  pattern (a purge path and a receipt) when they land; the `reading_id`-FK scan in that test
+  lists the migrations to read — add `0007_…`.
+- **Export:** a new object type is a name in `EXPORT_FILES`, a schema in `EXPORT_FILE_SCHEMAS`
+  (`src/domain/export/schema.ts`), a collector in `buildExportArchive()` (`src/export/build.ts`)
+  and a `LINK_KINDS` entry; the round-trip test validates every file. Extractions and entities
+  belong in the export (they are the user's derived artifacts, with versions).
+- **Delete AI artifacts:** add `extractions` (and whatever else is model-derived) to
+  `AI_ARTIFACT_TABLES` in `src/privacy/aiArtifacts.ts`; each needs an owner delete policy.
+- **Invariant 4 is a trigger** (`readings_keep_text`); derived-side modules (`src/ai`,
+  `src/interpretation`, `src/jobs`, `src/privacy`, `src/export`) must never write `readings` or
+  `reading_cards` — `raw-text-never-overwritten` scans for it. Extraction reads text, never
+  rewrites it.
+- `readings.metadata_version` bumps on card, deck, spread **and question** edits; an extraction
+  keyed on it is stale on any of those — reprocess, never silently keep.
+- Jobs: `enqueue()` then `runBatch({ jobId })` runs one job immediately with cron as the retry
+  path (the delete and export actions do this). Extraction after save should stay a queued job
+  (never in the request path) — the cron batch picks it up.
+- Fixtures: `src/__tests__/fixtures/journal-db.ts` (`makeReading`, `storeInterpretation`,
+  `attachDerived`) and `e2e/_helpers.ts` `seedReadings()`; scope the e2e `ai_calls` spy to the
+  test's `user_id`. `demo-cleo` has 1000 generated readings (`pnpm demo:seed --bulk N`).
+
 ### 1. Schema
 All tables per [../DATA_MODEL.md](../DATA_MODEL.md#derived-metadata--phase-06), RLS on each. Trigram
 index on `entity_aliases.alias_normalized`. `predictions.fact_status` fixed to `POSSIBILITY` by check

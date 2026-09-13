@@ -98,3 +98,92 @@ export async function signInViaUi(page: Page, email: string, password = PASSWORD
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/home$/);
 }
+
+/** Service-role client for test setup only (never in app code). */
+async function adminClient() {
+  const { createClient } = await import('@supabase/supabase-js');
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key)
+    throw new Error('e2e needs NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+}
+
+export interface SeedReadingSpec {
+  deck: 'rws-classic' | 'thoth';
+  /** Built-in spread slug; card count must match. */
+  spread: 'one-card' | 'three-card' | 'situation-advice-outcome';
+  cards: string[];
+  question?: string | null;
+  notes?: string | null;
+  occurredAt?: string;
+  source?: 'digital' | 'physical';
+}
+
+/**
+ * Insert readings for a test user directly (Phase 05 journal specs need a few readings
+ * without walking the flow each time). Same rows `create_reading()` would write.
+ */
+export async function seedReadings(userId: string, specs: SeedReadingSpec[]): Promise<string[]> {
+  const admin = await adminClient();
+  const ids: string[] = [];
+  for (const spec of specs) {
+    const deck = await admin.from('decks').select('id').eq('slug', spec.deck).single();
+    const spread = await admin
+      .from('spreads')
+      .select('id, positions')
+      .eq('slug', spec.spread)
+      .is('user_id', null)
+      .single();
+    if (deck.error || spread.error) throw new Error('reference data missing — run pnpm db:seed');
+    const deckId = (deck.data as { id: string }).id;
+    const positions = (spread.data as { positions: { key: string }[] }).positions;
+    const cards = await admin
+      .from('cards')
+      .select('id, slug')
+      .eq('deck_id', deckId)
+      .in('slug', spec.cards);
+    const bySlug = new Map(
+      (cards.data as { id: string; slug: string }[]).map((c) => [c.slug, c.id]),
+    );
+    const reading = await admin
+      .from('readings')
+      .insert({
+        user_id: userId,
+        question: spec.question ?? null,
+        is_open_reflection: spec.question === null,
+        spread_id: (spread.data as { id: string }).id,
+        deck_id: deckId,
+        source: spec.source ?? 'physical',
+        uses_reversals: false,
+        user_notes: spec.notes ?? null,
+        occurred_at: spec.occurredAt ?? new Date().toISOString(),
+      })
+      .select('id')
+      .single();
+    if (reading.error) throw new Error(`seed reading failed: ${reading.error.message}`);
+    const readingId = (reading.data as { id: string }).id;
+    const rows = spec.cards.map((slug, i) => {
+      const cardId = bySlug.get(slug);
+      if (!cardId) throw new Error(`no card ${slug} in ${spec.deck}`);
+      return {
+        reading_id: readingId,
+        user_id: userId,
+        position_index: i,
+        position_key: positions[i]?.key ?? `position_${i + 1}`,
+        card_id: cardId,
+        orientation: 'upright',
+        sort_order: i,
+      };
+    });
+    const ins = await admin.from('reading_cards').insert(rows);
+    if (ins.error) throw new Error(`seed cards failed: ${ins.error.message}`);
+    ids.push(readingId);
+  }
+  return ids;
+}
+
+/** Sign in as one of the `pnpm demo:seed` accounts. */
+export async function signInAsDemo(page: Page, email: string) {
+  await signInViaUi(page, email, 'demo-password-123');
+}

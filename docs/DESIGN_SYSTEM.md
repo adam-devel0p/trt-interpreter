@@ -151,3 +151,20 @@ unavailable — your reading is saved." + what happened + Try again, partial lay
 *stored* (feedback Yes / Not really with an optional reason, Regenerate). The reading flow's
 question step gained the FR-25 nudge: a region "You've asked this a few times today." listing the
 earlier readings, *Draw anyway* (primary) and *Look at what's driving the uncertainty*.
+
+Phase 05 built `TimelineItem` (one reading on the journal: date, question or *Open reflection*,
+deck accent as a left rule, spread and source, up to five `xs` card thumbnails then *+N*, the
+deck-native card names, one preview line — the AI synthesis labelled *AI ·* in the tinted sans
+container, or the user's note in the serif — and status chips; `content-visibility: auto` so a
+1000-entry list scrolls at 60fps; matched cards from a search get an outline and an underlined
+name), `NoteHistory` (the earlier versions of the user's question and notes as a folded
+`<details>`, serif on paper because the words are theirs), the journal's `JournalFilters` (a
+GET form: search box, a *Filters* disclosure with date range, deck, spread, source, follow-up,
+notes, AI and sort; selects apply on change; every state lives in the URL; *Clear all* is one
+link) and `JournalList` (month headings that regroup in the viewer's zone after mount, a polite
+`role="status"` result count, cursor pagination by sentinel with a *Load more* fallback), the
+edit form's deck and spread selects (a deck change clears the cards with an honest notice; the
+stored interpretation is *stale*, never silently kept), the delete confirmation that names
+exactly what goes, and the Profile's `ExportControls` (button, history with status, size,
+expiry and *Download*), `DeleteAiArtifactsControl` (counts quoted before the destructive verb)
+and `DeletionReceipts`.

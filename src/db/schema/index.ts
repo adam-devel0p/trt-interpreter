@@ -4,3 +4,4 @@ export * from './profiles';
 export * from './decks';
 export * from './readings';
 export * from './ai';
+export * from './journal';

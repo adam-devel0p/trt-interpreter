@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import * as React from 'react';
-import type { PickerCard } from '@/db/queries/decks';
+import type { DeckRow, PickerCard, SpreadView } from '@/db/queries/decks';
 import type { ReadingView } from '@/db/queries/readings';
 import type { DraftCard } from '@/domain/readings/draft';
 import { LIFE_AREAS, QUESTION_MAX, type LifeAreaKey } from '@/domain/readings/types';
@@ -14,12 +14,18 @@ import { updateReadingAction } from '../../actions';
 
 export function EditReadingForm({
   reading,
-  cards,
+  decks,
+  spreads,
+  cardsByDeck,
   recentIds,
+  hasInterpretation,
 }: {
   reading: ReadingView;
-  cards: PickerCard[];
+  decks: DeckRow[];
+  spreads: SpreadView[];
+  cardsByDeck: Record<string, PickerCard[]>;
   recentIds: string[];
+  hasInterpretation: boolean;
 }) {
   const router = useRouter();
   const [question, setQuestion] = React.useState(reading.question ?? '');
@@ -28,6 +34,9 @@ export function EditReadingForm({
     (reading.life_area as LifeAreaKey | null) ?? '',
   );
   const [occurredAt, setOccurredAt] = React.useState(toLocalInput(reading.occurred_at));
+  const [deckId, setDeckId] = React.useState(reading.deck.id);
+  const [spreadId, setSpreadId] = React.useState(reading.spread.id);
+  const [usesReversals, setUsesReversals] = React.useState(reading.uses_reversals);
   const [placed, setPlaced] = React.useState<(DraftCard | null)[]>(
     reading.spread.positions.map((_, i) => {
       const c = reading.cards[i];
@@ -37,7 +46,30 @@ export function EditReadingForm({
   const [pending, start] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
 
+  const deck = decks.find((d) => d.id === deckId) ?? reading.deck;
+  const spread = spreads.find((s) => s.id === spreadId) ?? reading.spread;
+  const cards = cardsByDeck[deck.id] ?? [];
+  const structureChanged = deck.id !== reading.deck.id || spread.id !== reading.spread.id;
   const complete = placed.every((c) => c !== null) && (open || question.trim().length > 0);
+
+  /** A deck change invalidates every card (a card belongs to one deck): clear, never guess. */
+  const chooseDeck = (id: string) => {
+    if (id === deckId) return;
+    const next = decks.find((d) => d.id === id);
+    if (!next) return;
+    setDeckId(id);
+    setUsesReversals(next.supports_reversals && usesReversals);
+    setPlaced(spread.positions.map(() => null));
+  };
+
+  /** A spread change keeps the cards that still have a position and adds empty slots. */
+  const chooseSpread = (id: string) => {
+    if (id === spreadId) return;
+    const next = spreads.find((s) => s.id === id);
+    if (!next) return;
+    setSpreadId(id);
+    setPlaced(next.positions.map((_, i) => placed[i] ?? null));
+  };
 
   const submit = () => {
     setError(null);
@@ -53,8 +85,13 @@ export function EditReadingForm({
         placed.map((c, position_index) => ({
           position_index,
           card_id: c!.card_id,
-          orientation: c!.orientation,
+          orientation: usesReversals ? c!.orientation : 'upright',
         })),
+        {
+          ...(spread.id !== reading.spread.id ? { spread_id: spread.id } : {}),
+          ...(deck.id !== reading.deck.id ? { deck_id: deck.id } : {}),
+          ...(usesReversals !== reading.uses_reversals ? { uses_reversals: usesReversals } : {}),
+        },
       );
       if (!res.ok) setError(res.message);
       else router.push(`/reading/${reading.id}`);
@@ -63,6 +100,7 @@ export function EditReadingForm({
 
   return (
     <form
+      data-deck={deck.system}
       className="flex flex-col gap-6"
       onSubmit={(e) => {
         e.preventDefault();
@@ -127,17 +165,77 @@ export function EditReadingForm({
         />
       </div>
 
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="edit-deck" className="text-sm font-medium">
+            Deck
+          </label>
+          <select
+            id="edit-deck"
+            value={deckId}
+            onChange={(e) => chooseDeck(e.target.value)}
+            className="min-h-11 w-full rounded-control bg-surface px-3 text-base hairline"
+          >
+            {decks.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="edit-spread" className="text-sm font-medium">
+            Spread
+          </label>
+          <select
+            id="edit-spread"
+            value={spreadId}
+            onChange={(e) => chooseSpread(e.target.value)}
+            className="min-h-11 w-full rounded-control bg-surface px-3 text-base hairline"
+          >
+            {spreads.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} · {s.card_count}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      {deck.supports_reversals ? (
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={usesReversals}
+            onChange={(e) => setUsesReversals(e.target.checked)}
+            className="size-4"
+          />
+          This reading uses reversals
+        </label>
+      ) : (
+        <p className="text-sm text-fg-muted">{deck.name} never uses reversals.</p>
+      )}
+      {structureChanged ? (
+        <p role="status" className="rounded-card bg-accent-soft px-4 py-3 text-sm">
+          {deck.id !== reading.deck.id
+            ? `Switching to ${deck.name} cleared the cards — a card belongs to one deck. Enter them again below.`
+            : `The spread is now ${spread.name}; fill any new positions below.`}
+          {hasInterpretation
+            ? ' The stored AI interpretation will be marked as for the earlier cards; you can regenerate it or leave it.'
+            : ''}
+        </p>
+      ) : null}
+
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-2 text-sm font-medium">Cards</legend>
         <CardEntry
-          spreadName={reading.spread.name}
-          positions={reading.spread.positions}
-          layout={reading.spread.layout}
+          spreadName={spread.name}
+          positions={spread.positions}
+          layout={spread.layout}
           cards={cards}
-          deckName={reading.deck.name}
-          recentIds={recentIds}
+          deckName={deck.name}
+          recentIds={deck.id === reading.deck.id ? recentIds : []}
           placed={placed}
-          usesReversals={reading.uses_reversals}
+          usesReversals={usesReversals}
           onPlace={(i, id) =>
             setPlaced((p) =>
               p.some((c, k) => c?.card_id === id && k !== i)

@@ -10,7 +10,7 @@ import {
 } from '@/db/queries/decks';
 import {
   createReading,
-  deleteReading,
+  softDeleteReading,
   deleteServerDraft,
   getReading,
   getServerDraft,
@@ -259,7 +259,8 @@ describe('readings query layer (integration)', () => {
     expect(r.question).toBe('Edited question');
     expect(r.life_area).toBeNull();
     expect(new Date(r.occurred_at).toISOString()).toBe('2026-09-01T12:00:00.000Z');
-    expect(r.metadata_version).toBe(1);
+    // A question edit bumps the version (an interpretation for the old question is stale).
+    expect(r.metadata_version).toBe(2);
 
     await replaceReadingCards(user.client, id, [
       { position_index: 0, card_id: rwsIds[30]!, orientation: 'reversed' },
@@ -269,7 +270,7 @@ describe('readings query layer (integration)', () => {
     r = (await getReading(user.client, id))!;
     expect(r.cards.map((c) => c.card.id)).toEqual([rwsIds[30], rwsIds[31], rwsIds[32]]);
     expect(r.cards[0]!.orientation).toBe('reversed');
-    expect(r.metadata_version).toBe(2);
+    expect(r.metadata_version).toBe(3);
 
     // A bad replacement (foreign deck) leaves the previous cards untouched.
     await expect(
@@ -304,14 +305,28 @@ describe('readings query layer (integration)', () => {
     expect(recent[0]).toBe(rwsIds[30]); // the last replacement above
   });
 
-  it('deleting a reading removes its cards; a missing reading deletes nothing', async () => {
-    const id = await createReading(user.client, physical());
-    expect(await deleteReading(user.client, id)).toBe(true);
+  it('soft-deleting a reading hides it at once and keeps the row for the purge job; twice is a no-op', async () => {
+    const id = await createReading(
+      user.client,
+      physical({
+        cards: [
+          { position_index: 0, card_id: rwsIds[70]!, orientation: 'upright' },
+          { position_index: 1, card_id: rwsIds[71]!, orientation: 'upright' },
+          { position_index: 2, card_id: rwsIds[72]!, orientation: 'upright' },
+        ],
+      }),
+    );
+    expect(await listRecentCardIds(user.client, rws.id)).toContain(rwsIds[70]);
+    expect(await softDeleteReading(user.client, id)).toBe(true);
     expect(await getReading(user.client, id)).toBeNull();
-    const cards = await platformSql()<{ n: string }[]>`
-      select count(*)::text as n from reading_cards where reading_id = ${id}`;
-    expect(cards[0]?.n).toBe('0');
-    expect(await deleteReading(user.client, id)).toBe(false);
+    expect((await listReadings(user.client)).map((r) => r.id)).not.toContain(id);
+    expect(await listRecentCardIds(user.client, rws.id)).not.toContain(rwsIds[70]);
+    const rows = await platformSql()<{ deleted: boolean; cards: string }[]>`
+      select deleted_at is not null as deleted,
+        (select count(*)::text from reading_cards where reading_id = ${id}) as cards
+      from readings where id = ${id}`;
+    expect(rows[0]).toEqual({ deleted: true, cards: '3' });
+    expect(await softDeleteReading(user.client, id)).toBe(false);
   });
 
   it('the server draft round-trips, survives as the user left it, and goes away on delete', async () => {

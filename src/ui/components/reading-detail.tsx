@@ -10,6 +10,8 @@ import { SpreadLayout } from './spread-layout';
 export interface ReadingDetailSlots {
   /** "Your interpretation" editor (client, bound to the notes action). */
   notes: React.ReactNode;
+  /** Earlier versions of the user's own words (invariant 4); null when there are none. */
+  history?: React.ReactNode;
   /** Follow-up status control (client). */
   followUp: React.ReactNode;
   /** Post-save "Revisit this?" chip row (client); null when not offered. */
@@ -115,6 +117,7 @@ export function ReadingDetail({ reading, justSaved = false, slots, cardHref }: R
           Your interpretation
         </h2>
         {slots.notes}
+        {slots.history ? <div className="mt-3">{slots.history}</div> : null}
       </section>
 
       <section aria-labelledby="ai-interpretation-h" className="mt-8">

@@ -40,14 +40,23 @@ checks were actually performed.
   - `card-overlap-alone-never-correlates.test.ts`
   - `rejected-link-not-resuggested.test.ts`
   - `summary-never-sole-evidence.test.ts`
-  - `deleting-reading-purges-derived.test.ts`
-  - `archive-readable-without-subscription.test.ts`
+  - `deleting-reading-purges-derived.test.ts` (live since Phase 05: the purge job has a counter and remover for every registry target, every table with a `reading_id` FK is registered, delete is soft delete + `purge_deleted`, every read path filters `deleted_at`; `…integration.test.ts` soft-deletes a reading carrying every derived artifact, runs the job, asserts zero rows in every registry table and a receipt with the counts)
+  - `archive-readable-without-subscription.test.ts` (live since Phase 05: no journal, detail, search, export or delete path references the plan, a subscription, a budget or a paywall; `…integration.test.ts` sets `plan = 'free'`, withdraws consent and proves list, search, detail with stored interpretation, history and export still work — Phase 11 must extend it to exhausted limits)
   - `no-journal-content-in-logs.test.ts`
-  - `raw-text-never-overwritten.test.ts`
+  - `raw-text-never-overwritten.test.ts` (live since Phase 05: no derived-side module writes `readings` or `reading_cards`, every `modelWrite()` payload is free of user-text columns, the `readings_keep_text` trigger and the revisions policies are in the migration; `…integration.test.ts`: three note edits keep three versions + current, a question edit is kept and bumps `metadata_version`, a raw service-role update still leaves history, derived artifacts leave the words byte-identical, revisions cannot be forged or edited)
   - `alias-merge-preserves-historical-roles.test.ts`
 - **The provider spy in e2e is `ai_calls`.** Every model call lands there (with the mock provider
   too), so "reopening makes no new call" is asserted by counting rows before and after, and
-  "regenerate makes exactly one" likewise (`e2e/interpretation.spec.ts`).
+  "regenerate makes exactly one" likewise (`e2e/interpretation.spec.ts`). Scope the count to
+  the test's `user_id` — other specs run in parallel and do call the model.
+- **Phase 05 fixtures.** `src/__tests__/fixtures/journal-db.ts` builds readings through the real
+  `create_reading()`, stored interpretations through the write gate, flags and question asks
+  through their query functions (`makeReading`, `storeInterpretation`, `attachDerived`);
+  `e2e/_helpers.ts` gained `seedReadings(userId, specs)` (service-role inserts, same rows) and
+  `signInAsDemo()`. The journal performance suite
+  (`src/db/queries/__tests__/journal-perf.integration.test.ts`) seeds 1000 readings with the
+  demo generator and asserts p95 < 300 ms per query; the scroll check in `e2e/journal.spec.ts`
+  signs in as `demo-cleo` (needs `pnpm demo:seed`) and records frame times as an annotation.
 - **Tests that need the seed decks or the mock provider live outside `src/domain/` and `src/ai/`**
   (the layering lint applies to test files too): `src/interpretation/__tests__/` holds the
   purity, prompt and repeat-rule tests.
@@ -83,4 +92,7 @@ checks were actually performed.
 
 `lint` → `typecheck` → `unit+integration` → `rls` → `build` → `e2e`.
 Plus: prompt/schema edits without a version bump fail; a user-owned table missing from the deletion
-registry fails; a client bundle containing a provider key pattern fails.
+registry fails (`scripts/check-deletion-registry.ts` in `pnpm lint` **and**
+`src/db/__tests__/deletion-registry.test.ts` — verified in Phase 05 by removing
+`reading_note_revisions`: both fail, naming the table); a client bundle containing a provider key
+pattern fails.

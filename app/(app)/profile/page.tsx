@@ -3,11 +3,14 @@ import { redirect } from 'next/navigation';
 import { signOutAction } from '@/auth/actions';
 import { getSessionClient, requireUser } from '@/auth/session';
 import { listDecks } from '@/db/queries/decks';
+import { listDeletionReceipts, listExports } from '@/db/queries/exports';
 import { getProfile, hasAiConsent } from '@/db/queries/profile';
+import { countAiArtifacts } from '@/privacy/aiArtifacts';
 import { Button } from '@/ui/components/button';
 import { PageHeader } from '@/ui/components/page-header';
 import { SettingsRow, SettingsSection } from '@/ui/components/settings';
 import { ConsentToggle, DeckSelect, DepthSelect, ReversalsToggle } from './controls';
+import { DeleteAiArtifactsControl, DeletionReceipts, ExportControls } from './privacy-controls';
 
 export const metadata = { title: 'Profile' };
 export const dynamic = 'force-dynamic';
@@ -20,7 +23,13 @@ export const dynamic = 'force-dynamic';
 export default async function ProfilePage() {
   const user = await requireUser();
   const client = await getSessionClient();
-  const [profile, decks] = await Promise.all([getProfile(client, user.id), listDecks(client)]);
+  const [profile, decks, exports, receipts, artifactCounts] = await Promise.all([
+    getProfile(client, user.id),
+    listDecks(client),
+    listExports(client, 5),
+    listDeletionReceipts(client, 5),
+    countAiArtifacts(client, user.id),
+  ]);
   if (!profile) redirect('/sign-in');
   const consented = hasAiConsent(profile);
   const defaultDeck = decks.find((d) => d.id === profile.default_deck_id) ?? decks[0];
@@ -97,7 +106,7 @@ export default async function ProfilePage() {
         <SettingsRow
           label="Delete AI artifacts"
           description="Remove every interpretation and suggestion, keep your own words."
-          comingIn="Phase 05"
+          control={<DeleteAiArtifactsControl counts={artifactCounts} />}
         />
       </SettingsSection>
 
@@ -117,18 +126,17 @@ export default async function ProfilePage() {
         />
       </SettingsSection>
 
-      <SettingsSection title="Export & delete" description="Always two taps away.">
-        <SettingsRow
-          label="Export everything"
-          description="A complete copy of your journal, in a readable format."
-          comingIn="Phase 05"
-        />
-        <SettingsRow
-          label="Delete account"
-          description="Removes everything, including derived data."
-          comingIn="Phase 12"
-        />
-      </SettingsSection>
+      <div id="export" className="scroll-mt-4">
+        <SettingsSection title="Export & delete" description="Always two taps away.">
+          <ExportControls exports={exports} />
+          <SettingsRow
+            label="Delete account"
+            description="Removes everything, including derived data."
+            comingIn="Phase 12"
+          />
+          <DeletionReceipts receipts={receipts} />
+        </SettingsSection>
+      </div>
 
       <SettingsSection title="About & policies">
         <SettingsRow

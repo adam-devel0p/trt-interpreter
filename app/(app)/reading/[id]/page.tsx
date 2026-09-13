@@ -3,9 +3,10 @@ import { z } from 'zod';
 import { getSessionClient, requireUser } from '@/auth/session';
 import { getInterpretationState, listSafetyFlags } from '@/db/queries/interpretations';
 import { getProfile, hasAiConsent } from '@/db/queries/profile';
-import { getReading } from '@/db/queries/readings';
+import { countReadingDependents, getReading, listNoteRevisions } from '@/db/queries/readings';
 import { selectDepth } from '@/domain/interpretation/depth';
 import { isFutureFacing } from '@/domain/readings/futureFacing';
+import { NoteHistory } from '@/ui/components/note-history';
 import { ReadingDetail } from '@/ui/components/reading-detail';
 import { ReadingControls, FollowUpControl, NotesEditor, RevisitChips } from './controls';
 import { InterpretationPanel } from './interpretation-panel';
@@ -31,10 +32,12 @@ export default async function ReadingPage({
   const client = await getSessionClient();
   const reading = await getReading(client, id);
   if (!reading) notFound();
-  const [profile, interpretation, safetyFlags] = await Promise.all([
+  const [profile, interpretation, safetyFlags, revisions, dependents] = await Promise.all([
     getProfile(client, user.id),
     getInterpretationState(client, id),
     listSafetyFlags(client, 'reading', id),
+    listNoteRevisions(client, id),
+    countReadingDependents(client, id),
   ]);
   const consent = profile ? hasAiConsent(profile) : false;
   const depth = profile
@@ -56,6 +59,7 @@ export default async function ReadingPage({
       cardHref={(c) => `/decks/${reading.deck.slug}/${c.card.slug}`}
       slots={{
         notes: <NotesEditor readingId={reading.id} initial={reading.user_notes ?? ''} />,
+        history: revisions.length ? <NoteHistory revisions={revisions} /> : null,
         followUp: (
           <FollowUpControl
             readingId={reading.id}
@@ -64,7 +68,17 @@ export default async function ReadingPage({
           />
         ),
         revisit: offerRevisit ? <RevisitChips readingId={reading.id} /> : null,
-        controls: <ReadingControls readingId={reading.id} />,
+        controls: (
+          <ReadingControls
+            readingId={reading.id}
+            summary={{
+              cards: dependents.cards,
+              hasNotes: !!reading.user_notes,
+              interpretations: dependents.interpretations,
+              revisions: dependents.revisions,
+            }}
+          />
+        ),
         interpretation: (
           <InterpretationPanel
             readingId={reading.id}

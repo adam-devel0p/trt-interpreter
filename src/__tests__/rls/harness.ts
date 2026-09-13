@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { expect } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createAnonClient, createTokenUserClient } from '@/db/client';
-import { authAdmin } from '@/db/admin';
+import { authAdmin, removeUserStorage } from '@/db/admin';
 import { clientEnv } from '@/config/env';
 import { createClient } from '@supabase/supabase-js';
 
@@ -33,6 +33,8 @@ export async function createTestUser(label: string): Promise<TestUser> {
 }
 
 export async function deleteTestUser(user: TestUser): Promise<void> {
+  // Rows cascade from auth.users; storage objects (export archives) do not.
+  await removeUserStorage(user.id);
   await authAdmin().deleteUser(user.id);
 }
 

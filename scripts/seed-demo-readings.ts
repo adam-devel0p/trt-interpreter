@@ -23,7 +23,21 @@ interface Story {
   notes: string | null;
   followUp: FollowUpStatus;
   revisitInDays: number | null;
+  /** Phase 05: soft-deleted rows exercise the purge job and must never appear in any view. */
+  deleted?: boolean;
+  /** Phase 05: kept whatever `--months` says (a back-dated physical reading from years ago). */
+  backdated?: boolean;
 }
+
+/** A long, searchable note in the user's voice (Phase 05: FTS + trigram over notes). */
+const LONG_NOTE =
+  'I keep coming back to this one. The Eight of Cups in the outcome position is the card I ' +
+  'drew the week before I left the agency, and here it is again with the Hermit next to it. ' +
+  'Two readings of the same walking-away. What I notice this time: I am not sad about it. ' +
+  'The Star underneath is the part I did not have last year. If the flat in Leeds falls ' +
+  'through I will still have moved something. Sam said the same thing on the phone, in his ' +
+  'own words — that I already decided and the cards are just the paperwork. Revisit in a ' +
+  'month and see whether the paperwork held.';
 
 /** Ana: digital, RWS by default, a job change and a move over the summer. */
 const ANA: Story[] = [
@@ -246,6 +260,53 @@ const ANA: Story[] = [
     notes: null,
     followUp: 'unresolved',
     revisitInDays: 7,
+  },
+  {
+    daysAgo: 33,
+    question: 'Is leaving the agency the same story as leaving the flat?',
+    lifeArea: 'self',
+    spread: 'situation-advice-outcome',
+    deck: 'rws-classic',
+    source: 'physical',
+    notes: LONG_NOTE,
+    followUp: 'partly_resolved',
+    revisitInDays: 30,
+  },
+  {
+    daysAgo: 1040,
+    question: null,
+    lifeArea: null,
+    spread: 'one-card',
+    deck: 'rws-classic',
+    source: 'physical',
+    notes: 'Found this in an old notebook. Back-dated from the page.',
+    followUp: 'not_relevant',
+    revisitInDays: null,
+    backdated: true,
+  },
+  {
+    daysAgo: 12,
+    question: 'Deleted by accident, then deleted on purpose',
+    lifeArea: null,
+    spread: 'one-card',
+    deck: 'rws-classic',
+    source: 'digital',
+    notes: 'This one should never show anywhere.',
+    followUp: 'unresolved',
+    revisitInDays: null,
+    deleted: true,
+  },
+  {
+    daysAgo: 4,
+    question: null,
+    lifeArea: null,
+    spread: 'three-card',
+    deck: 'thoth',
+    source: 'physical',
+    notes: null,
+    followUp: 'unresolved',
+    revisitInDays: null,
+    deleted: true,
   },
 ];
 
@@ -520,7 +581,7 @@ export async function seedReadings(ctx: SeedContext): Promise<void> {
     const email = DEMO_USERS[i]?.email;
     const stories = (email && STORIES[email]) ?? [];
     for (const story of stories) {
-      if (story.daysAgo > ctx.months * 31) continue;
+      if (story.daysAgo > ctx.months * 31 && !story.deleted && !story.backdated) continue;
       const deck = deckBySlug.get(story.deck)!;
       const spread = spreadBySlug.get(story.spread)!;
       const positions = spread.positions as { key: string }[];
@@ -559,6 +620,7 @@ export async function seedReadings(ctx: SeedContext): Promise<void> {
             followUpStatus: story.followUp,
             revisitAt,
             rng: story.source === 'digital' ? draw.rng : null,
+            deletedAt: story.deleted ? new Date(occurredAt.getTime() + 3_600_000) : null,
           })
           .returning({ id: readings.id });
         await tx.insert(readingCards).values(
@@ -579,4 +641,116 @@ export async function seedReadings(ctx: SeedContext): Promise<void> {
     }
   }
   console.log(`  ${total} readings across ${userIds.length} users (${ctx.months} months)`);
+}
+
+/**
+ * Phase 05 — a generated journal of `count` readings for one user, spread over ~3 years, both
+ * decks, every built-in spread, notes on a third of them. Deterministic from `seed`. Used by
+ * `pnpm demo:seed --bulk N` (demo-cleo) and by the journal performance and scroll tests.
+ */
+export async function seedBulkReadings(
+  userId: string,
+  count: number,
+  seed: number,
+): Promise<string[]> {
+  const db = platformDb();
+  const rng = seededRng((seed + 7).toString(16).padStart(32, '0'));
+  const deckRows = await db.select().from(decks);
+  const spreadRows = await db.select().from(spreads).where(eq(spreads.isBuiltin, true));
+  const cardRows = await db
+    .select({ id: cards.id, deckId: cards.deckId, sortOrder: cards.sortOrder })
+    .from(cards);
+  const cardIdsByDeck = new Map(
+    deckRows.map((d) => [
+      d.id,
+      cardRows
+        .filter((c) => c.deckId === d.id)
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map((c) => c.id),
+    ]),
+  );
+  const QUESTIONS = [
+    'What should I know about the week ahead?',
+    'How do I handle the conversation with my manager?',
+    'What is the move asking of me?',
+    'Where is the money going?',
+    'What does this friendship need?',
+    'What am I avoiding at home?',
+    'Is the course worth finishing?',
+    'What would help me sleep?',
+  ];
+  const NOTES = [
+    'Swords again. I notice I ask this when I am tired.',
+    'The Tower reversed feels gentler than I expected.',
+    'Three cups in a row. Something social is coming, or I want it to.',
+    'Nothing landed. Keeping it anyway.',
+    LONG_NOTE,
+  ];
+  const AREAS = ['work', 'money', 'relationships', 'home', 'self', 'health', null] as const;
+  const FOLLOW: FollowUpStatus[] = ['unresolved', 'resolved', 'partly_resolved', 'not_relevant'];
+
+  await db.delete(readings).where(eq(readings.userId, userId));
+  const ids: string[] = [];
+  const BATCH = 100;
+  for (let start = 0; start < count; start += BATCH) {
+    const readingValues: (typeof readings.$inferInsert)[] = [];
+    const cardValues: (typeof readingCards.$inferInsert)[][] = [];
+    for (let i = start; i < Math.min(start + BATCH, count); i++) {
+      const deck = deckRows[rng.int(deckRows.length)]!;
+      const spread = spreadRows[rng.int(spreadRows.length)]!;
+      const positions = spread.positions as { key: string }[];
+      const usesReversals = deck.supportsReversals && rng.int(2) === 0;
+      const occurredAt = new Date(Date.now() - (i * 1.1 + rng.int(12)) * 86_400_000);
+      const draw = drawCards({
+        cardIds: cardIdsByDeck.get(deck.id)!,
+        deckId: deck.id,
+        count: positions.length,
+        usesReversals,
+        seed: hex(rng),
+        now: occurredAt,
+      });
+      const isOpen = rng.int(5) === 0;
+      const source = rng.int(3) === 0 ? 'physical' : 'digital';
+      readingValues.push({
+        userId,
+        createdAt: occurredAt,
+        occurredAt,
+        question: isOpen ? null : QUESTIONS[rng.int(QUESTIONS.length)]!,
+        isOpenReflection: isOpen,
+        lifeArea: AREAS[rng.int(AREAS.length)] ?? null,
+        spreadId: spread.id,
+        deckId: deck.id,
+        source,
+        usesReversals,
+        userNotes: rng.int(3) === 0 ? NOTES[rng.int(NOTES.length)]! : null,
+        followUpStatus: FOLLOW[rng.int(FOLLOW.length)]!,
+        revisitAt: rng.int(6) === 0 ? new Date(occurredAt.getTime() + 30 * 86_400_000) : null,
+        rng: source === 'digital' ? draw.rng : null,
+      });
+      cardValues.push(
+        draw.cards.map((c) => ({
+          readingId: '',
+          userId,
+          positionIndex: c.position_index,
+          positionKey: positions[c.position_index]?.key ?? `position_${c.position_index + 1}`,
+          cardId: c.card_id,
+          orientation: c.orientation,
+          sortOrder: c.position_index,
+          createdAt: occurredAt,
+        })),
+      );
+    }
+    await db.transaction(async (tx) => {
+      const inserted = await tx
+        .insert(readings)
+        .values(readingValues)
+        .returning({ id: readings.id });
+      const allCards = inserted.flatMap((row, k) =>
+        cardValues[k]!.map((c) => ({ ...c, readingId: row.id })),
+      );
+      await tx.insert(readingCards).values(allCards);
+      ids.push(...inserted.map((r) => r.id));
+    });
+  }
+  return ids;
 }

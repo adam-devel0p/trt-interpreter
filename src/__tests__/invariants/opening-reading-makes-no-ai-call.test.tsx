@@ -30,6 +30,19 @@ const ROOT = process.cwd();
 const ENTRY_POINTS = [
   'app/(app)/reading',
   'app/(app)/home/page.tsx',
+  // Phase 05: the journal, the profile's export/delete controls, the export route and the
+  // purge/export jobs the delete and export actions reach.
+  'app/(app)/journal',
+  'app/(app)/profile',
+  'app/api/exports',
+  'src/db/queries/journal.ts',
+  'src/db/queries/exports.ts',
+  'src/ui/components/timeline-item.tsx',
+  'src/ui/components/note-history.tsx',
+  'src/export/build.ts',
+  'src/privacy/purge.ts',
+  'src/privacy/aiArtifacts.ts',
+  'src/jobs/handlers',
   'src/db/queries/readings.ts',
   'src/db/queries/spreads.ts',
   'src/ui/components/reading-detail.tsx',
@@ -149,6 +162,85 @@ describe('opening-reading-makes-no-ai-call', () => {
     expect(graph.has(path.resolve(ROOT, 'src/db/queries/readings.ts'))).toBe(true);
     expect(graph.has(path.resolve(ROOT, 'src/ui/components/reading-detail.tsx'))).toBe(true);
     expect(graph.has(path.resolve(ROOT, 'src/ui/components/card.tsx'))).toBe(true);
+    expect(graph.has(path.resolve(ROOT, 'src/db/queries/journal.ts'))).toBe(true);
+    expect(graph.has(path.resolve(ROOT, 'src/export/build.ts'))).toBe(true);
+  });
+
+  it('1b · the journal search is one RPC + embed, no model; the timeline renders from stored rows', async () => {
+    const { searchJournal } = await import('@/db/queries/journal');
+    const { TimelineItem } = await import('@/ui/components/timeline-item');
+    const fixture = fixtureReading(THOTH_DECK, ['lust', 'the-universe', 'princess-of-disks']);
+    const tables: string[] = [];
+    const rpcs: string[] = [];
+    const row = {
+      id: fixture.id,
+      occurred_at: fixture.occurred_at,
+      updated_at: fixture.updated_at,
+      question: fixture.question,
+      is_open_reflection: false,
+      life_area: null,
+      source: 'physical',
+      follow_up_status: 'unresolved',
+      revisit_at: null,
+      user_notes: 'my own words',
+      decks: {
+        id: fixture.deck.id,
+        slug: fixture.deck.slug,
+        name: fixture.deck.name,
+        system: 'thoth',
+      },
+      spreads: { id: fixture.spread.id, name: fixture.spread.name, card_count: 3 },
+      reading_cards: fixture.cards.map((c) => ({
+        position_index: c.position_index,
+        orientation: c.orientation,
+        cards: c.card,
+      })),
+      interpretations: [
+        { synthesis: 'old', status: 'complete', superseded_by: 'x' },
+        { synthesis: 'current synthesis', status: 'complete', superseded_by: null },
+      ],
+    };
+    const builder = {
+      select: () => builder,
+      eq: () => builder,
+      is: () => builder,
+      order: () => builder,
+      limit: () => builder,
+      then: (resolve: (v: unknown) => void) => resolve({ data: [row], error: null }),
+    };
+    const client = {
+      from: (t: string) => {
+        tables.push(t);
+        return {
+          ...builder,
+          then: (r: (v: unknown) => void) => r({ data: [], error: null, count: 0 }),
+        };
+      },
+      rpc: (name: string) => {
+        rpcs.push(name);
+        return builder;
+      },
+    };
+    const page = await searchJournal(client as never, {
+      q: '',
+      from: null,
+      to: null,
+      deck: null,
+      spread: null,
+      source: null,
+      followUp: null,
+      hasNotes: null,
+      hasInterpretation: null,
+      sort: 'newest',
+    });
+    expect(rpcs).toEqual(['search_readings']);
+    expect(tables).toEqual([]);
+    expect(page.items[0]?.synthesis).toBe('current synthesis');
+    const html = renderToStaticMarkup(<TimelineItem item={page.items[0]!} />);
+    expect(html).toContain('current synthesis');
+    expect(html).toContain('Lust');
+    expect(html).not.toMatch(/Strength|Pentacles|Rider/);
+    expect(aiSpy).not.toHaveBeenCalled();
   });
 
   it('2 · reading the query layer touches only readings (embedded deck/spread/cards) and never the AI runner', async () => {

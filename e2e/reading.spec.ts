@@ -131,7 +131,10 @@ test.describe('reading loop', () => {
     await expect(page.getByLabel('In your own words')).toHaveValue('Edited note, still mine.');
 
     // Per-card expansion shows the reference meaning for the position, no AI.
-    const first = page.getByRole('main').locator('details').first();
+    const first = page
+      .getByRole('region', { name: 'Cards in position' })
+      .locator('details')
+      .first();
     await first.locator('summary').click();
     await expect(first).toContainText(/suggests|may|one way/);
   });

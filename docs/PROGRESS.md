@@ -2,20 +2,22 @@
 
 The first thing to read in any new session. Update it at the end of every phase.
 
-**Current state:** Phase 04 complete with deferrals — a saved reading receives a streaming,
-deck-aware, layered interpretation (synthesis → card by card in position → read together →
-questions to sit with) generated from the deck's own reference rows after the save, persisted
-with model/prompt/schema versions, frozen once complete, superseded (never overwritten) on
-regenerate, and never recomputed on open. Real Anthropic + OpenAI-embeddings providers behind
-the Phase 00 runner (`runStreamObject` = streaming with the full repair/timeout/backoff/breaker
-policy); `interpretations`, `safety_flags`, `question_embeddings`, `ai_calls` tables; deck purity
-and hedged register enforced by validator + one repair; §10 safety card once per reading; FR-25
-nudge on the third repeated question; thumbs feedback; `/dev/ai-usage`; `pnpm eval` runner with
-fixtures and baselines. Invariants live: `model-cannot-create-confirmed-fact`,
-`reading-survives-ai-failure`, `opening-reading-makes-no-ai-call` (extended). Full gate green
-(100 e2e × 4 runs). **No provider key was available**: the real-model eval run, human review of
-baselines and the manual reading of real interpretations are with the owner.
-**Next phase:** [Phase 05 — Journal, search, export](phases/phase-05-journal-search.md)
+**Current state:** Phase 05 complete — the product is a shippable private tarot journal.
+`/journal` is a month-grouped, keyset-paginated timeline from stored rows (zero AI calls on the
+route); search is FTS + trigram fallback + card search through `card_aliases` (Thoth *Lust* found
+by "strength", shown under its own name); eight filters and three sorts live in the URL. Edit
+covers question, date, life area, spread, deck and cards in one transaction; every previous
+`user_notes` / `question` is kept in `reading_note_revisions` by trigger (invariant 4) and shown
+as *Earlier versions*. Delete = soft delete + registry-driven `purge_deleted` job (run at once,
+cron retries) + `deletion_receipts`; the confirmation names what goes. Export v1
+(`export_user_data`): zip of per-type JSON + `links.json` + `manifest.json` in a private bucket,
+10-minute signed URLs, 7-day archives, on every plan. Profile has real export history, "Delete AI
+artifacts" and receipts. `demo-cleo` carries 1000 generated readings; p95 13–81 ms per query,
+16.7 ms/frame scrolling. Invariants live: `deleting-reading-purges-derived`,
+`raw-text-never-overwritten`, `archive-readable-without-subscription`;
+`opening-reading-makes-no-ai-call` extended to the journal. Full gate green (110 e2e).
+Owner-side deferral from 04 (real-model eval) still open and unblocking.
+**Next phase:** [Phase 06 — Structured memory](phases/phase-06-structured-memory.md)
 
 ## Phase status
 
@@ -26,7 +28,7 @@ baselines and the manual reading of real interpretations are with the owner.
 | 02 | [Deck reference: RWS + Thoth](phases/phase-02-deck-reference.md) | ✅ complete | [report](phases/completed/phase-02-report.md) | 2026-09-12 · Thoth text-only + no reversals by design; RWS art committed (27 MB) |
 | 03 | [Reading loop (no AI)](phases/phase-03-reading-loop.md) | ✅ complete | [report](phases/completed/phase-03-report.md) | 2026-09-12 · Thoth reversals test done on RWS by design; PWA device check still open |
 | 04 | [AI boundary + interpretation](phases/phase-04-ai-interpretation.md) | ⚠️ complete with deferrals | [report](phases/completed/phase-04-report.md) | 2026-09-13 · real-model eval + human baseline review need provider keys (owner) |
-| 05 | [Journal, search, export](phases/phase-05-journal-search.md) | ⬜ not started | — | ← shippable journal |
+| 05 | [Journal, search, export](phases/phase-05-journal-search.md) | ✅ complete | [report](phases/completed/phase-05-report.md) | 2026-09-13 · ← shippable journal; `removeUserStorage()` ready for 12's account job |
 | 06 | [Structured memory](phases/phase-06-structured-memory.md) | ⬜ not started | — | |
 | 07 | [Journeys](phases/phase-07-journeys.md) | ⬜ not started | — | |
 | 08 | [Events, outcomes, correlation](phases/phase-08-events-outcomes.md) | ⬜ not started | — | |
@@ -48,9 +50,9 @@ Each must be unskipped by the phase shown and never weakened afterwards. See
 | `thoth-never-substitutes-rws` | 02 | ✅ |
 | `model-cannot-create-confirmed-fact` | 04 | ✅ |
 | `reading-survives-ai-failure` | 04 | ✅ |
-| `raw-text-never-overwritten` | 05 | ⬜ |
-| `deleting-reading-purges-derived` | 05 | ⬜ |
-| `archive-readable-without-subscription` | 05 | ⬜ |
+| `raw-text-never-overwritten` | 05 | ✅ |
+| `deleting-reading-purges-derived` | 05 | ✅ |
+| `archive-readable-without-subscription` | 05 | ✅ (Phase 11 must extend it to exhausted limits) |
 | `alias-merge-preserves-historical-roles` | 06 | ⬜ |
 | `card-overlap-alone-never-correlates` | 08 | ⬜ |
 | `rejected-link-not-resuggested` | 08 | ⬜ |
@@ -79,8 +81,13 @@ Add anything a phase discovered but could not settle. Remove when resolved.
   `src/ai/tasks/interpret_reading/fixtures/__baselines__/*.json` and iterates the prompt
   (`PROMPT_VERSION` bump) if the output reads generic.
 - Occasional `PGRST303` right after sign-in in local e2e (JWT "issued in the future": Docker
-  vs host clock skew). Routes that must never block (repeat check) fail soft; nothing else
-  handles it specifically.
+  vs host clock skew, ~10 ms). Routes that must never block (repeat check) fail soft. Phase 05
+  hit the same skew in the job queue (a fresh job "due in the future"): jobs now let the DB stamp
+  `run_after`, and a named job is claimed regardless. Never compare a JS `Date` to DB `now()`.
+- Every note autosave pause writes a `reading_note_revisions` row (invariant 4 taken
+  literally). Coalescing is a one-line trigger change if history gets noisy.
+- The two soft-deleted demo rows stay soft-deleted: nothing enqueues the `purge_deleted` sweep
+  (`{readingId: null}`) yet — a cron entry or `pnpm jobs:sweep` is a Phase 12 ops item.
 
 ## Deferred items backlog
 
@@ -98,10 +105,18 @@ Phases append here when they defer something, so nothing is lost between session
 | Sentry source-map upload | 00 | 12 | Scrubbing proven without it |
 | ~~Live deck switch inside a flow (no navigation)~~ | 02 | 03 ✅ | Deck step switches accent and naming in place |
 | `fixtures/decks/` recorded fixtures | 02 → 04 | 12 (optional) | The mock's fixture *functions* answer for any reading; record real responses from the first eval run only if regression on specific outputs is wanted |
-| Change deck or spread of a saved reading | 03 | 05 (if asked) | Edit covers question, date, life area and cards; a deck/spread change invalidates every card, so re-logging is the honest path for now |
-| Soft delete (`deleted_at`) for readings | 03 | 05 | Hard delete now (nothing derived exists); the purge job lands with the derived tables |
+| ~~Change deck or spread of a saved reading~~ | 03 | 05 ✅ | `replace_reading_cards(…, p_spread_id, p_deck_id, p_uses_reversals)`; a deck change clears the cards with an honest notice |
+| ~~Soft delete (`deleted_at`) for readings~~ | 03 | 05 ✅ | soft delete + `purge_deleted` job + receipts |
 | Server-side card search RPC / Thoth `strength` ranking | 03 | — | In the Thoth picker, `strength` ranks Nine of Wands (titled *Strength*) above Lust (alias); correct per Phase 02 ranking, noted for UX review |
 | Real-model `pnpm eval`, human baseline review, 5 real interpretations read, Thoth zero-RWS against the real model, kill-the-key mid-flow, breaker/timeout against the real provider | 04 | owner (any time) | No `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` in this session; everything is wired and tested against the mock and a fake SDK client |
 | Region-aware safety resources | 04 | 11/12 | No region known (`profiles.locale = 'en'`); international + US/UK lines shown |
-| Purge `safety_flags` with the reading | 04 | 05 | Keyed by object id, no FK; registered `via: 'job'` |
-| Interpretations in journal list / export | 04 | 05 | Query + component ready; list preview = `synthesis` |
+| ~~Purge `safety_flags` with the reading~~ | 04 | 05 ✅ | explicit remover in `src/privacy/purge.ts`, receipt counts it |
+| ~~Interpretations in journal list / export~~ | 04 | 05 ✅ | list preview = current `synthesis`; export carries every generation |
+| Entity / journey filters in the journal | 05 | 06 / 07 | a key in `journalFiltersSchema`, an `EXISTS` in `search_readings`, a select in `filters.tsx` |
+| Extractions + summaries in "Delete AI artifacts" and in the export | 05 | 06 / 10 | `AI_ARTIFACT_TABLES`, `EXPORT_FILES` |
+| Confirmed links in `links.json` | 05 | 08 | `LINK_KINDS` |
+| Markdown / PDF export | 05 | 12 | v2 by design |
+| Account-deletion storage sweep (`removeUserStorage()` exists, tested) | 05 | 12 | called by the test harness now; the account job must call it |
+| `purge_deleted` sweep scheduling (`{readingId: null}`) | 05 | 12 | cron entry / script; today only per-reading jobs are enqueued |
+| Purge e2e users' export archives | 05 | 12 | with the `%@test.local` user purge |
+| `rng.deck_id` on a digital reading whose deck was changed in edit | 05 | when `rng` is surfaced | the draw record stays as the audit of the original draw |

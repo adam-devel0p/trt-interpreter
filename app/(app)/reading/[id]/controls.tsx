@@ -177,8 +177,36 @@ export function RevisitChips({ readingId }: { readingId: string }) {
   );
 }
 
-/** Edit, delete (confirmed), and labelled placeholders for export/share (Phase 05). */
-export function ReadingControls({ readingId }: { readingId: string }) {
+export interface DeletionSummary {
+  cards: number;
+  hasNotes: boolean;
+  interpretations: number;
+  revisions: number;
+}
+
+/** "This reading, its 3 cards, your notes and 2 earlier versions of them, 1 AI interpretation." */
+export function describeDeletion(s: DeletionSummary): string {
+  const parts = [`its ${s.cards} card${s.cards === 1 ? '' : 's'}`];
+  if (s.hasNotes) parts.push('your notes');
+  if (s.revisions > 0)
+    parts.push(`${s.revisions} earlier version${s.revisions === 1 ? '' : 's'} of your words`);
+  if (s.interpretations > 0)
+    parts.push(`${s.interpretations} AI interpretation${s.interpretations === 1 ? '' : 's'}`);
+  const list =
+    parts.length === 1
+      ? parts[0]!
+      : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+  return `This reading, ${list}. It leaves your timeline now and is purged for good within minutes. This cannot be undone.`;
+}
+
+/** Edit, delete (confirmed, naming exactly what goes), export (Profile) and the share placeholder. */
+export function ReadingControls({
+  readingId,
+  summary,
+}: {
+  readingId: string;
+  summary: DeletionSummary;
+}) {
   const [error, setError] = React.useState<string | null>(null);
   return (
     <div className="flex flex-col gap-3">
@@ -189,24 +217,21 @@ export function ReadingControls({ readingId }: { readingId: string }) {
         <ConfirmDestructive
           trigger={<Button variant="secondary">Delete</Button>}
           title="Delete this reading?"
-          description="It disappears from your timeline, along with its cards and your notes. This cannot be undone."
+          description={describeDeletion(summary)}
           confirmLabel="Delete reading"
           onConfirm={async () => {
             const res = await deleteReadingAction(readingId);
             if (res && !res.ok) setError(res.message);
           }}
         />
+        <Button asChild variant="secondary">
+          <Link href="/profile#export">Export</Link>
+        </Button>
         <span
           aria-disabled="true"
           className="inline-flex min-h-11 items-center gap-2 rounded-control px-4 text-sm font-medium text-fg-muted opacity-70"
         >
-          Export <span className="rounded-chip bg-surface-2 px-2 py-0.5 text-xs">Phase 05</span>
-        </span>
-        <span
-          aria-disabled="true"
-          className="inline-flex min-h-11 items-center gap-2 rounded-control px-4 text-sm font-medium text-fg-muted opacity-70"
-        >
-          Share <span className="rounded-chip bg-surface-2 px-2 py-0.5 text-xs">Phase 05</span>
+          Share <span className="rounded-chip bg-surface-2 px-2 py-0.5 text-xs">Phase 11</span>
         </span>
       </div>
       {error ? <FormMessage tone="error">{error}</FormMessage> : null}

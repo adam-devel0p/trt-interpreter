@@ -2,9 +2,12 @@
 
 import * as React from 'react';
 import type { PickerCard, SpreadView } from '@/db/queries/decks';
+import type { JournalItem } from '@/db/queries/journal';
 import { Card } from '@/ui/components/card';
 import { CardPicker } from '@/ui/components/card-picker';
+import { NoteHistory } from '@/ui/components/note-history';
 import { SpreadLayout } from '@/ui/components/spread-layout';
+import { TimelineItem } from '@/ui/components/timeline-item';
 
 export interface DeckGalleryProps {
   decks: { system: 'rws' | 'thoth'; name: string; cards: PickerCard[] }[];
@@ -22,8 +25,37 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 /**
  * Phase 02 components in the gallery: Card (art + typographic, sizes, reversed, skeleton),
- * CardPicker (per deck, with a pick log the e2e spec reads) and SpreadLayout.
+ * CardPicker (per deck, with a pick log the e2e spec reads) and SpreadLayout. Phase 05 adds
+ * TimelineItem (both decks, AI preview vs. the user's note, a matched card) and NoteHistory.
  */
+function timelineItem(
+  deck: { system: 'rws' | 'thoth'; name: string; cards: PickerCard[] },
+  slugs: string[],
+  over: Partial<JournalItem>,
+): JournalItem {
+  return {
+    id: `gallery-${deck.system}`,
+    occurred_at: '2026-09-12T10:00:00.000Z',
+    updated_at: '2026-09-12T10:00:00.000Z',
+    question: 'Should I take the job?',
+    is_open_reflection: false,
+    life_area: 'work',
+    source: 'physical',
+    follow_up_status: 'unresolved',
+    revisit_at: null,
+    user_notes: null,
+    synthesis: null,
+    deck: { id: deck.system, slug: deck.system, name: deck.name, system: deck.system },
+    spread: { id: 'three', name: 'Past · Present · Future', card_count: slugs.length },
+    cards: slugs.map((slug, i) => ({
+      position_index: i,
+      orientation: i === 1 && deck.system === 'rws' ? 'reversed' : 'upright',
+      card: deck.cards.find((c) => c.slug === slug)!,
+    })),
+    ...over,
+  };
+}
+
 export function DeckGallery({ decks, spreads }: DeckGalleryProps) {
   const rws = decks.find((d) => d.system === 'rws');
   const thoth = decks.find((d) => d.system === 'thoth');
@@ -111,6 +143,49 @@ export function DeckGallery({ decks, spreads }: DeckGalleryProps) {
             ))
           )}
         </ul>
+      </Section>
+
+      <Section title="TimelineItem (Phase 05) — AI preview vs. the user's note, matched card">
+        <ol className="flex flex-col gap-2">
+          <TimelineItem
+            item={timelineItem(rws, ['strength', 'the-tower', 'ace-of-cups'], {
+              synthesis:
+                'Taken together, these cards suggest the question may be about pace rather than direction.',
+              revisit_at: '2026-10-12T09:00:00.000Z',
+            })}
+            matchedCardIds={new Set([by(rws, 'strength').id])}
+          />
+          <TimelineItem
+            item={timelineItem(thoth, ['lust', 'the-universe', 'princess-of-disks'], {
+              question: null,
+              is_open_reflection: true,
+              user_notes: 'Trying the Thoth deck. Adjustment — the balance I keep asking about.',
+              follow_up_status: 'resolved',
+            })}
+            matchedCardIds={new Set([by(thoth, 'lust').id])}
+          />
+        </ol>
+      </Section>
+
+      <Section title="NoteHistory (Phase 05) — earlier versions of the user's words">
+        <NoteHistory
+          revisions={[
+            {
+              id: 'r2',
+              field: 'question',
+              content: 'Should I apply for the job?',
+              metadata_version: 1,
+              replaced_at: '2026-09-12T11:00:00.000Z',
+            },
+            {
+              id: 'r1',
+              field: 'user_notes',
+              content: 'First thoughts: the Tower again.',
+              metadata_version: 1,
+              replaced_at: '2026-09-12T10:30:00.000Z',
+            },
+          ]}
+        />
       </Section>
 
       <Section title="SpreadLayout (Phase 02) — relative coordinates, 390px-safe">

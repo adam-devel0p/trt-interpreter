@@ -9,11 +9,11 @@ import { getSessionClient, requireUser } from '@/auth/session';
 import { getDeckById, listCards } from '@/db/queries/decks';
 import {
   createReading,
-  deleteReading,
   deleteServerDraft,
   replaceReadingCards,
   setFollowUpStatus,
   setRevisitAt,
+  softDeleteReading,
   updateReading,
   updateReadingNotes,
   upsertServerDraft,
@@ -43,6 +43,8 @@ import {
 } from '@/domain/readings/types';
 import { SEED_BYTES } from '@/domain/readings/prng';
 import { CUSTOM_SPREAD_MAX_POSITIONS } from '@/domain/readings/thresholds';
+import { enqueue } from '@/jobs/enqueue';
+import { runBatch } from '@/jobs/worker';
 import { errorClassOf, logger } from '@/observability/logger';
 
 /**
@@ -170,6 +172,7 @@ async function readingWrite(
     });
     revalidatePath(`/reading/${readingId.data}`);
     revalidatePath(HOME_PATH);
+    revalidatePath('/journal');
     return { ok: true, value: undefined };
   } catch (err) {
     logger.warn(`app.reading.${event}_failed`, {
@@ -203,36 +206,73 @@ export async function setRevisitAction(id: unknown, revisitAt: unknown): Promise
   return readingWrite(id, (c, rid) => setRevisitAt(c, rid, at.data), 'revisit_set');
 }
 
-/** Metadata + cards edit. Cards are replaced atomically after the metadata write. */
+const editStructureSchema = z
+  .object({
+    spread_id: z.string().uuid().optional(),
+    deck_id: z.string().uuid().optional(),
+    uses_reversals: z.boolean().optional(),
+  })
+  .strict();
+
+/**
+ * Metadata + cards edit (§6.3). The metadata write comes first; cards — and, when asked, the
+ * spread and deck — are then replaced in one transaction, which bumps `metadata_version` so a
+ * stored interpretation is shown as stale rather than silently kept.
+ */
 export async function updateReadingAction(
   id: unknown,
   meta: unknown,
   cards: unknown,
+  structure: unknown = {},
 ): Promise<ActionResult> {
   const m = updateReadingInputSchema.safeParse(meta);
   const c = z.array(placedCardSchema).min(1).max(CUSTOM_SPREAD_MAX_POSITIONS).safeParse(cards);
-  if (!m.success || !c.success) return { ok: false, message: GENERIC_FAILED };
+  const st = editStructureSchema.safeParse(structure ?? {});
+  if (!m.success || !c.success || !st.success) return { ok: false, message: GENERIC_FAILED };
   return readingWrite(
     id,
     async (client, rid) => {
       await updateReading(client, rid, m.data as UpdateReadingInput);
-      await replaceReadingCards(client, rid, c.data as PlacedCard[]);
+      await replaceReadingCards(client, rid, c.data as PlacedCard[], {
+        spreadId: st.data.spread_id,
+        deckId: st.data.deck_id,
+        usesReversals: st.data.uses_reversals,
+      });
     },
     'edited',
   );
 }
 
+/**
+ * Delete (FR-23, §19): soft delete as the user — gone from every view at once — then a
+ * `purge_deleted` job hard-deletes it with every dependent artifact and writes a receipt. The
+ * job is run straight away; if that attempt fails the cron batch retries it.
+ */
 export async function deleteReadingAction(id: unknown): Promise<ActionResult> {
+  const user = await requireUser();
   const result = await readingWrite(
     id,
     async (client, rid) => {
-      const gone = await deleteReading(client, rid);
+      const gone = await softDeleteReading(client, rid);
       if (!gone) throw new Error('not found');
     },
     'deleted',
   );
-  if (result.ok) redirect(HOME_PATH);
-  return result;
+  if (!result.ok) return result;
+  const readingId = z.string().uuid().parse(id);
+  try {
+    const job = await enqueue('purge_deleted', { readingId }, { userId: user.id });
+    await runBatch({ jobId: job.id });
+  } catch (err) {
+    // The reading is already out of every view; the cron sweep purges it.
+    logger.warn('app.reading.purge_deferred', {
+      userId: user.id,
+      objectId: readingId,
+      errorClass: errorClassOf(err),
+    });
+  }
+  revalidatePath('/journal');
+  redirect(HOME_PATH);
 }
 
 /** Thumbs + optional reason on an interpretation (§16). A user write; never logged. */

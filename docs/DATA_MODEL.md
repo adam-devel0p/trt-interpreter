@@ -139,11 +139,21 @@ removes both still succeeds because the check runs at statement end), `deck_id` 
 interpretation — §6.3, never overwritten), `follow_up_status follow_up_status default
 'unresolved'`, `revisit_at timestamptz null`, `rng jsonb null` (`{algorithm, seed, drawn_at,
 deck_id, deck_size, reversal_probability}` — proves the LLM did not choose cards, FR-04),
-`metadata_version int default 1` (bumped when cards are replaced), `deleted_at`, `updated_at`.
+`metadata_version int default 1` (bumped when cards, spread or deck are replaced **and** when the
+question changes — a stored interpretation for the old version shows as stale), `deleted_at`
+(soft delete, Phase 05: every read path and `search_readings` filter `deleted_at is null`; the
+`purge_deleted` job hard-deletes), `updated_at`, `search_vector tsvector` (Phase 05, **generated
+always** as `to_tsvector('english', question || ' ' || user_notes)`, never written by code).
 Checks: `(source = 'digital') = (rng is not null)`; `is_open_reflection or question is not null`.
-Trigger `readings_check_deck`: `uses_reversals` may only be true when the deck supports reversals.
+Triggers: `readings_check_deck` (`uses_reversals` may only be true when the deck supports
+reversals); `readings_keep_text` (Phase 05, `BEFORE UPDATE OF user_notes, question,
+is_open_reflection`, SECURITY DEFINER: inserts the previous `user_notes` / `question` into
+`reading_note_revisions` and bumps `metadata_version` on a question change — invariant 4 is a
+property of the data, whichever code path did the edit).
 Indexes: `(user_id, created_at desc)`, `(user_id, occurred_at desc)`, `(user_id, revisit_at)`
-partial where not null, GIN FTS over `question || user_notes` (Phase 05).
+partial where not null; Phase 05: `(user_id, occurred_at desc, id desc)` and `(user_id,
+updated_at desc, id desc)` partial `where deleted_at is null` (timeline keysets), GIN on
+`search_vector`, GIN `gin_trgm_ops` on `question` and on `user_notes` (typo fallback).
 
 **`reading_cards`** — `id`, `reading_id` (cascade), `user_id` (denormalised, cascade),
 `position_index`, `position_key` (copied from the spread's position at save time), `card_id`
@@ -157,12 +167,31 @@ and `reversed` is only allowed when both the deck and the reading use reversals.
 `domain/readings/draft.ts`, re-validated on restore), `updated_at`. One in-progress reading per
 user, upserted from the first card onward, deleted on save.
 
-**Functions** (migration `0004_readings`, `SECURITY INVOKER` so RLS applies and `user_id` is
-always `auth.uid()`): `create_reading(p jsonb) → uuid` inserts the reading and its cards in one
-transaction, refusing a card count that does not match `spreads.card_count`;
-`replace_reading_cards(p_reading_id, p_cards jsonb)` deletes and re-inserts every position
-atomically and bumps `metadata_version`. Both are granted to `authenticated` and `service_role`
-only.
+**`reading_note_revisions`** — Phase 05 (`0006_journal`). `id`, `reading_id` (cascade),
+`user_id` (cascade), `field` (`'user_notes' | 'question'`, check), `content text` (the value
+before the edit, verbatim), `metadata_version` (the reading's at the time), `replaced_at`.
+Indexes `(reading_id, replaced_at desc)`, `(user_id, replaced_at desc)`. **Written only by the
+`readings_keep_text` trigger**; RLS: select + delete for the owner, no insert or update policy
+(nothing can forge or rewrite history). Purged with the reading; exported as
+`note_revisions.json`.
+
+**Functions** (`SECURITY INVOKER` so RLS applies and `user_id` is always `auth.uid()`):
+`create_reading(p jsonb) → uuid` (`0004`) inserts the reading and its cards in one transaction,
+refusing a card count that does not match `spreads.card_count`;
+`replace_reading_cards(p_reading_id, p_cards jsonb, p_spread_id uuid = null, p_deck_id uuid =
+null, p_uses_reversals boolean = null)` (`0006`, replaces the 2-arg form) deletes the cards,
+updates spread / deck / reversals when given, re-inserts every position and bumps
+`metadata_version` — all in one transaction, so a deck change with a foreign card leaves the
+previous cards, deck and spread untouched; refuses a soft-deleted reading.
+`search_readings(p jsonb) → setof readings` (`0006`, `STABLE`, `search_path = public,
+extensions`, `pg_trgm.word_similarity_threshold = 0.5`): journal search in one planner-visible
+query — `q` (websearch FTS over `search_vector`, OR a card match against `q_card_ids` resolved
+by the caller through `card_aliases`, OR trigram `<%` word similarity against question / notes),
+`card_ids` (AND), `from` / `to`, `deck_id`, `spread_id`, `source`, `follow_up`, `has_notes`,
+`has_interpretation` (EXISTS on a complete, non-superseded interpretation), `sort` (`newest |
+oldest | edited`), `limit` (≤ 200) and a keyset cursor `after_key` / `after_id`; always
+`deleted_at is null`. PostgREST embeds deck, spread, cards and interpretations on the result.
+All three are granted to `authenticated` and `service_role` only.
 
 **`interpretations`** — Phase 04 (`0005_ai_interpretation`). One row per generation. `id`,
 `reading_id` (FK cascade), `user_id` (FK cascade), `status enum interpretation_status
@@ -316,8 +345,22 @@ Props are validated against a per-event allowlist schema; free text is rejected 
 **`smoke_notes`** — Phase 00 throwaway; **dropped in Phase 01** (`0002_auth_profiles`). The RLS
 harness now runs on `profiles`.
 
-**`deletion_receipts`** — Phase 05/12. `user_id`, `scope`, `requested_at`, `completed_at`,
-`counts jsonb` (what was purged, by table).
+**`deletion_receipts`** — Phase 05 (`0006_journal`). `id`, `user_id null` (FK **on delete set
+null** — a receipt outlives the account and holds only counts), `scope` (`reading | ai_artifacts
+| history | account`, check), `object_type`, `object_id`, `job_id`, `requested_at` (the soft
+delete), `completed_at`, `counts jsonb` (`{ "<table>": n }` for every table in the registry
+scope, plus `readings`). Index `(user_id, completed_at desc)`. RLS: select own; written by the
+service role from `purgeReading()` and `deleteAiArtifacts()`.
+
+**`exports`** — Phase 05 (`0006_journal`). `id`, `user_id` (cascade), `status` (`queued |
+running | ready | failed | expired`, check), `format` (`json_v1`), `requested_at`,
+`completed_at`, `expires_at` (7 days), `storage_path` (`exports/<user_id>/<id>.zip` in the
+private `exports` bucket), `size_bytes`, `counts jsonb` (the manifest's), `error_class`,
+`job_id`. Index `(user_id, requested_at desc)`. RLS: select own; **insert own only as a
+request** (`status = 'queued'`, no `storage_path`, no `job_id`); no update or delete policy —
+the `export_user_data` job (service role) moves the row on. The bucket has no `storage.objects`
+policies: archives are reachable only through short-lived signed URLs minted by
+`GET /api/exports/[id]/download` after an RLS-checked read of the row.
 
 ---
 
@@ -335,7 +378,8 @@ create policy <t>_delete on <t> for delete using (user_id = auth.uid());
 
 Variants used so far: `profiles` is keyed on `id = auth.uid()` and has no delete policy;
 `user_flags` has a select policy only (service-role writes); `jobs` has RLS enabled with no
-policies. Column-level rules that RLS cannot express (old vs new row, e.g. `profiles.plan`) are
+policies; `reading_note_revisions` is select + delete (trigger-written); `deletion_receipts`
+is select only (job-written); `exports` is select + a constrained insert (the request). Column-level rules that RLS cannot express (old vs new row, e.g. `profiles.plan`) are
 `BEFORE UPDATE` triggers that check `auth.role()`.
 
 Child tables (e.g. `reading_cards`, `interpretations`) carry a denormalised `user_id` **and** an

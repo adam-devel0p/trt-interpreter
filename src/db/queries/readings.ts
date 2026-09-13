@@ -230,8 +230,9 @@ export async function listRecentCardIds(
 ): Promise<string[]> {
   const { data, error } = await client
     .from('reading_cards')
-    .select('card_id, created_at, cards!inner(deck_id)')
+    .select('card_id, created_at, cards!inner(deck_id), readings!inner(deleted_at)')
     .eq('cards.deck_id', deckId)
+    .is('readings.deleted_at', null)
     .order('created_at', { ascending: false })
     .limit(limit * 5);
   if (error) throw new ReadingQueryError('recent cards read failed', error.code);
@@ -304,25 +305,78 @@ export async function setRevisitAt(
   if (!data?.length) throw new ReadingQueryError('reading not found', 'P0002');
 }
 
-/** Atomic replacement of every position via `replace_reading_cards()`. */
+export interface ReplaceCardsOptions {
+  /** New spread; the card count must match it. */
+  spreadId?: string;
+  /** New deck; every card must belong to it. */
+  deckId?: string;
+  usesReversals?: boolean;
+}
+
+/**
+ * Atomic replacement of every position via `replace_reading_cards()`, optionally moving the
+ * reading to another spread or deck in the same transaction (§6.3 controls). Bumps
+ * `metadata_version`, so a stored interpretation shows as stale.
+ */
 export async function replaceReadingCards(
   client: UserClient,
   id: string,
   cards: PlacedCard[],
+  opts: ReplaceCardsOptions = {},
 ): Promise<void> {
   const clean = z.array(placedCardSchema).min(1).max(CUSTOM_SPREAD_MAX_POSITIONS).parse(cards);
+  const extra = z
+    .object({
+      spreadId: z.string().uuid().optional(),
+      deckId: z.string().uuid().optional(),
+      usesReversals: z.boolean().optional(),
+    })
+    .strict()
+    .parse(opts);
   const { error } = await client.rpc('replace_reading_cards', {
     p_reading_id: id,
     p_cards: clean,
+    p_spread_id: extra.spreadId ?? null,
+    p_deck_id: extra.deckId ?? null,
+    p_uses_reversals: extra.usesReversals ?? null,
   });
   if (error) throw new ReadingQueryError('cards update failed', error.code);
 }
 
-/** Hard delete: nothing derived exists yet; `reading_cards` cascade. Phase 05 adds the purge job. */
-export async function deleteReading(client: UserClient, id: string): Promise<boolean> {
-  const { data, error } = await client.from('readings').delete().eq('id', id).select('id');
+/**
+ * Soft delete (FR-23, §19): the reading leaves every view and retrieval path at once — every
+ * read in this module and the search function filter on `deleted_at is null`. The
+ * `purge_deleted` job hard-deletes it and every dependent artifact and writes a receipt.
+ */
+export async function softDeleteReading(client: UserClient, id: string): Promise<boolean> {
+  const { data, error } = await client
+    .from('readings')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id)
+    .is('deleted_at', null)
+    .select('id');
   if (error) throw new ReadingQueryError('reading delete failed', error.code);
   return (data?.length ?? 0) > 0;
+}
+
+export interface NoteRevision {
+  id: string;
+  field: 'user_notes' | 'question';
+  content: string;
+  metadata_version: number;
+  replaced_at: string;
+}
+
+/** Every previous value of the reading's own-words columns, newest first (invariant 4). */
+export async function listNoteRevisions(client: UserClient, id: string): Promise<NoteRevision[]> {
+  const { data, error } = await client
+    .from('reading_note_revisions')
+    .select('id, field, content, metadata_version, replaced_at')
+    .eq('reading_id', id)
+    .order('replaced_at', { ascending: false })
+    .order('id', { ascending: false });
+  if (error) throw new ReadingQueryError('revisions read failed', error.code);
+  return (data ?? []) as unknown as NoteRevision[];
 }
 
 // ── Server-side draft (one per user) ──────────────────────────────────────────────────────
@@ -354,4 +408,31 @@ export async function upsertServerDraft(
 export async function deleteServerDraft(client: UserClient, userId: string): Promise<void> {
   const { error } = await client.from('reading_drafts').delete().eq('user_id', userId);
   if (error) throw new ReadingQueryError('draft delete failed', error.code);
+}
+
+export interface ReadingDependents {
+  cards: number;
+  interpretations: number;
+  revisions: number;
+}
+
+/** What a delete will remove, for the confirmation that names it (FR-23). Head counts only. */
+export async function countReadingDependents(
+  client: UserClient,
+  id: string,
+): Promise<ReadingDependents> {
+  const count = async (table: string, column: string) => {
+    const { count: n, error } = await client
+      .from(table)
+      .select('id', { count: 'exact', head: true })
+      .eq(column, id);
+    if (error) throw new ReadingQueryError(`${table} count failed`, error.code);
+    return n ?? 0;
+  };
+  const [cards, interpretations, revisions] = await Promise.all([
+    count('reading_cards', 'reading_id'),
+    count('interpretations', 'reading_id'),
+    count('reading_note_revisions', 'reading_id'),
+  ]);
+  return { cards, interpretations, revisions };
 }

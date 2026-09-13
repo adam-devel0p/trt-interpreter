@@ -4,6 +4,8 @@
  */
 import { desc, sql } from 'drizzle-orm';
 import { aiCalls } from '@/db/schema/ai';
+import { deletionReceipts } from '@/db/schema/journal';
+import { STORAGE_PREFIXES } from '@/domain/privacy/deletionRegistry';
 import { adminDb, adminSql, adminSupabase, closeAdmin } from './client';
 
 export { closeAdmin };
@@ -157,4 +159,96 @@ export async function aiUsageSince(days: number): Promise<AiUsageRow[]> {
 /** Recent rows for the dev usage page and the content-free assertion. Never returns text. */
 export async function recentAiCalls(limit = 50) {
   return adminDb().select().from(aiCalls).orderBy(desc(aiCalls.createdAt)).limit(limit);
+}
+
+// ── Deletion receipts (§19) ───────────────────────────────────────────────────────────────
+
+export interface ReceiptInsert {
+  userId: string;
+  scope: 'reading' | 'ai_artifacts' | 'history' | 'account';
+  objectType?: string;
+  objectId?: string;
+  jobId?: string;
+  requestedAt?: Date;
+  /** Rows removed per table. Counts only — never content. */
+  counts: Record<string, number>;
+}
+
+/** One receipt per purge. Service role: users only read their own (`deletion_receipts_select`). */
+export async function insertDeletionReceipt(rec: ReceiptInsert): Promise<{ id: string }> {
+  const [row] = await adminDb()
+    .insert(deletionReceipts)
+    .values({
+      userId: rec.userId,
+      scope: rec.scope,
+      objectType: rec.objectType ?? null,
+      objectId: rec.objectId ?? null,
+      jobId: rec.jobId ?? null,
+      requestedAt: rec.requestedAt ?? new Date(),
+      counts: rec.counts,
+    })
+    .returning({ id: deletionReceipts.id });
+  if (!row) throw new Error('receipt insert returned no row');
+  return row;
+}
+
+// ── Export archives (FR-22): the private `exports` bucket ────────────────────────────────
+
+export const EXPORT_BUCKET = 'exports';
+
+/** `<user_id>/<export_id>.zip` — the prefix is the user, so account deletion can sweep it. */
+export function exportStoragePath(userId: string, exportId: string): string {
+  return `${userId}/${exportId}.zip`;
+}
+
+export async function uploadExportArchive(path: string, bytes: Uint8Array): Promise<void> {
+  const { error } = await adminSupabase()
+    .storage.from(EXPORT_BUCKET)
+    .upload(path, bytes, { contentType: 'application/zip', upsert: true });
+  if (error) throw new Error(`export upload failed: ${error.message}`);
+}
+
+/**
+ * A signed URL for one archive, valid for `expiresInSeconds`. The caller must already have
+ * verified (through the user client) that the export row belongs to the requester.
+ */
+export async function createExportSignedUrl(
+  path: string,
+  expiresInSeconds: number,
+): Promise<string> {
+  const { data, error } = await adminSupabase()
+    .storage.from(EXPORT_BUCKET)
+    .createSignedUrl(path, expiresInSeconds, { download: true });
+  if (error || !data?.signedUrl) throw new Error(`signed url failed: ${error?.message}`);
+  return data.signedUrl;
+}
+
+export async function removeExportArchives(paths: readonly string[]): Promise<void> {
+  if (paths.length === 0) return;
+  const { error } = await adminSupabase()
+    .storage.from(EXPORT_BUCKET)
+    .remove([...paths]);
+  if (error) throw new Error(`export remove failed: ${error.message}`);
+}
+
+/**
+ * Remove every storage object a user owns, prefix by prefix from the registry's
+ * `STORAGE_PREFIXES`. Rows in `exports` cascade from `auth.users`; the bytes do not — this is
+ * the step the account-deletion job (Phase 12) and the test harness call. Returns the count.
+ */
+export async function removeUserStorage(userId: string): Promise<number> {
+  let removed = 0;
+  for (const { bucket, prefix } of STORAGE_PREFIXES) {
+    const folder = prefix(userId).replace(/\/$/, '');
+    const { data, error } = await adminSupabase()
+      .storage.from(bucket)
+      .list(folder, { limit: 1000 });
+    if (error) throw new Error(`storage list failed: ${error.message}`);
+    const paths = (data ?? []).filter((o) => o.name).map((o) => `${folder}/${o.name}`);
+    if (paths.length === 0) continue;
+    const rm = await adminSupabase().storage.from(bucket).remove(paths);
+    if (rm.error) throw new Error(`storage remove failed: ${rm.error.message}`);
+    removed += paths.length;
+  }
+  return removed;
 }

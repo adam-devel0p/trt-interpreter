@@ -28,21 +28,30 @@ export function backoffMs(attempt: number, random: () => number = Math.random): 
 
 /**
  * Claim up to `limit` runnable jobs atomically (FOR UPDATE SKIP LOCKED so concurrent workers
- * never double-run) and execute them sequentially. One bounded batch per call.
+ * never double-run) and execute them sequentially. One bounded batch per call. `jobId` claims
+ * that one job only — used to run a just-enqueued purge or export straight away; the cron
+ * batch remains the retry path.
  */
-export async function runBatch(opts: { limit?: number } = {}): Promise<BatchResult> {
-  const limit = opts.limit ?? WORKER_POLICY.defaultBatch;
+export async function runBatch(
+  opts: { limit?: number; jobId?: string } = {},
+): Promise<BatchResult> {
+  const limit = opts.jobId ? 1 : (opts.limit ?? WORKER_POLICY.defaultBatch);
   const db = platformDb();
   // Raw SQL params must be strings/numbers: drizzle's execute() does not serialise Date.
   const stale = new Date(Date.now() - WORKER_POLICY.staleLockMs).toISOString();
+  const only = opts.jobId ?? null;
 
   const claimed = await db.execute<Job>(sql`
     update ${jobs} set status = 'running', locked_at = now(), attempts = attempts + 1,
       updated_at = now()
     where id in (
       select id from ${jobs}
-      where (status = 'queued' and run_after <= now())
-         or (status = 'running' and locked_at < ${stale}::timestamptz)
+      where case
+        when ${only}::uuid is null then
+          (status = 'queued' and run_after <= now())
+          or (status = 'running' and locked_at < ${stale}::timestamptz)
+        else id = ${only}::uuid and status = 'queued'
+      end
       order by run_after asc
       limit ${limit}::int
       for update skip locked
