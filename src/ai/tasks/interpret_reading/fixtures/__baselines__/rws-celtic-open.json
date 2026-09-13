@@ -1,11 +1,11 @@
 {
   "fixture": "rws-celtic-open",
   "description": "RWS · Celtic cross (lite) · open reflection, no note, deep depth.",
-  "provider": "mock",
+  "provider": "anthropic",
   "model": "claude-opus-5",
-  "prompt_version": "interpret_reading/1.0.0",
+  "prompt_version": "interpret_reading/1.0.1",
   "schema_version": "interpretation/1.0.0",
-  "ran_at": "2026-09-13T02:25:23.408Z",
+  "ran_at": "2026-09-13T07:59:45.644Z",
   "safety": {
     "category": "none",
     "severity": "low"
@@ -29,31 +29,31 @@
         {
           "position": "The heart of the matter",
           "card": "The Star",
-          "mentions_position": true,
+          "mentions_position": false,
           "mentions_card": true
         },
         {
           "position": "What crosses it",
           "card": "Five of Cups",
-          "mentions_position": true,
+          "mentions_position": false,
           "mentions_card": true
         },
         {
           "position": "What you hold in mind",
           "card": "The Emperor",
-          "mentions_position": true,
+          "mentions_position": false,
           "mentions_card": true
         },
         {
           "position": "What lies beneath",
           "card": "Page of Swords",
-          "mentions_position": true,
+          "mentions_position": false,
           "mentions_card": true
         },
         {
           "position": "What comes next",
           "card": "Ten of Pentacles",
-          "mentions_position": true,
+          "mentions_position": false,
           "mentions_card": true
         }
       ]
@@ -64,13 +64,14 @@
     },
     "hedge_density": {
       "pass": true,
-      "detail": 18
+      "detail": 35
     },
     "prompts": {
       "pass": true,
       "detail": [
-        "What would change if you treated The Star as describing you rather than the situation?",
-        "Which of these cards felt truest the moment you saw it, before you read anything?"
+        "What is standing behind you, unlooked at, while your attention stays on what was lost?",
+        "Where in your life is structure being gripped too tightly, and where has no one picked it up at all?",
+        "If you were building something meant to outlast you, who would you be building it for?"
       ]
     }
   },
@@ -79,64 +80,70 @@
     "attempts": 1,
     "meta": {
       "modelId": "claude-opus-5",
-      "promptVersion": "mock-1",
-      "schemaVersion": "mock-1",
-      "tokensIn": 100,
-      "tokensOut": 50,
-      "costMicros": 0,
-      "latencyMs": 12,
+      "promptVersion": "interpret_reading/1.0.1",
+      "schemaVersion": "interpretation/1.0.0",
+      "tokensIn": 2746,
+      "tokensOut": 1899,
+      "costMicros": 61205,
+      "latencyMs": 34620,
       "repaired": false
     }
   },
-  "streamed_chars": 2730,
+  "streamed_chars": 6233,
   "output": {
-    "synthesis": "Taken together, these cards suggest that what you are sitting with may be less about a decision than about what The Star in the The heart of the matter position is asking you to notice.",
+    "synthesis": "A quiet replenishing is underway (The Star), crossed by grief that keeps your eyes on what spilled; beneath it a watchful, questioning mind, and ahead the pull of something built to last.",
     "per_card": [
       {
         "position_index": 0,
-        "text": "In the The heart of the matter position, The Star may point to hope as one thread running through what you are sitting with. One way to read this is as a question rather than an answer: what would hope look like here, in practice?",
+        "text": "You drew without a question, and The Star lands at the heart of it — which suggests the real centre is not a problem to be solved but a recovery already quietly in progress. The card points to renewal after difficulty: hope that does not need proof, a sense of being able to breathe again. One way to read it here is that something in you is being replenished even though you cannot yet see results, which may be exactly why nothing came to mind to ask. There is also the openness in it — a willingness to be seen without defences — which can feel exposed as much as it feels calm. You might ask yourself what has recently eased, even slightly, without your arranging it.",
         "nuances": [
-          "Read another way, The Star here might describe how the situation feels from the inside rather than what it is."
+          "The calm after a storm can be mistaken for nothing happening; the stillness may be the point rather than an absence of one.",
+          "Openness without defences can also register as vulnerability — it may be worth noticing which of the two you feel more."
         ],
         "card_id": "00000000-0000-4000-8000-00000000000a"
       },
       {
         "position_index": 1,
-        "text": "In the What crosses it position, Five of Cups may point to loss as one thread running through what you are sitting with. One way to read this is as a question rather than an answer: what would loss look like here, in practice?",
+        "text": "The Five of Cups crosses The Star, and the tension it names is plain: grief keeps the gaze fixed on what has spilled, even while renewal is underway. This may point to a loss or disappointment that still has a claim on your attention, and the way attention narrows around it. The card's own picture holds the complication — two cups still stand behind the figure, unlooked at. One way to read this pairing is that the sorrow is real and so is what remains, and neither cancels the other. Rather than turning away from the spilled cups, you might ask what is standing behind you that you have not turned to look at.",
         "nuances": [
-          "Read another way, Five of Cups here might describe how the situation feels from the inside rather than what it is."
+          "The loss may not be a single event but a slow disappointment that never got named as grief.",
+          "Turning around too briskly can be its own avoidance; the card allows the mourning to take the time it takes."
         ],
         "card_id": "00000000-0000-4000-8000-00000000000b"
       },
       {
         "position_index": 2,
-        "text": "In the What you hold in mind position, The Emperor may point to rigidity as one thread running through what you are sitting with. One way to read this is as a question rather than an answer: what would rigidity look like here, in practice?",
+        "text": "The Emperor reversed sits where your conscious concern lives, which suggests that what you think this is about is a question of authority and structure. Reversed, this card may point to control that has hardened into rigidity, or to authority nobody is exercising, leaving things to drift — and it is worth weighing which of those you recognise. Given that the heart of the reading is a quiet renewal, the worry you carry may be about whether anyone is holding the frame while you recover. You might ask yourself whether the structure you are gripping is still serving you, or whether there is a decision sitting unmade because no one has picked it up.",
         "nuances": [
-          "Read another way, The Emperor here might describe how the situation feels from the inside rather than what it is."
+          "Rigidity and drift can coexist: you may be over-controlling one area precisely because another has no one steering it.",
+          "The abdicated authority may not be yours — it could be someone else's role you have been quietly compensating for."
         ],
         "card_id": "00000000-0000-4000-8000-00000000000c"
       },
       {
         "position_index": 3,
-        "text": "In the What lies beneath position, Page of Swords may point to curiosity as one thread running through what you are sitting with. One way to read this is as a question rather than an answer: what would curiosity look like here, in practice?",
+        "text": "Underneath all of this, the Page of Swords suggests a mind on alert — curiosity, quick questions, a readiness to argue, a watchfulness that may be so habitual you no longer notice it. As the root of the situation, this may point to an old assumption that safety comes from seeing everything first, from testing each idea before trusting it. That vigilance sits in interesting company with The Star's willingness to be seen without defences; the two do not easily share a room. The card's own counsel is worth keeping: consider what you are trying to find out, and whether you are listening as sharply as you are watching.",
         "nuances": [
-          "Read another way, Page of Swords here might describe how the situation feels from the inside rather than what it is."
+          "The Page can also mean a piece of news or an idea arriving that needs testing rather than a permanent stance.",
+          "Watchfulness may have been earned by the loss in the Five of Cups rather than predating it."
         ],
         "card_id": "00000000-0000-4000-8000-00000000000d"
       },
       {
         "position_index": 4,
-        "text": "In the What comes next position, Ten of Pentacles may point to legacy as one thread running through what you are sitting with. One way to read this is as a question rather than an answer: what would legacy look like here, in practice?",
+        "text": "The Ten of Pentacles as the near tendency suggests attention moving toward what lasts — family, roots, tradition, the kind of security built over generations. After grief and a recovering hope, this may point to a widening of frame: from what was lost to what is being handed on. The card carries obligations as well as inheritance, so the shift may arrive as duty as much as comfort. Offered as a possibility rather than a forecast, it asks its own question: what are you building that will outlast you, and for whom? That question may also give the reversed Emperor somewhere useful to go — structure in service of something, rather than structure for its own sake.",
         "nuances": [
-          "Read another way, Ten of Pentacles here might describe how the situation feels from the inside rather than what it is."
+          "Legacy here need not mean family in the literal sense; it may be work, a place, or something you maintain for others.",
+          "The obligations attached could feel like a weight arriving just as you were beginning to breathe again."
         ],
         "card_id": "00000000-0000-4000-8000-00000000000e"
       }
     ],
-    "combined": "Read as a whole, the The Star, Five of Cups, The Emperor, Page of Swords, Ten of Pentacles seem to describe a movement from hope toward something you have not named yet. The cards do not settle the question; they suggest where it might be worth looking. It may help to hold the reading loosely and return to it once something has moved.",
+    "combined": "Read across the five, this looks like a reading about recovery being crossed by memory. The Star at the heart suggests something is quietly being restored in you, without proof and without much to show yet; the Five of Cups crossing it suggests your attention keeps returning to what spilled, even as two cups stand behind you. What you consciously carry, in The Emperor reversed, may be framed as a problem of control or of no one taking charge — a structure held too tightly, or one that has been left to drift. Beneath it, the Page of Swords suggests a long-standing vigilance, a mind that questions and watches and may not be listening quite as sharply. Together these suggest the strain of trying to stay guarded while also being replenished, which is difficult to do at once. The Ten of Pentacles points ahead to a longer horizon — roots, inheritance, what endures past one person — which may be where the loosened authority of the Emperor could find honest work. Since you drew without a question, one way to hold all this is that the reading is offering you the question: not what went wrong, but what remains and who it is for.",
     "reflective_prompts": [
-      "What would change if you treated The Star as describing you rather than the situation?",
-      "Which of these cards felt truest the moment you saw it, before you read anything?"
+      "What is standing behind you, unlooked at, while your attention stays on what was lost?",
+      "Where in your life is structure being gripped too tightly, and where has no one picked it up at all?",
+      "If you were building something meant to outlast you, who would you be building it for?"
     ]
   },
   "human_review": {

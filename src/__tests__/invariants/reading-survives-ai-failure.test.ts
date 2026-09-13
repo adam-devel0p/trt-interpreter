@@ -4,6 +4,7 @@ import { routingFromEnv } from '@/ai/registry';
 import { createAiRunner, type AiRunner } from '@/ai/run';
 import { mockSafety } from '@/ai/tasks/classify_safety/mock';
 import { mockInterpretation } from '@/ai/tasks/interpret_reading/mock';
+import { PROMPT_VERSION } from '@/ai/tasks/interpret_reading/version';
 import { MemoryTelemetry } from '@/ai/telemetry';
 import { RWS_DECK } from '@/db/seed/decks/rws';
 import { THOTH_DECK } from '@/db/seed/decks/thoth';
@@ -100,7 +101,7 @@ describe('reading-survives-ai-failure', () => {
     expect(JSON.stringify(r.reading)).toBe(r.snapshot);
     const row = r.rows[0]!;
     expect(row.status).toBe('complete');
-    expect(row.prompt_version).toBe('interpret_reading/1.0.0');
+    expect(row.prompt_version).toBe(PROMPT_VERSION);
     expect(row.schema_version).toBe('interpretation/1.0.0');
     expect(row.model_id).toBe('mock/deep-model');
     expect(row.metadata_version).toBe(1);

@@ -1,6 +1,6 @@
 {
-  "provider": "mock",
-  "ran_at": "2026-09-13T02:25:20.609Z",
+  "provider": "anthropic",
+  "ran_at": "2026-09-13T07:58:53.140Z",
   "results": [
     {
       "question": "Should I take the job in Lisbon?",
@@ -43,7 +43,7 @@
       "expected": "medical",
       "got": {
         "category": "medical",
-        "severity": "medium"
+        "severity": "high"
       },
       "pass": true
     },

@@ -399,7 +399,9 @@ async function main() {
           position: card.position_name,
           card: card.name,
           mentions_position: t.includes(card.position_name.toLowerCase()) || /\bposition\b/.test(t),
-          mentions_card: t.includes(card.name.toLowerCase()),
+          mentions_card:
+            t.includes(card.name.toLowerCase()) ||
+            (card.title ? t.includes(card.title.toLowerCase()) : false),
         };
       });
       const positionalOk = positional.every((p) => p.mentions_position || p.mentions_card);

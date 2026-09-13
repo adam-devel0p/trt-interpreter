@@ -91,7 +91,7 @@ describe('interpret_reading prompt (AI_LAYER prompt rules 1–8)', () => {
     expect(u).toContain('“Should I take the job in Lisbon?”');
     for (const c of rws.cards) {
       expect(u).toContain(
-        `Position ${c.position_index + 1} — ${c.position_name}: ${c.position_prompt}`,
+        `Position ${c.position_index + 1} of ${rws.cards.length} (position_index ${c.position_index}) — ${c.position_name}: ${c.position_prompt}`,
       );
       expect(u).toContain(`Card: ${c.name}`);
       expect(u).toContain(c.meaning.slice(0, 60));

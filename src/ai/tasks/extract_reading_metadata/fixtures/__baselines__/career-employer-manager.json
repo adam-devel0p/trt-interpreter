@@ -1,11 +1,11 @@
 {
   "fixture": "career-employer-manager",
   "description": "An employer and a manager named by role, then the manager's name. Expect an organisation with an employer relation, a person with a manager relation, a decision theme, the user's own life area kept.",
-  "provider": "mock",
-  "model": "mock/claude-sonnet-5",
+  "provider": "anthropic",
+  "model": "claude-sonnet-5",
   "prompt_version": "extract_reading_metadata/1.0.0",
   "schema_version": "extraction/1.0.0",
-  "ran_at": "2026-09-13T06:59:40.124Z",
+  "ran_at": "2026-09-13T07:58:57.983Z",
   "checks": {
     "schema": {
       "pass": true
@@ -21,7 +21,7 @@
       "pass": true,
       "detail": {
         "precision": 0.6666666666666666,
-        "extra": ["manager"]
+        "extra": ["design lead role"]
       }
     },
     "no_pronouns": {
@@ -30,7 +30,7 @@
     },
     "theme_sanity": {
       "pass": true,
-      "detail": ["ambition", "decision", "confidence"]
+      "detail": ["ambition", "confidence", "decision", "trust"]
     },
     "life_area": {
       "pass": true,
@@ -38,7 +38,10 @@
     },
     "possibilities": {
       "pass": true,
-      "detail": ["Choosing to apply for the design lead role may open something."]
+      "detail": [
+        "The agency may back the application",
+        "The writer may apply for the design lead role"
+      ]
     },
     "timeframe": {
       "pass": true,
@@ -52,62 +55,78 @@
     "life_area": "work",
     "entities": [
       {
-        "mention": "my manager",
+        "mention": "Priya",
         "kind": "person",
-        "confidence": 0.85,
+        "confidence": 0.95,
         "relation": "manager",
-        "context": "Priya, my manager, says the agency will back me."
+        "context": "Priya, my manager, says the agency will back me"
       },
       {
         "mention": "the agency",
         "kind": "organization",
-        "confidence": 0.7,
+        "confidence": 0.9,
         "relation": "employer",
-        "context": "Priya, my manager, says the agency will back me."
+        "context": "the agency will back me"
       },
       {
-        "mention": "Priya",
-        "kind": "person",
-        "confidence": 0.6,
-        "relation": "manager",
-        "context": "Priya, my manager, says the agency will back me."
+        "mention": "the design lead role",
+        "kind": "project",
+        "confidence": 0.7,
+        "relation": null,
+        "context": "Should I apply for the design lead role?"
       }
     ],
     "themes": [
       {
         "label": "Ambition",
-        "category": "practical",
-        "weight": 0.95
-      },
-      {
-        "label": "Decision",
         "category": "situational",
-        "weight": 0.65
+        "weight": 0.8
       },
       {
         "label": "Confidence",
         "category": "emotional",
-        "weight": 0.65
+        "weight": 0.6
+      },
+      {
+        "label": "Decision",
+        "category": "practical",
+        "weight": 0.7
+      },
+      {
+        "label": "Trust",
+        "category": "relational",
+        "weight": 0.4
       }
     ],
-    "event_mentions": [],
-    "goals": [],
+    "event_mentions": [
+      {
+        "text": "Priya says the agency will back me",
+        "when": null
+      }
+    ],
+    "goals": ["apply for the design lead role"],
     "fears": [],
-    "decisions": ["Should I apply for the design lead role?"],
+    "decisions": [],
     "timeframe": null,
     "possibilities": [
       {
-        "text": "Choosing to apply for the design lead role may open something.",
-        "category": null,
+        "text": "The agency may back the application",
+        "category": "work",
+        "timeframe": null,
+        "kind": "possibility"
+      },
+      {
+        "text": "The writer may apply for the design lead role",
+        "category": "work",
         "timeframe": null,
         "kind": "possibility"
       }
     ],
-    "emotional_tone": null,
+    "emotional_tone": "hopeful",
     "journey_candidates": [
       {
-        "title": "Work at the agency",
-        "confidence": 0.5
+        "title": "Applying for the design lead role",
+        "confidence": 0.7
       }
     ],
     "safety_flags": []

@@ -77,7 +77,7 @@ Each task is a directory `src/ai/tasks/<task>/` containing `prompt.ts`, `schema.
 
 | Task | Phase | Tier | Output | Notes |
 |---|---|---|---|---|
-| `interpret_reading` | 04 ✅ | deep | layered interpretation | Deck-aware; streams; grounded in `cards` reference rows, not model memory. `interpret_reading/1.0.0` · `interpretation/1.0.0` |
+| `interpret_reading` | 04 ✅ | deep | layered interpretation | Deck-aware; streams; grounded in `cards` reference rows, not model memory. `interpret_reading/1.0.1` · `interpretation/1.0.0` |
 | `classify_safety` | 04 ✅ | fast | category + severity | Runs on the question before interpretation (§10). `classify_safety/1.0.0` · `safety_classification/1.0.0` |
 | `detect_repeat_question` | 04 ✅ | fast (embedding + rule) | similarity verdict | Mostly deterministic; no generation needed (FR-25). Embedding request only; the rule is `domain/interpretation/repeat.ts` |
 | `extract_reading_metadata` | 06 ✅ | standard | extraction payload | Themes, entities (mentions + relations), possibilities, timeframe (§7.2). Runs as the `extract_reading_metadata` job after save, never in the request path. `extract_reading_metadata/1.0.0` · `extraction/1.0.0` |

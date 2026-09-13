@@ -1,11 +1,11 @@
 {
   "fixture": "relocation-place-family",
   "description": "A move, a city, a parent, a friend, a horizon. Expect a place, two people, a home/change theme, a timeframe.",
-  "provider": "mock",
-  "model": "mock/claude-sonnet-5",
+  "provider": "anthropic",
+  "model": "claude-sonnet-5",
   "prompt_version": "extract_reading_metadata/1.0.0",
   "schema_version": "extraction/1.0.0",
-  "ran_at": "2026-09-13T06:59:40.174Z",
+  "ran_at": "2026-09-13T07:59:10.928Z",
   "checks": {
     "schema": {
       "pass": true
@@ -20,8 +20,8 @@
     "entity_precision": {
       "pass": true,
       "detail": {
-        "precision": 1,
-        "extra": []
+        "precision": 0.75,
+        "extra": ["flat"]
       }
     },
     "no_pronouns": {
@@ -30,7 +30,7 @@
     },
     "theme_sanity": {
       "pass": true,
-      "detail": ["home", "change", "family"]
+      "detail": ["change", "distance", "family", "decision"]
     },
     "life_area": {
       "pass": true,
@@ -45,7 +45,7 @@
       "detail": {
         "start": null,
         "end": null,
-        "text": "on Friday"
+        "text": "Friday"
       }
     },
     "no_probability": {
@@ -58,57 +58,74 @@
       {
         "mention": "My mum",
         "kind": "person",
-        "confidence": 0.85,
+        "confidence": 0.9,
         "relation": "parent",
-        "context": "My mum thinks it is too far."
+        "context": "My mum thinks it is too far"
       },
       {
         "mention": "Sam",
         "kind": "person",
-        "confidence": 0.6,
+        "confidence": 0.9,
+        "relation": "friend",
+        "context": "Sam says give it a month and see"
+      },
+      {
+        "mention": "the flat",
+        "kind": "object",
+        "confidence": 0.7,
         "relation": null,
-        "context": "Sam says give it a month and see."
+        "context": "Viewing the flat on Friday"
       },
       {
         "mention": "Leeds",
         "kind": "place",
-        "confidence": 0.7,
+        "confidence": 0.9,
         "relation": null,
-        "context": "What is the move to Leeds asking of me?"
+        "context": "the move to Leeds"
       }
     ],
     "themes": [
       {
-        "label": "Home",
-        "category": "practical",
-        "weight": 0.95
-      },
-      {
         "label": "Change",
         "category": "situational",
-        "weight": 0.65
+        "weight": 0.8
+      },
+      {
+        "label": "Distance",
+        "category": "relational",
+        "weight": 0.6
       },
       {
         "label": "Family",
         "category": "relational",
-        "weight": 0.65
+        "weight": 0.5
+      },
+      {
+        "label": "Decision",
+        "category": "practical",
+        "weight": 0.6
       }
     ],
-    "event_mentions": [],
+    "event_mentions": [
+      {
+        "text": "Viewing the flat",
+        "when": "Friday"
+      }
+    ],
     "goals": [],
     "fears": [],
     "decisions": [],
     "timeframe": {
       "start": null,
       "end": null,
-      "text": "on Friday"
+      "text": "Friday"
     },
     "possibilities": [],
-    "emotional_tone": null,
+    "emotional_tone": "uncertain",
     "journey_candidates": [
       {
         "title": "The move to Leeds",
-        "confidence": 0.55
+        "confidence": 0.9
       }
     ],
     "safety_flags": []

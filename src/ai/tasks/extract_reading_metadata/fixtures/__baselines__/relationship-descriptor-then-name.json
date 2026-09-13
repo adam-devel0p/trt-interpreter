@@ -1,20 +1,20 @@
 {
   "fixture": "relationship-descriptor-then-name",
   "description": "A partner named by role and by name in one entry; a worry; a horizon. Expect both surface forms as person mentions with a partner relation, no pronoun mentions, an emotional theme.",
-  "provider": "mock",
-  "model": "mock/claude-sonnet-5",
+  "provider": "anthropic",
+  "model": "claude-sonnet-5",
   "prompt_version": "extract_reading_metadata/1.0.0",
   "schema_version": "extraction/1.0.0",
-  "ran_at": "2026-09-13T06:59:40.157Z",
+  "ran_at": "2026-09-13T07:59:04.827Z",
   "checks": {
     "schema": {
       "pass": true
     },
     "entity_recall": {
-      "pass": true,
+      "pass": false,
       "detail": {
-        "recall": 1,
-        "missing": []
+        "recall": 0.5,
+        "missing": ["girlfriend"]
       }
     },
     "entity_precision": {
@@ -30,7 +30,7 @@
     },
     "theme_sanity": {
       "pass": true,
-      "detail": ["conflict"]
+      "detail": ["conflict", "distance", "anxiety"]
     },
     "life_area": {
       "pass": true,
@@ -38,7 +38,7 @@
     },
     "possibilities": {
       "pass": true,
-      "detail": []
+      "detail": ["The argument may become resolved", "The need for space may pass"]
     },
     "timeframe": {
       "pass": true,
@@ -56,16 +56,9 @@
     "life_area": "relationships",
     "entities": [
       {
-        "mention": "my girlfriend",
-        "kind": "person",
-        "confidence": 0.85,
-        "relation": "partner",
-        "context": "What is unresolved between my girlfriend and me?"
-      },
-      {
         "mention": "Alex",
         "kind": "person",
-        "confidence": 0.6,
+        "confidence": 0.95,
         "relation": "partner",
         "context": "Alex, my girlfriend, said she needs space this week."
       }
@@ -75,9 +68,24 @@
         "label": "Conflict",
         "category": "relational",
         "weight": 0.8
+      },
+      {
+        "label": "Distance",
+        "category": "relational",
+        "weight": 0.7
+      },
+      {
+        "label": "Anxiety",
+        "category": "emotional",
+        "weight": 0.5
       }
     ],
-    "event_mentions": [],
+    "event_mentions": [
+      {
+        "text": "Alex said she needs space this week",
+        "when": "this week"
+      }
+    ],
     "goals": [],
     "fears": [],
     "decisions": [],
@@ -86,12 +94,25 @@
       "end": null,
       "text": "this week"
     },
-    "possibilities": [],
-    "emotional_tone": "unsettled",
+    "possibilities": [
+      {
+        "text": "The argument may become resolved",
+        "category": "relational",
+        "timeframe": null,
+        "kind": "possibility"
+      },
+      {
+        "text": "The need for space may pass",
+        "category": "relational",
+        "timeframe": "this week",
+        "kind": "possibility"
+      }
+    ],
+    "emotional_tone": "anxious",
     "journey_candidates": [
       {
-        "title": "Things with my girlfriend",
-        "confidence": 0.45
+        "title": "The relationship with Alex",
+        "confidence": 0.7
       }
     ],
     "safety_flags": []

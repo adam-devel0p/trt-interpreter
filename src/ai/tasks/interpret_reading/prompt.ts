@@ -83,7 +83,7 @@ export function systemPrompt(input: InterpretReadingInput): string {
     '8. Second person, unhurried, concrete. Refer to cards by their deck-native names exactly as given.',
     safety,
     '',
-    'Respond with a single JSON object and nothing else, with keys in this order: "synthesis" (string), "per_card" (array of {"position_index": number, "text": string, "nuances": string[]}, one entry per drawn card, in position order), "combined" (string), "reflective_prompts" (string[]).',
+    'Respond with a single JSON object and nothing else, with keys in this order: "synthesis" (string), "per_card" (array of {"position_index": number, "text": string, "nuances": string[]}, one entry per drawn card, in position order, where position_index is the zero-based index stated for that card — the first card is 0), "combined" (string), "reflective_prompts" (string[]).',
   ].join('\n');
 }
 
@@ -143,7 +143,7 @@ export function userPrompt(input: InterpretReadingInput): string {
         : 'upright';
     lines.push(
       '',
-      `Position ${c.position_index + 1} — ${c.position_name}: ${c.position_prompt}`,
+      `Position ${c.position_index + 1} of ${input.cards.length} (position_index ${c.position_index}) — ${c.position_name}: ${c.position_prompt}`,
       `Card: ${c.name} (${orient})${id ? ` — ${id}` : ''}`,
       `Keywords: ${c.keywords.join(', ')}`,
       `Reference meaning: ${c.meaning}`,

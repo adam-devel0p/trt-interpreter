@@ -1,11 +1,11 @@
 {
   "fixture": "open-reflection-thin",
   "description": "An open reflection with almost no text. Expect nothing invented: no entities, at most one theme, no possibilities, no timeframe — empty is the right answer.",
-  "provider": "mock",
-  "model": "mock/claude-sonnet-5",
+  "provider": "anthropic",
+  "model": "claude-sonnet-5",
   "prompt_version": "extract_reading_metadata/1.0.0",
   "schema_version": "extraction/1.0.0",
-  "ran_at": "2026-09-13T06:59:40.141Z",
+  "ran_at": "2026-09-13T07:59:00.541Z",
   "checks": {
     "schema": {
       "pass": true

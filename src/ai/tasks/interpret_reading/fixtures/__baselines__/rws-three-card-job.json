@@ -1,11 +1,11 @@
 {
   "fixture": "rws-three-card-job",
   "description": "RWS · Situation/Advice/Outcome · a job decision with a note that leads.",
-  "provider": "mock",
+  "provider": "anthropic",
   "model": "claude-opus-5",
-  "prompt_version": "interpret_reading/1.0.0",
+  "prompt_version": "interpret_reading/1.0.1",
   "schema_version": "interpretation/1.0.0",
-  "ran_at": "2026-09-13T02:25:25.512Z",
+  "ran_at": "2026-09-13T08:00:07.314Z",
   "safety": {
     "category": "none",
     "severity": "low"
@@ -35,7 +35,7 @@
         {
           "position": "Present",
           "card": "The Tower",
-          "mentions_position": true,
+          "mentions_position": false,
           "mentions_card": true
         },
         {
@@ -52,13 +52,14 @@
     },
     "hedge_density": {
       "pass": true,
-      "detail": 11
+      "detail": 25
     },
     "prompts": {
       "pass": true,
       "detail": [
-        "What would change if you treated Eight of Pentacles as describing you rather than the situation?",
-        "Which of these cards felt truest the moment you saw it, before you read anything?"
+        "If the fear is the move rather than the work, what specifically about moving are you picturing — and how much of it is about the first month rather than the years after?",
+        "If you stayed, what would be slowly crumbling in the background that The Tower reversed might be pointing at?",
+        "In the Six of Wands scene, who do you imagine standing along the route — and whose acknowledgement would actually change how the decision feels?"
       ]
     }
   },
@@ -67,48 +68,52 @@
     "attempts": 1,
     "meta": {
       "modelId": "claude-opus-5",
-      "promptVersion": "mock-1",
-      "schemaVersion": "mock-1",
-      "tokensIn": 100,
-      "tokensOut": 50,
-      "costMicros": 0,
-      "latencyMs": 12,
+      "promptVersion": "interpret_reading/1.0.1",
+      "schemaVersion": "interpretation/1.0.0",
+      "tokensIn": 2326,
+      "tokensOut": 1212,
+      "costMicros": 41930,
+      "latencyMs": 20190,
       "repaired": false
     }
   },
-  "streamed_chars": 1970,
+  "streamed_chars": 4016,
   "output": {
-    "synthesis": "Taken together, these cards suggest that “Should I take the job in Lisbon?” may be less about a decision than about what Eight of Pentacles in the Past position is asking you to notice.",
+    "synthesis": "Steady skill built by repetition sits behind you; The Tower reversed suggests a change being postponed rather than escaped, and the Six of Wands points to recognition if the momentum continues.",
     "per_card": [
       {
         "position_index": 0,
-        "text": "In the Past position, Eight of Pentacles may point to diligence as one thread running through “Should I take the job in Lisbon?”. One way to read this is as a question rather than an answer: what would diligence look like here, in practice?",
+        "text": "In the Past position, the Eight of Pentacles suggests that what shaped this question is diligence — the craft you've built by doing the thing again and again, quietly and well. That patient apprenticeship may be why a job in Lisbon is even on the table; the skill is already yours and travels with you. It also hints that mastery, for you, has come from the next repetition rather than a leap, which may be part of why a leap now feels foreign.",
         "nuances": [
-          "Read another way, Eight of Pentacles here might describe how the situation feels from the inside rather than what it is."
+          "One way to read it: the focus that served you may also have become a comfortable groove, and the question is whether Lisbon extends the craft or interrupts it.",
+          "Alternatively, the card may point less to your job history than to a longer habit of earning things slowly, which could make a sudden offer feel unearned."
         ],
         "card_id": "00000000-0000-4000-8000-00000000000a"
       },
       {
         "position_index": 1,
-        "text": "In the Present position, The Tower may point to a disaster averted as one thread running through “Should I take the job in Lisbon?”. One way to read this is as a question rather than an answer: what would a disaster averted look like here, in practice?",
+        "text": "You said it yourself: \"The Tower again, but reversed this time. I think the fear is the move, not the work\" — and the reference reading supports you, since reversed this card may point to an upheaval being postponed rather than avoided. What is most active right now seems to be the resistance itself: the slow crumble of a situation you're bracing against rather than the work you'd actually be doing. It may also be read the other way, that the worst of the shake-up has already passed and what remains is the fear's echo.",
         "nuances": [
-          "Read another way, The Tower here might describe how the situation feels from the inside rather than what it is."
+          "One plausible alternative: the postponed collapse isn't the move but staying — the current arrangement quietly giving way while you decide.",
+          "The Mars and fire correspondence suggests heat and urgency in this moment; you might notice whether that pressure is coming from the offer's deadline or from inside you."
         ],
         "card_id": "00000000-0000-4000-8000-00000000000b"
       },
       {
         "position_index": 2,
-        "text": "In the Future position, Six of Wands may point to recognition as one thread running through “Should I take the job in Lisbon?”. One way to read this is as a question rather than an answer: what would recognition look like here, in practice?",
+        "text": "In the Future position, the Six of Wands suggests one direction this could take if the present momentum continues: progress that others can see, and the confidence that follows being met with approval. Given the Eight of Pentacles behind you, this may read as the private craft finally becoming public — work acknowledged rather than just done. The card's own caution is worth keeping: notice who would be celebrating with you and who would only be watching from a distance.",
         "nuances": [
-          "Read another way, Six of Wands here might describe how the situation feels from the inside rather than what it is."
+          "One way to read it: the recognition may arrive whether or not you move, if it's the work rather than the location that's landing.",
+          "Alternatively, the visibility itself could be the challenge — a more public, acknowledged role may ask a different kind of confidence than the quiet focus you've practised."
         ],
         "card_id": "00000000-0000-4000-8000-00000000000c"
       }
     ],
-    "combined": "Read as a whole, the Eight of Pentacles, The Tower, Six of Wands seem to describe a movement from diligence toward something you have not named yet. Your own note already touches this, and the cards mostly add texture to what you noticed. It may help to hold the reading loosely and return to it once something has moved.",
+    "combined": "Read along the line, these three suggest a situation that has been moving from private mastery toward visible recognition, with the present caught in a held breath. The Eight of Pentacles gives you a past of earned, repeated skill; The Tower reversed suggests that the change is being postponed rather than escaped, which sits closely with your own note that the fear is the move and not the work; the Six of Wands offers one possible direction where the work you've done is acknowledged openly. What the line does not settle is whether Lisbon is the location of that recognition or simply the loudest option on the table right now. You might ask yourself whether the thing you're bracing against is the flight and the unfamiliar street, or something in the current arrangement that is already quietly giving way.",
     "reflective_prompts": [
-      "What would change if you treated Eight of Pentacles as describing you rather than the situation?",
-      "Which of these cards felt truest the moment you saw it, before you read anything?"
+      "If the fear is the move rather than the work, what specifically about moving are you picturing — and how much of it is about the first month rather than the years after?",
+      "If you stayed, what would be slowly crumbling in the background that The Tower reversed might be pointing at?",
+      "In the Six of Wands scene, who do you imagine standing along the route — and whose acknowledgement would actually change how the decision feels?"
     ]
   },
   "human_review": {

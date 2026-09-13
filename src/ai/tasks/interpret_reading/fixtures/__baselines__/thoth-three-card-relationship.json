@@ -1,11 +1,11 @@
 {
   "fixture": "thoth-three-card-relationship",
   "description": "Thoth · Past/Present/Future · a relationship question, experienced reader (brief, folded).",
-  "provider": "mock",
+  "provider": "anthropic",
   "model": "claude-opus-5",
-  "prompt_version": "interpret_reading/1.0.0",
+  "prompt_version": "interpret_reading/1.0.1",
   "schema_version": "interpretation/1.0.0",
-  "ran_at": "2026-09-13T02:25:28.805Z",
+  "ran_at": "2026-09-13T08:00:36.998Z",
   "safety": {
     "category": "none",
     "severity": "low"
@@ -35,7 +35,7 @@
         {
           "position": "Present",
           "card": "Three of Swords",
-          "mentions_position": true,
+          "mentions_position": false,
           "mentions_card": true
         },
         {
@@ -52,13 +52,14 @@
     },
     "hedge_density": {
       "pass": true,
-      "detail": 11
+      "detail": 16
     },
     "prompts": {
       "pass": true,
       "detail": [
-        "What would change if you treated Lust as describing you rather than the situation?",
-        "Which of these cards felt truest the moment you saw it, before you read anything?"
+        "What exactly did you see, entire, that you are now grieving — and have you named it anywhere outside your own head?",
+        "If the rapture of the early fire is no longer available, what would tenderness look like in this relationship instead?",
+        "What dream in this relationship has never been given a body, and what would giving it one actually require of you?"
       ]
     }
   },
@@ -67,48 +68,49 @@
     "attempts": 1,
     "meta": {
       "modelId": "claude-opus-5",
-      "promptVersion": "mock-1",
-      "schemaVersion": "mock-1",
-      "tokensIn": 100,
-      "tokensOut": 50,
-      "costMicros": 0,
-      "latencyMs": 12,
+      "promptVersion": "interpret_reading/1.0.1",
+      "schemaVersion": "interpretation/1.0.0",
+      "tokensIn": 2854,
+      "tokensOut": 884,
+      "costMicros": 36370,
+      "latencyMs": 16082,
       "repaired": false
     }
   },
-  "streamed_chars": 2016,
+  "streamed_chars": 2819,
   "output": {
-    "synthesis": "Taken together, these cards suggest that “What is this relationship asking of me right now?” may be less about a decision than about what Lust in the Past position is asking you to notice.",
+    "synthesis": "You noticed Sorrow in the middle and your wish to skip it; the line suggests this relationship may be asking you to stay with the clear sight that came after the fire, long enough for something tender to take a form you can touch.",
     "per_card": [
       {
         "position_index": 0,
-        "text": "In the Past position, Lust may point to the rapture of vigour as one thread running through “What is this relationship asking of me right now?”. One way to read this is as a question rather than an answer: what would the rapture of vigour look like here, in practice?",
+        "text": "Lust in the Past suggests this relationship has been shaped by force enjoyed rather than managed — appetite and courage arriving together, the Grail lifted rather than set down carefully. One way to read it is that the vigour you rode earlier is still felt here, and it set the terms of what you can now see.",
         "nuances": [
-          "Read another way, Lust here might describe how the situation feels from the inside rather than what it is."
+          "Alternatively, this Leo fire may have been more the mood you brought to it than the relationship's own temperature — worth asking whose rapture it was."
         ],
         "card_id": "00000000-0000-4000-8000-00000000000a"
       },
       {
         "position_index": 1,
-        "text": "In the Present position, Three of Swords may point to sorrow as one thread running through “What is this relationship asking of me right now?”. One way to read this is as a question rather than an answer: what would sorrow look like here, in practice?",
+        "text": "You said you keep wanting to skip past Sorrow, and the card's own logic suggests why: this is Binah of air, grief that comes with clear sight rather than personal misery, the rose of Peace torn precisely because you now see the whole thing entire. What is most active right now may simply be the cost of that seeing, and skipping it may mean skipping the understanding it carries.",
         "nuances": [
-          "Read another way, Three of Swords here might describe how the situation feels from the inside rather than what it is."
+          "It may also be that some of this Saturn-in-Libra weight belongs to the situation's structure rather than to you, and that what feels like something to get past is actually something to let sit."
         ],
         "card_id": "00000000-0000-4000-8000-00000000000b"
       },
       {
         "position_index": 2,
-        "text": "In the Future position, Princess of Cups may point to earth of water as one thread running through “What is this relationship asking of me right now?”. One way to read this is as a question rather than an answer: what would earth of water look like here, in practice?",
+        "text": "The Princess of Cups in the Future position suggests one direction: feeling at the point of crystallising — earth of water, the tortoise emerging from the shell-cup, tenderness that becomes something with a body. If the present continues as it is, this may point to a dream in the relationship asking to be made concrete rather than only felt.",
         "nuances": [
-          "Read another way, Princess of Cups here might describe how the situation feels from the inside rather than what it is."
+          "Read another way, earth of water can stay at the dreaming stage if nothing is given a form, so the question may be whether you are willing to build rather than only imagine."
         ],
         "card_id": "00000000-0000-4000-8000-00000000000c"
       }
     ],
-    "combined": "Read as a whole, the Lust, Three of Swords, Princess of Cups seem to describe a movement from the rapture of vigour toward something you have not named yet. Your own note already touches this, and the cards mostly add texture to what you noticed. It may help to hold the reading loosely and return to it once something has moved.",
+    "combined": "Read along the line, the fire of Lust gave way to the clarity that Sorrow costs, and the Princess of Cups suggests what could follow is smaller, softer and more concrete than either. Your instinct to skip the middle card is worth noticing precisely because the third card seems to grow out of it — crystallisation needs the still, cold moment to happen in. What this relationship may be asking of you right now is to stay in Binah's grief long enough to know what you actually saw.",
     "reflective_prompts": [
-      "What would change if you treated Lust as describing you rather than the situation?",
-      "Which of these cards felt truest the moment you saw it, before you read anything?"
+      "What exactly did you see, entire, that you are now grieving — and have you named it anywhere outside your own head?",
+      "If the rapture of the early fire is no longer available, what would tenderness look like in this relationship instead?",
+      "What dream in this relationship has never been given a body, and what would giving it one actually require of you?"
     ]
   },
   "human_review": {

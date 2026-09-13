@@ -4,6 +4,7 @@ import { routingFromEnv } from '@/ai/registry';
 import { createAiRunner, type AiRunner } from '@/ai/run';
 import { mockSafety } from '@/ai/tasks/classify_safety/mock';
 import { mockInterpretation } from '@/ai/tasks/interpret_reading/mock';
+import { PROMPT_VERSION } from '@/ai/tasks/interpret_reading/version';
 import { DbTelemetry } from '@/ai/telemetry';
 import { closeAdmin, platformSql, recentAiCalls } from '@/db/admin';
 import {
@@ -137,7 +138,7 @@ describe('interpretation (integration)', () => {
       status: 'complete',
       fact_status: 'TAROT_INTERPRETATION',
       model_id: 'mock/mock-deep',
-      prompt_version: 'interpret_reading/1.0.0',
+      prompt_version: PROMPT_VERSION,
       schema_version: 'interpretation/1.0.0',
       metadata_version: 1,
       depth: 'standard',
