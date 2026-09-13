@@ -52,7 +52,7 @@ in Mailpit at `http://127.0.0.1:55324`). Google sign-in needs
 | `pnpm test:unit` / `test:integration` | Either suite alone |
 | `pnpm test:rls` | Authorization suite: real users, real JWTs, row-level-security assertions |
 | `pnpm test:e2e` | Playwright (mobile 390px + desktop) with axe; runs against `pnpm build` |
-| `pnpm eval` | Prompt evals against real models — never in CI, costs money |
+| `pnpm eval` | Prompt evals against real models — never in CI, costs money (`--dry` runs them against the mock) |
 | `pnpm lint` | ESLint (incl. architecture rules) + Prettier + deletion-registry check |
 | `pnpm typecheck` | `tsc --noEmit` |
 | `pnpm check:client-bundle` | After a build: fail if the client bundle contains a secret |

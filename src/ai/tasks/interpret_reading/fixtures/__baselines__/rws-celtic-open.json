@@ -1,0 +1,148 @@
+{
+  "fixture": "rws-celtic-open",
+  "description": "RWS · Celtic cross (lite) · open reflection, no note, deep depth.",
+  "provider": "mock",
+  "model": "claude-opus-5",
+  "prompt_version": "interpret_reading/1.0.0",
+  "schema_version": "interpretation/1.0.0",
+  "ran_at": "2026-09-13T02:25:23.408Z",
+  "safety": {
+    "category": "none",
+    "severity": "low"
+  },
+  "depth": "deep",
+  "checks": {
+    "schema": {
+      "pass": true
+    },
+    "deck_purity": {
+      "pass": true,
+      "detail": []
+    },
+    "register": {
+      "pass": true,
+      "detail": []
+    },
+    "positional": {
+      "pass": true,
+      "detail": [
+        {
+          "position": "The heart of the matter",
+          "card": "The Star",
+          "mentions_position": true,
+          "mentions_card": true
+        },
+        {
+          "position": "What crosses it",
+          "card": "Five of Cups",
+          "mentions_position": true,
+          "mentions_card": true
+        },
+        {
+          "position": "What you hold in mind",
+          "card": "The Emperor",
+          "mentions_position": true,
+          "mentions_card": true
+        },
+        {
+          "position": "What lies beneath",
+          "card": "Page of Swords",
+          "mentions_position": true,
+          "mentions_card": true
+        },
+        {
+          "position": "What comes next",
+          "card": "Ten of Pentacles",
+          "mentions_position": true,
+          "mentions_card": true
+        }
+      ]
+    },
+    "note_acknowledged": {
+      "pass": true,
+      "detail": null
+    },
+    "hedge_density": {
+      "pass": true,
+      "detail": 18
+    },
+    "prompts": {
+      "pass": true,
+      "detail": [
+        "What would change if you treated The Star as describing you rather than the situation?",
+        "Which of these cards felt truest the moment you saw it, before you read anything?"
+      ]
+    }
+  },
+  "terminal": {
+    "type": "done",
+    "attempts": 1,
+    "meta": {
+      "modelId": "claude-opus-5",
+      "promptVersion": "mock-1",
+      "schemaVersion": "mock-1",
+      "tokensIn": 100,
+      "tokensOut": 50,
+      "costMicros": 0,
+      "latencyMs": 12,
+      "repaired": false
+    }
+  },
+  "streamed_chars": 2730,
+  "output": {
+    "synthesis": "Taken together, these cards suggest that what you are sitting with may be less about a decision than about what The Star in the The heart of the matter position is asking you to notice.",
+    "per_card": [
+      {
+        "position_index": 0,
+        "text": "In the The heart of the matter position, The Star may point to hope as one thread running through what you are sitting with. One way to read this is as a question rather than an answer: what would hope look like here, in practice?",
+        "nuances": [
+          "Read another way, The Star here might describe how the situation feels from the inside rather than what it is."
+        ],
+        "card_id": "00000000-0000-4000-8000-00000000000a"
+      },
+      {
+        "position_index": 1,
+        "text": "In the What crosses it position, Five of Cups may point to loss as one thread running through what you are sitting with. One way to read this is as a question rather than an answer: what would loss look like here, in practice?",
+        "nuances": [
+          "Read another way, Five of Cups here might describe how the situation feels from the inside rather than what it is."
+        ],
+        "card_id": "00000000-0000-4000-8000-00000000000b"
+      },
+      {
+        "position_index": 2,
+        "text": "In the What you hold in mind position, The Emperor may point to rigidity as one thread running through what you are sitting with. One way to read this is as a question rather than an answer: what would rigidity look like here, in practice?",
+        "nuances": [
+          "Read another way, The Emperor here might describe how the situation feels from the inside rather than what it is."
+        ],
+        "card_id": "00000000-0000-4000-8000-00000000000c"
+      },
+      {
+        "position_index": 3,
+        "text": "In the What lies beneath position, Page of Swords may point to curiosity as one thread running through what you are sitting with. One way to read this is as a question rather than an answer: what would curiosity look like here, in practice?",
+        "nuances": [
+          "Read another way, Page of Swords here might describe how the situation feels from the inside rather than what it is."
+        ],
+        "card_id": "00000000-0000-4000-8000-00000000000d"
+      },
+      {
+        "position_index": 4,
+        "text": "In the What comes next position, Ten of Pentacles may point to legacy as one thread running through what you are sitting with. One way to read this is as a question rather than an answer: what would legacy look like here, in practice?",
+        "nuances": [
+          "Read another way, Ten of Pentacles here might describe how the situation feels from the inside rather than what it is."
+        ],
+        "card_id": "00000000-0000-4000-8000-00000000000e"
+      }
+    ],
+    "combined": "Read as a whole, the The Star, Five of Cups, The Emperor, Page of Swords, Ten of Pentacles seem to describe a movement from hope toward something you have not named yet. The cards do not settle the question; they suggest where it might be worth looking. It may help to hold the reading loosely and return to it once something has moved.",
+    "reflective_prompts": [
+      "What would change if you treated The Star as describing you rather than the situation?",
+      "Which of these cards felt truest the moment you saw it, before you read anything?"
+    ]
+  },
+  "human_review": {
+    "reviewed_by": null,
+    "reviewed_at": null,
+    "verdict": null,
+    "notes": null
+  }
+}

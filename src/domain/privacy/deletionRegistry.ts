@@ -11,6 +11,9 @@
  * `spreads` carries a nullable `user_id` for custom spreads, so it is registered.
  * Phase 03: `readings`, `reading_cards` (root `reading` and, via the denormalised column, the
  * user root) and `reading_drafts`.
+ * Phase 04: `interpretations`, `question_embeddings` (cascade from the reading and the user),
+ * `safety_flags` (user cascade; keyed by object id, purged with the object in Phase 05's job)
+ * and the platform `ai_calls` (user_id set null on account deletion — it holds no content).
  */
 
 export type RootType = 'reading' | 'life_event' | 'journey' | 'entity' | 'user';
@@ -23,7 +26,16 @@ export interface CascadeTarget {
 }
 
 export const DELETION_REGISTRY: Record<RootType, readonly CascadeTarget[]> = {
-  reading: [{ table: 'reading_cards', via: 'cascade', note: 'FK readings.id on delete cascade' }],
+  reading: [
+    { table: 'reading_cards', via: 'cascade', note: 'FK readings.id on delete cascade' },
+    { table: 'interpretations', via: 'cascade', note: 'FK readings.id on delete cascade' },
+    { table: 'question_embeddings', via: 'cascade', note: 'FK readings.id on delete cascade' },
+    {
+      table: 'safety_flags',
+      via: 'job',
+      note: 'keyed by (object_type, object_id); the Phase 05 purge job removes them with the reading',
+    },
+  ],
   life_event: [],
   journey: [],
   entity: [],
@@ -47,6 +59,14 @@ export const DELETION_REGISTRY: Record<RootType, readonly CascadeTarget[]> = {
       table: 'spreads',
       via: 'cascade',
       note: 'custom spreads only; built-in rows have user_id null and are never deleted',
+    },
+    { table: 'interpretations', via: 'cascade' },
+    { table: 'safety_flags', via: 'cascade', note: 'category + IDs only' },
+    { table: 'question_embeddings', via: 'cascade', note: 'hash + vector only' },
+    {
+      table: 'ai_calls',
+      via: 'cascade',
+      note: 'user_id set null on delete; rows hold counts and classes, no content',
     },
   ],
 };

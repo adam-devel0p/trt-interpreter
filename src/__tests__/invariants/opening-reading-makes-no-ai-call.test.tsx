@@ -5,8 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ReadingView } from '@/db/queries/readings';
 import { RWS_DECK } from '@/db/seed/decks/rws';
 import { THOTH_DECK } from '@/db/seed/decks/thoth';
-import { SPREADS } from '@/db/seed/decks/spreads';
-import type { CardSeed, DeckSeed } from '@/domain/decks/types';
+import { fixtureInterpretation, fixtureReading } from '@/__tests__/fixtures/reading';
 
 /**
  * Invariant (CLAUDE.md engineering rules, spec §19): opening a saved reading makes zero AI
@@ -15,7 +14,8 @@ import type { CardSeed, DeckSeed } from '@/domain/decks/types';
  *      or the detail component imports `src/ai/`;
  *   2. runtime — with every AI entry point replaced by a spy that throws, the query layer's
  *      read and the detail screen's render both complete without touching it.
- * Phase 04 extends layer 2 to a reading *with* a stored interpretation.
+ * Since Phase 04 layer 2 also covers a reading *with* a stored interpretation: the
+ * interpretation query reads one table, and the detail screen renders the stored layers.
  */
 
 const aiSpy = vi.fn(() => {
@@ -33,6 +33,10 @@ const ENTRY_POINTS = [
   'src/db/queries/readings.ts',
   'src/db/queries/spreads.ts',
   'src/ui/components/reading-detail.tsx',
+  'src/ui/components/layered-interpretation.tsx',
+  'src/ui/components/safety-resource-card.tsx',
+  'src/db/queries/interpretations.ts',
+  'src/db/queries/profile.ts',
   'src/ui/components/card-entry.tsx',
   'src/ui/components/shuffle-reveal.tsx',
   'src/ui/components/user-note-editor.tsx',
@@ -85,96 +89,11 @@ function moduleGraph(): Set<string> {
   return seen;
 }
 
-const view = (deck: DeckSeed, c: CardSeed, deckId: string) => ({
-  id: `${deck.system}-${c.slug}`,
-  deck_id: deckId,
-  deck_system: deck.system,
-  deck_name: deck.name,
-  slug: c.slug,
-  name: c.name,
-  title: c.title,
-  arcana: c.arcana,
-  suit: c.suit,
-  suit_label: c.suit_label,
-  rank_label: c.rank_label,
-  number: c.number,
-  numeral: c.numeral,
-  element: c.element,
-  astrology: c.astrology,
-  correspondences: c.correspondences,
-  art_asset_path: c.art_asset_path,
-  sort_order: c.sort_order,
-  keywords_upright: c.keywords_upright,
-  keywords_reversed: c.keywords_reversed,
-  meaning_upright: c.meaning_upright,
-  meaning_reversed: c.meaning_reversed,
-});
-
-function fixtureReading(deck: DeckSeed, slugs: string[]): ReadingView {
-  const deckId = `00000000-0000-4000-8000-00000000000${deck.system === 'rws' ? 'a' : 'b'}`;
-  const spread = SPREADS.find((s) => s.positions.length === slugs.length)!;
-  return {
-    id: '00000000-0000-4000-8000-000000000001',
-    user_id: '00000000-0000-4000-8000-000000000002',
-    created_at: '2026-09-12T10:00:00.000Z',
-    occurred_at: '2026-09-12T10:00:00.000Z',
-    question: 'Should I take the job?',
-    is_open_reflection: false,
-    life_area: 'work',
-    spread_id: '00000000-0000-4000-8000-000000000003',
-    deck_id: deckId,
-    source: 'physical',
-    uses_reversals: deck.supports_reversals,
-    user_notes: 'My own words.',
-    follow_up_status: 'unresolved',
-    revisit_at: null,
-    rng: null,
-    metadata_version: 1,
-    updated_at: '2026-09-12T10:00:00.000Z',
-    deck: {
-      id: deckId,
-      slug: deck.slug,
-      name: deck.name,
-      system: deck.system,
-      tradition_notes: deck.tradition_notes,
-      supports_reversals: deck.supports_reversals,
-      art_strategy: deck.art_strategy,
-      license_note: deck.license_note,
-      sort_order: deck.sort_order,
-    },
-    spread: {
-      id: '00000000-0000-4000-8000-000000000003',
-      user_id: null,
-      slug: spread.slug,
-      name: spread.name,
-      description: spread.description,
-      positions: spread.positions,
-      layout: spread.layout,
-      is_builtin: true,
-      deck_scope: null,
-      card_count: spread.positions.length,
-      sort_order: 0,
-    },
-    cards: slugs.map((slug, i) => ({
-      id: `rc-${i}`,
-      position_index: i,
-      position_key: spread.positions[i]!.key,
-      orientation: i === 1 && deck.supports_reversals ? 'reversed' : 'upright',
-      user_meaning: null,
-      card: view(
-        deck,
-        deck.cards.find((c) => c.slug === slug)!,
-        deckId,
-      ),
-      position: spread.positions[i]!,
-    })),
-  };
-}
-
-/** A PostgREST-shaped fake: records every table touched, returns the fixture for `readings`. */
-function fakeClient(reading: ReadingView) {
+/** A PostgREST-shaped fake: records every table touched, returns the fixture for each table. */
+function fakeClient(reading: ReadingView, interpretation?: object) {
   const tables: string[] = [];
   const rpcs: string[] = [];
+  let current: unknown[] = [];
   const row = {
     ...reading,
     decks: reading.deck,
@@ -194,8 +113,8 @@ function fakeClient(reading: ReadingView) {
     is: () => builder,
     order: () => builder,
     limit: () => builder,
-    maybeSingle: async () => ({ data: row, error: null }),
-    then: (resolve: (v: unknown) => void) => resolve({ data: [row], error: null }),
+    maybeSingle: async () => ({ data: current[0] ?? null, error: null }),
+    then: (resolve: (v: unknown) => void) => resolve({ data: current, error: null }),
   };
   return {
     tables,
@@ -203,6 +122,12 @@ function fakeClient(reading: ReadingView) {
     client: {
       from: (t: string) => {
         tables.push(t);
+        current =
+          t === 'readings'
+            ? [row]
+            : t === 'interpretations' && interpretation
+              ? [interpretation]
+              : [];
         return builder;
       },
       rpc: (name: string) => {
@@ -239,6 +164,20 @@ describe('opening-reading-makes-no-ai-call', () => {
     expect(aiSpy).not.toHaveBeenCalled();
   });
 
+  it('2b · reading a stored interpretation is one select on `interpretations`, no RPC, no runner', async () => {
+    const { getInterpretationState } = await import('@/db/queries/interpretations');
+    const fixture = fixtureReading(RWS_DECK, ['strength', 'the-tower', 'ace-of-cups']);
+    const stored = fixtureInterpretation(fixture);
+    const fake = fakeClient(fixture, stored);
+    const state = await getInterpretationState(fake.client as never, fixture.id);
+    expect(fake.tables).toEqual(['interpretations']);
+    expect(fake.rpcs).toEqual([]);
+    expect(state.current?.id).toBe(stored.id);
+    expect(state.current?.synthesis).toBe(stored.synthesis);
+    expect(state.latest?.id).toBe(stored.id);
+    expect(aiSpy).not.toHaveBeenCalled();
+  });
+
   it('3 · the detail screen renders a complete, useful reading from stored data alone', async () => {
     const { ReadingDetail } = await import('@/ui/components/reading-detail');
     for (const [deck, slugs] of [
@@ -272,6 +211,60 @@ describe('opening-reading-makes-no-ai-call', () => {
       } else {
         expect(html).toContain('The Tower, reversed — Rider–Waite–Smith');
       }
+    }
+    expect(aiSpy).not.toHaveBeenCalled();
+  });
+
+  it('4 · a reading with a stored interpretation renders every layer from the row, with the spy never called', async () => {
+    const { ReadingDetail } = await import('@/ui/components/reading-detail');
+    const { LayeredInterpretation } = await import('@/ui/components/layered-interpretation');
+    for (const [deck, slugs] of [
+      [RWS_DECK, ['strength', 'the-tower', 'ace-of-cups']],
+      [THOTH_DECK, ['lust', 'the-universe', 'princess-of-disks']],
+    ] as const) {
+      const reading = fixtureReading(deck, [...slugs]);
+      const stored = fixtureInterpretation(reading);
+      const html = renderToStaticMarkup(
+        <ReadingDetail
+          reading={reading}
+          slots={{
+            notes: null,
+            followUp: null,
+            revisit: null,
+            controls: null,
+            interpretation: (
+              <LayeredInterpretation
+                layers={{
+                  synthesis: stored.synthesis,
+                  per_card: stored.per_card,
+                  combined: stored.combined,
+                  reflective_prompts: stored.reflective_prompts,
+                }}
+                cards={reading.cards.map((c) => ({
+                  position_index: c.position_index,
+                  positionName: c.position!.name,
+                  cardName: c.card.name,
+                  orientation: c.orientation,
+                }))}
+                meta={{
+                  modelId: stored.model_id,
+                  promptVersion: stored.prompt_version,
+                  generatedAt: stored.generated_at,
+                }}
+              />
+            ),
+          }}
+        />,
+      );
+      expect(html).not.toContain('Not generated.');
+      expect(html).toContain('AI interpretation');
+      expect(html).toContain(escapeHtml(stored.synthesis));
+      for (const c of stored.per_card) expect(html).toContain(escapeHtml(c.text));
+      expect(html).toContain(escapeHtml(stored.combined));
+      for (const p of stored.reflective_prompts) expect(html).toContain(escapeHtml(p));
+      expect(html).toContain('suggested');
+      expect(html).toContain(stored.model_id);
+      if (deck.system === 'thoth') expect(html).not.toMatch(/Pentacles|\bPage\b/);
     }
     expect(aiSpy).not.toHaveBeenCalled();
   });

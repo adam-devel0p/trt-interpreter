@@ -201,6 +201,27 @@ export async function listReadings(
   ).map(({ decks, spreads, ...r }) => ({ ...r, deck: decks, spread: spreads }));
 }
 
+/** Summaries for a known set of ids (the repeat-question nudge), newest first. */
+export async function listReadingSummariesByIds(
+  client: UserClient,
+  ids: readonly string[],
+): Promise<ReadingSummary[]> {
+  if (ids.length === 0) return [];
+  const { data, error } = await client
+    .from('readings')
+    .select(SUMMARY_SELECT)
+    .in('id', [...ids])
+    .is('deleted_at', null)
+    .order('occurred_at', { ascending: false });
+  if (error) throw new ReadingQueryError('readings read failed', error.code);
+  return (
+    (data ?? []) as unknown as (Omit<ReadingSummary, 'deck' | 'spread'> & {
+      decks: ReadingSummary['deck'];
+      spreads: ReadingSummary['spread'];
+    })[]
+  ).map(({ decks, spreads, ...r }) => ({ ...r, deck: decks, spread: spreads }));
+}
+
 /** Most recently used card ids in a deck (for the picker's recent row), newest first, deduped. */
 export async function listRecentCardIds(
   client: UserClient,

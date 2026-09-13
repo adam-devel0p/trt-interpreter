@@ -1,0 +1,19 @@
+{
+  "name": "rws-celtic-open",
+  "description": "RWS · Celtic cross (lite) · open reflection, no note, deep depth.",
+  "deck": "rws",
+  "spread": "celtic-cross-lite",
+  "question": null,
+  "life_area": null,
+  "cards": [
+    { "slug": "the-star", "orientation": "upright" },
+    { "slug": "five-of-cups", "orientation": "upright" },
+    { "slug": "the-emperor", "orientation": "reversed" },
+    { "slug": "page-of-swords", "orientation": "upright" },
+    { "slug": "ten-of-pentacles", "orientation": "upright" }
+  ],
+  "user_notes": null,
+  "depth": "deep",
+  "experience_level": "beginner",
+  "expect": { "acknowledges_note": false }
+}

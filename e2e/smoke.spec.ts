@@ -33,6 +33,13 @@ test('/home shows the 5-tab bottom nav, keyboard reachable', async ({ page }) =>
   await expectNoSeriousA11y(page);
 });
 
+test('/dev/ai-usage renders the cost ledger with no journal content', async ({ page }) => {
+  await page.goto('/dev/ai-usage');
+  await expect(page.getByRole('heading', { name: 'AI usage' })).toBeVisible();
+  await expect(page.getByRole('table', { name: 'Calls by task and model' })).toBeVisible();
+  await expectNoSeriousA11y(page);
+});
+
 test('/dev/ui renders every component in light and dark at this viewport', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/dev/ui');

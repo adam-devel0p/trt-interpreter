@@ -16,6 +16,30 @@ purge job, deletion registry v1, JSON export, Profile export/delete UI.
 
 ## Tasks
 
+From Phase 04 (see [completed/phase-04-report.md](completed/phase-04-report.md) §13):
+- Interpretations are read with `getInterpretationState(client, readingId)` (`src/db/queries/interpretations.ts`)
+  → `{ current, latest }`; `current` is the one complete, non-superseded row (`synthesis`,
+  `per_card`, `combined`, `reflective_prompts`, `model_id`, `prompt_version`, `metadata_version`).
+  Render with `LayeredInterpretation` (`src/ui/components/layered-interpretation.tsx`). For the
+  list's one-line preview, select `synthesis` from `interpretations` with the same
+  `status = 'complete' and superseded_by is null` filter — one embedded select, never a call.
+  The `opening-reading-makes-no-ai-call` invariant's import-graph scan should grow to cover the
+  journal routes.
+- Deleting a reading cascades `interpretations` and `question_embeddings`; **`safety_flags` are
+  keyed by `(object_type, object_id)` with no FK and must be deleted by the purge job** (registered
+  `via: 'job'` in `deletionRegistry.ts`). `getInterpretationState` does not look at `deleted_at` —
+  filter on the reading.
+- Editing cards bumps `readings.metadata_version`; the detail panel already shows a stored
+  interpretation as *stale* with "Generate for the current cards". Nothing to add.
+- Export (FR-23) should include each reading's interpretations (all generations, with versions
+  and `superseded_by`) and `feedback` / `feedback_reason` (the user's own words), plus
+  `safety_flags` categories; never `ai_calls` (platform telemetry, no content).
+- `ai_calls` is the e2e provider spy: count rows before/after to prove a path makes no call.
+- Layering lint applies to tests: anything needing the seed decks or the mock provider lives
+  outside `src/domain/` and `src/ai/` (e.g. `src/interpretation/__tests__/`).
+- Owner-side deferral still open from 04: the real-model `pnpm eval` run and human review of the
+  baselines (needs `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`). Not a blocker for this phase.
+
 ### 1. Journal timeline (FR-07)
 - Reverse-chronological list grouped by month, virtualised, paginated (cursor-based, never offset).
 - Each item: date, question (or "Open reflection"), deck accent, spread name, card thumbnails/names,

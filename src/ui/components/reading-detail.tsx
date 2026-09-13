@@ -16,6 +16,11 @@ export interface ReadingDetailSlots {
   revisit?: React.ReactNode;
   /** Edit / delete / export controls (client). */
   controls: React.ReactNode;
+  /**
+   * The AI interpretation (client island that renders the stored layers or streams new ones).
+   * When absent the section shows an honest "Not generated." — the reading is complete without it.
+   */
+  interpretation?: React.ReactNode;
 }
 
 export interface ReadingDetailProps {
@@ -28,8 +33,8 @@ export interface ReadingDetailProps {
 }
 
 /**
- * Reading detail (§6.3), in order: at a glance · your interpretation · AI interpretation (an
- * honest empty slot until Phase 04) · cards in position with the deck-native reference meaning
+ * Reading detail (§6.3), in order: at a glance · your interpretation · AI interpretation (the
+ * stored layers via a slot, or an honest empty state) · cards in position with the deck-native reference meaning
  * · connections (placeholder) · follow-up · controls. Everything on this screen is stored
  * data; nothing is computed by a model when it opens (invariant: opening makes zero AI calls).
  */
@@ -116,13 +121,15 @@ export function ReadingDetail({ reading, justSaved = false, slots, cardHref }: R
         <h2 id="ai-interpretation-h" className="mb-2 font-serif text-xl">
           AI interpretation
         </h2>
-        <div className="rounded-card border-l-2 border-hairline-strong bg-surface-ai px-4 py-3 text-sm text-fg-muted">
-          <p className="font-medium text-fg">Not generated.</p>
-          <p className="mt-1">
-            Nothing here was produced by a model. AI interpretation arrives in a later phase and is
-            optional; your reading is complete without it.
-          </p>
-        </div>
+        {slots.interpretation ?? (
+          <div className="rounded-card border-l-2 border-hairline-strong bg-surface-ai px-4 py-3 text-sm text-fg-muted">
+            <p className="font-medium text-fg">Not generated.</p>
+            <p className="mt-1">
+              Nothing here was produced by a model. AI interpretation is optional; your reading is
+              complete without it.
+            </p>
+          </div>
+        )}
       </section>
 
       <section aria-labelledby="cards-h" className="mt-8">

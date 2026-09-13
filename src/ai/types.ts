@@ -44,6 +44,8 @@ export interface ObjectRequest<T> {
   objectRefs?: ObjectRef[];
   /** Optional named fixture for the mock provider / evals. Ignored by real providers. */
   fixture?: string;
+  /** Structured hints the mock provider may use to fabricate a plausible reply. Ignored by real providers. */
+  mockInput?: Record<string, unknown>;
 }
 
 export interface ResultMeta {
@@ -66,12 +68,15 @@ export interface StreamRequest {
   task: TaskId;
   system: string;
   messages: Message[];
+  /** When set, providers that support structured output constrain the stream to this schema. */
+  schema?: z.ZodType;
   modelHint?: ModelTier;
   maxTokens: number;
   timeoutMs?: number;
   userId?: string;
   objectRefs?: ObjectRef[];
   fixture?: string;
+  mockInput?: Record<string, unknown>;
 }
 
 export type StreamChunk =

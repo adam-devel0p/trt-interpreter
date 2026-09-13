@@ -104,7 +104,7 @@ Every async surface needs all four states designed, and each phase's review chec
 
 `AppShell` · `BottomNav` · `PageHeader` · `Card` (tarot card render, art or typographic treatment,
 orientation-aware) · `CardPicker` (fast deck-native search-select for physical entry) · `SpreadLayout`
-· `ShuffleReveal` · `LayeredInterpretation` · `UserNoteEditor` · `InferredChip` · `EvidenceList` ·
+· `ShuffleReveal` · `LayeredInterpretation` · `SafetyResourceCard` · `UserNoteEditor` · `InferredChip` · `EvidenceList` ·
 `SourceCitation` · `TimelineItem` · `JourneyTimeline` · `ThemeProgression` · `ConfidenceBadge` ·
 `ConnectionProposal` (confirm/maybe/unrelated) · `OutcomeSelector` · `AskComposer` · `AnswerWithSources`
 · `PaywallSheet` · `EmptyState` · `Skeleton` · `ErrorState` · `ConfirmDestructive`.
@@ -133,3 +133,21 @@ its own zone). `ChoiceButton`'s selected state is now an outline + soft accent g
 `hairline` utility owns `box-shadow`, so a Tailwind ring is invisible on it; use outlines for
 selection on hairlined surfaces. `FocusHeading` takes `autoFocus={false}` when a step's own control
 (the picker) should receive focus.
+
+Phase 04 built `LayeredInterpretation` (the AI container contract made concrete: UI sans in the
+tinted `surface-ai` container with a 2px hairline left edge, an eyebrow "AI interpretation ·
+suggested, one way to read this", the synthesis always visible, then *Card by card*, *Read
+together* and *Questions to sit with* as native `<details>` layers — keyboard-operable by
+construction, folded by default for `experienced` readers — a polite `role="status"` live region
+that announces **stages** ("Synthesis ready.", "Card 2 of 3.", "Interpretation complete."), never
+tokens, a `▍` caret on the string still arriving, a *stale* notice when the cards changed since,
+a "Why am I seeing this?" disclosure with model and prompt version, and an `actions` slot),
+`SafetyResourceCard` (§10: heading, one calm paragraph, resources as links or numbers with their
+region; shown once per reading above the interpretation; `data-safety-card` for tests) and the
+client island `InterpretationPanel` (`app/(app)/reading/[id]/`): states are *off* (no consent —
+plain copy and a link to Profile), *idle* ("Not generated." + "Generate interpretation"),
+*streaming* (skeleton → layers, Stop), *in progress elsewhere* (polls), *failed* ("Interpretation
+unavailable — your reading is saved." + what happened + Try again, partial layers kept) and
+*stored* (feedback Yes / Not really with an optional reason, Regenerate). The reading flow's
+question step gained the FR-25 nudge: a region "You've asked this a few times today." listing the
+earlier readings, *Draw anyway* (primary) and *Look at what's driving the uncertainty*.

@@ -1,0 +1,17 @@
+{
+  "name": "rws-three-card-job",
+  "description": "RWS · Situation/Advice/Outcome · a job decision with a note that leads.",
+  "deck": "rws",
+  "spread": "three-card",
+  "question": "Should I take the job in Lisbon?",
+  "life_area": "Work",
+  "cards": [
+    { "slug": "eight-of-pentacles", "orientation": "upright" },
+    { "slug": "the-tower", "orientation": "reversed" },
+    { "slug": "six-of-wands", "orientation": "upright" }
+  ],
+  "user_notes": "The Tower again, but reversed this time. I think the fear is the move, not the work.",
+  "depth": "standard",
+  "experience_level": "comfortable",
+  "expect": { "acknowledges_note": true }
+}

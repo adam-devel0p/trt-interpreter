@@ -186,6 +186,13 @@ Mostly deterministic, no generation:
 - Never block the draw outright, never shame the user, never count it as a streak or a failure.
   One nudge per cluster per day.
 
+Implemented (Phase 04): `domain/interpretation/repeat.ts` (`decideRepeat` — cosine over the
+stored vectors, `REPEAT_SIMILARITY 0.90`, `REPEAT_WINDOW_MS 24h`, `REPEAT_MIN_PRIOR 2`; "one per
+day" = no similar ask in the window carries `nudge_shown_at`), `src/interpretation/repeat.ts`
+(embed → compare → record the ask → verdict; fails soft to "no nudge"), `question_embeddings`
+(hash + vector; linked to the reading on save). The flow calls `POST /api/readings/repeat-check`
+on Continue with a 2.5 s client timeout, consent-gated on both sides.
+
 ---
 
 ## 6. Digital draw RNG (FR-04, §6.2)

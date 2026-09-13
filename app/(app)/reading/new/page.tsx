@@ -1,6 +1,6 @@
 import { getSessionClient, requireUser } from '@/auth/session';
 import { listCards, listDecks, listSpreads } from '@/db/queries/decks';
-import { getProfile } from '@/db/queries/profile';
+import { getProfile, hasAiConsent } from '@/db/queries/profile';
 import { getServerDraft, listRecentCardIds } from '@/db/queries/readings';
 import { ReadingFlow, type FlowDeck } from './reading-flow';
 
@@ -42,6 +42,7 @@ export default async function NewReadingPage() {
         useReversals: profile?.use_reversals ?? true,
       }}
       serverDraft={serverDraft}
+      repeatCheck={profile ? hasAiConsent(profile) : false}
     />
   );
 }

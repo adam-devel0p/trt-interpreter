@@ -164,12 +164,40 @@ transaction, refusing a card count that does not match `spreads.card_count`;
 atomically and bumps `metadata_version`. Both are granted to `authenticated` and `service_role`
 only.
 
-**`interpretations`** — Phase 04. `id`, `reading_id`, `status enum('pending','streaming','complete','failed')`,
-`synthesis text` (the one-line layer), `per_card jsonb` `[{position_index, card_id, text, nuances[]}]`,
-`combined text`, `reflective_prompts text[]`, `fact_status` fixed to `TAROT_INTERPRETATION`,
+**`interpretations`** — Phase 04 (`0005_ai_interpretation`). One row per generation. `id`,
+`reading_id` (FK cascade), `user_id` (FK cascade), `status enum interpretation_status
+('pending','streaming','complete','failed')`, `fact_status` **fixed to `TAROT_INTERPRETATION` by
+check constraint** (`interpretations_fact_status_check`), `metadata_version` (the reading's
+version the text was generated against — a later card edit makes it *stale*, shown as such),
+`depth text` (brief/standard/deep as run), the layers `synthesis text`, `per_card jsonb`
+`[{position_index, card_id, text, nuances[]}]`, `combined text`, `reflective_prompts text[]`
+(nullable; hold the partial output while `streaming`, so a disconnect loses nothing),
 `model_id`, `prompt_version`, `schema_version`, `tokens_in`, `tokens_out`, `cost_micros`,
-`latency_ms`, `generated_at`, `error_class null`.
-One `complete` row per reading (unique partial index); regenerations supersede via `superseded_by`.
+`latency_ms`, `error_class` (`invalid_output | timeout | provider_error | circuit_open |
+budget_denied | refusal | deck_purity | cancelled`), feedback `feedback smallint (-1|1)`,
+`feedback_reason text` (the user's own words — journal content), `feedback_at`,
+`superseded_by uuid`, `generated_at`, `created_at`, `updated_at`.
+Checks: `interpretations_complete_check` (a `complete` row has every layer and a `model_id`).
+**One current complete row per reading**: partial unique index `interpretations_current_idx`
+on `(reading_id) where status = 'complete' and superseded_by is null`; regeneration inserts a
+new row and points the previous one at it. Trigger `interpretations_freeze_complete`: once
+`complete`, the layers, versions, `status`, `metadata_version` and `reading_id` cannot change
+(`23514`) — only `superseded_by` and the feedback columns may. Every write goes through
+`modelWrite()` (docs/AI_LAYER.md#write-gate).
+
+**`safety_flags`** — Phase 04. `id`, `user_id`, `object_type`, `object_id`, `category`
+(`medical | self_harm | legal | financial | immediate_safety`, check), `severity`
+(`low | medium | high`, check), `surfaced_at` (when the resource card was shown), `resource_shown`,
+`created_at`. Unique `(object_type, object_id, category)` — one flag per topic per object, never
+repeated. **Never the question text.**
+
+**`question_embeddings`** — Phase 04 (generalised into `retrieval_documents` + `embeddings` in
+Phase 09). One row per ask before drawing: `id`, `user_id`, `reading_id null` (FK cascade; linked
+on save by `question_hash`), `question_hash text` (FNV-1a of the normalised text — a key, not
+content), `vector vector(1536)`, `model`, `nudge_shown_at`, `asked_at`. Indexes
+`(user_id, asked_at desc)`, `(user_id, question_hash)`. Holds a hash and a vector, never text.
+
+---
 
 ---
 
@@ -270,10 +298,14 @@ Check constraint + test: a summary may never cite another summary as its sole ev
 `attempts`, `max_attempts`, `run_after`, `locked_at`, `last_error_class`, `created_at`, `updated_at`.
 RLS enabled with **no policies**: service-role only. Index `(status, run_after)` for claiming;
 claim query uses `for update skip locked` and reclaims `running` rows whose lock is > 10 min old.
-**`ai_calls`** — Phase 04. `id`, `user_id null`, `task`, `model_id`, `prompt_version`,
-`schema_version`, `tokens_in`, `tokens_out`, `cost_micros`, `latency_ms`,
-`status enum('ok','invalid_output','timeout','provider_error','budget_denied','refusal')`, `error_class`,
-`object_refs jsonb`, `created_at`. **No prompt or completion text. Ever.**
+**`ai_calls`** — Phase 04. `id`, `user_id null` (FK `on delete set null`), `task`, `model_id`,
+`prompt_version`, `schema_version`, `tokens_in`, `tokens_out`, `cost_micros`, `latency_ms`,
+`status enum ai_call_status('ok','invalid_output','timeout','provider_error','budget_denied','refusal')`,
+`error_class`, `attempts smallint`, `object_refs jsonb` (`[{type, id}]`), `created_at`.
+Indexes on `created_at`, `(task, created_at)`, `(user_id, created_at)`. RLS enabled with **no
+policies** (service-role only, like `jobs`); written by `src/ai/telemetry.ts`, read by
+`/dev/ai-usage`. **No prompt or completion text. Ever** — asserted by an integration test that
+checks every string value of a stored row is an identifier, version or timestamp.
 **`usage_counters`** — Phase 11. `user_id`, `period_start date`, `task`, `calls`, `tokens`,
 `cost_micros`. Unique `(user_id, period_start, task)`.
 **`subscriptions`** — Phase 11. `user_id`, `provider`, `provider_customer_id`,
@@ -284,8 +316,6 @@ Props are validated against a per-event allowlist schema; free text is rejected 
 **`smoke_notes`** — Phase 00 throwaway; **dropped in Phase 01** (`0002_auth_profiles`). The RLS
 harness now runs on `profiles`.
 
-**`safety_flags`** — Phase 04. `user_id`, `object_type`, `object_id`, `category`, `severity`,
-`surfaced_at`, `resource_shown text`.
 **`deletion_receipts`** — Phase 05/12. `user_id`, `scope`, `requested_at`, `completed_at`,
 `counts jsonb` (what was purged, by table).
 
@@ -308,10 +338,12 @@ Variants used so far: `profiles` is keyed on `id = auth.uid()` and has no delete
 policies. Column-level rules that RLS cannot express (old vs new row, e.g. `profiles.plan`) are
 `BEFORE UPDATE` triggers that check `auth.role()`.
 
-Child tables (e.g. `reading_cards`) carry a denormalised `user_id` **and** an `exists` check against
-the parent on insert/update, so a row can never be attached to someone else's reading even with
-the caller's own `user_id`. Tables keyed by `user_id` alone (`reading_drafts`) pass
-`idColumn: 'user_id'` to the isolation harness.
+Child tables (e.g. `reading_cards`, `interpretations`) carry a denormalised `user_id` **and** an
+`exists` check against the parent on insert/update, so a row can never be attached to someone
+else's reading even with the caller's own `user_id`; `question_embeddings` applies the same check
+only when `reading_id` is set. Tables keyed by `user_id` alone (`reading_drafts`) pass
+`idColumn: 'user_id'` to the isolation harness. `ai_calls` has RLS enabled with no policies
+(`expectNoUserAccess`).
 Reference tables (`decks`, `cards`, `card_aliases`, `card_archetypes`, `card_archetype_members`) are
 `for select using (true)` to `authenticated` + `anon` (public reference pages) and writable only by
 the service role — tested with `expectPublicReadOnly()`. `spreads` is mixed: built-in rows

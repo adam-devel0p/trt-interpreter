@@ -48,6 +48,28 @@ directly. It returns a `RunResult<T>` — `{ ok: true, value, meta, attempts }` 
 provider_error | budget_denied | refusal` — and **never throws for a model problem**. The server
 entry point is `getAiRunner()` in `src/ai/index.ts`.
 
+**Streamed structured output** (Phase 04): `runStreamObject(req)` takes a `StreamObjectRequest<T>`
+(`StreamRequest` + `schema` + optional `validate(value) → issue labels` + `repairHint(issues)`)
+and yields `{type:'text'}` deltas, `{type:'reset', reason}` when an attempt is discarded,
+then `{type:'done', value, meta, attempts}` or `{type:'failed', status, errorClass, attempts,
+issues?}`. It runs the **same policy** as `runObject`: at `done` the accumulated text is parsed,
+schema-checked and `validate`d; a failure there is invalid output (one repair turn that echoes
+the failed text, the hint and the schema); timeouts retry → downgrade → fail; 429/5xx back off
+under the breaker; refusal is terminal. One `ai_calls` row per run. The Anthropic provider
+passes `schema` as `output_config.format = json_schema` (constraints such as `minLength` are
+stripped for the endpoint — `providers/outputSchema.ts` — and re-checked by Zod after).
+
+**Providers** (`src/ai/providers/`): `anthropic.ts` (SDK client with `maxRetries: 0`, the
+runner's abort signal passed through, `output_config.effort = 'medium'` for the `deep` and
+`standard` tiers, never for `fast`; `stop_reason: refusal` → `refusal`, `max_tokens` →
+`invalid_output`; SDK errors mapped to classes, never re-thrown with text), `openai-embeddings.ts`
+(plain `fetch` to `/v1/embeddings`, question text only), `mock.ts` (fixtures may be functions of
+the request's `mockInput` hints; object fixtures stream as chunked JSON; `failWith('invalid_json')`
+on a stream yields unparseable text; embeddings are a hashed bag-of-words at 1536 dims; the
+reported `modelId` is `mock/<routed id>` so a stored row never claims a real model ran).
+Pricing per model lives in `src/ai/pricing.ts` (micro-dollars per token; unknown models cost 0
+and are flagged on `/dev/ai-usage`).
+
 ## Task catalogue
 
 Each task is a directory `src/ai/tasks/<task>/` containing `prompt.ts`, `schema.ts`,
@@ -55,9 +77,9 @@ Each task is a directory `src/ai/tasks/<task>/` containing `prompt.ts`, `schema.
 
 | Task | Phase | Tier | Output | Notes |
 |---|---|---|---|---|
-| `interpret_reading` | 04 | deep | layered interpretation | Deck-aware; streams; grounded in `cards` reference rows, not model memory |
-| `classify_safety` | 04 | fast | category + severity | Runs on the question before interpretation (§10) |
-| `detect_repeat_question` | 04 | fast (embedding + rule) | similarity verdict | Mostly deterministic; no generation needed (FR-25) |
+| `interpret_reading` | 04 ✅ | deep | layered interpretation | Deck-aware; streams; grounded in `cards` reference rows, not model memory. `interpret_reading/1.0.0` · `interpretation/1.0.0` |
+| `classify_safety` | 04 ✅ | fast | category + severity | Runs on the question before interpretation (§10). `classify_safety/1.0.0` · `safety_classification/1.0.0` |
+| `detect_repeat_question` | 04 ✅ | fast (embedding + rule) | similarity verdict | Mostly deterministic; no generation needed (FR-25). Embedding request only; the rule is `domain/interpretation/repeat.ts` |
 | `extract_reading_metadata` | 06 | standard | extraction payload | Themes, entities, possibilities, timeframe (§7.2) |
 | `extract_event_metadata` | 08 | standard | extraction payload | Same schema family as above (§6.4) |
 | `propose_entity_candidates` | 06 | fast | candidate mentions + aliases | Proposes only; resolution decided in `domain/` |
@@ -84,7 +106,14 @@ tier and every tier has a model.
    cross-system substitution ("this is Thoth; do not use Rider-Waite-Smith names or meanings"). A
    post-generation check greps the output for the *other* deck's card names for the same archetypes;
    a hit fails validation and retries once, then drops to reference-only display. This makes §19's
-   Thoth criterion mechanically testable.
+   Thoth criterion mechanically testable. *Implemented in `domain/decks/purity.ts`:* the banned
+   list is the other deck's identifying vocabulary (card names, suit and court labels, deck names)
+   minus anything this deck also uses; the other deck's small-card **titles** ("Change", "Success")
+   are ordinary words and are never banned, and single-word trump names ("Justice", "Art") match
+   case-sensitively so prose ("a sense of justice") passes while a card reference fails. The
+   validator also requires exactly one `per_card` entry per drawn position and a hedged register
+   (`domain/interpretation/register.ts`); the failed class is stored as `deck_purity` when the
+   last attempt's issues include a purity hit.
 3. **Position matters.** Each card is interpreted in its named spread position with the position's
    prompt text, never as a standalone card meaning.
 4. **The user's words lead.** The exact question and the user's "what I notice" note are quoted into
@@ -97,6 +126,33 @@ tier and every tier has a model.
    `experienced` users get shorter AI output and their own notes shown first (§9.3).
 8. **Bounded context.** Historical tasks receive only the bounded evidence package, never full history
    (§11, §13).
+
+## interpret_reading — the run (Phase 04)
+
+`src/interpretation/service.ts` orchestrates; `src/ai/tasks/interpret_reading/` owns the prompt,
+schema re-export, validator and mock fixture. Order of operations is the contract:
+
+1. the reading exists (loaded through the query layer by the route);
+2. `hasAiConsent(profile)` — no consent, no call of any kind (`failed / consent`, no row);
+3. an `interpretations` row is written `pending` **before** any model call, carrying
+   `metadata_version`, `depth`, `prompt_version`, `schema_version`;
+4. `classify_safety` on the question (open reflections skip it); a classifier failure means
+   "none"; a hit is recorded in `safety_flags` (category, severity, IDs) and surfaced once;
+5. `interpret_reading` streams via `runStreamObject`; partial layers are persisted every 1.2 s
+   (`updateInterpretationPartial`) so a disconnect loses nothing; `card_id`s are resolved from
+   the reading after validation (the model never writes them);
+6. `complete` freezes the row (DB trigger) and supersedes any previous current row;
+   any failure → `failed` with a class and whatever partial text arrived.
+
+The route `POST /api/readings/[id]/interpret` returns the stored row as JSON when a current
+interpretation exists (no call), attaches to an in-process live run (`src/interpretation/live.ts`,
+replay + tail) when one is in flight, otherwise starts a run kept alive with `after()` and
+streams SSE frames (`started · safety · text · reset · complete · failed`). `GET` returns state
+for polling; `DELETE` cancels (row → `failed / cancelled`, partial layers kept).
+`{ regenerate: true }` is the only way to call the model for a reading that already has a
+current interpretation. Depth: `domain/interpretation/depth.ts` — `ai_explanation_depth` sets
+length and `max_tokens` (1 100 / 1 800 / 2 800); `experienced` shortens one step and folds the
+layers beneath the user's note.
 
 ## Write gate
 
@@ -113,7 +169,8 @@ const MODEL_ALLOWED: FactStatus[] = ['INFERRED_EVENT','TAROT_INTERPRETATION',
 - `CONFIRMED_FACT` and `USER_REFLECTION` are reachable only via `userWrite()`, called from
   request handlers that carry a real user action.
 - Backed by DB check constraints where the column is fixed (`interpretations.fact_status`,
-  `predictions.fact_status`).
+  `predictions.fact_status`). Implemented in `src/domain/facts/writeGate.ts` (Phase 04); every
+  interpretation write in `src/db/queries/interpretations.ts` goes through `modelWrite()`.
 - Tests: attempt `CONFIRMED_FACT` through `modelWrite()` → rejected; promote an `INFERRED_EVENT` via
   user confirmation → allowed and audited; a model-authored link may never be born `confirmed`.
 - Related invariant (§10 no self-validating loops): a `links` row may not use an `interpretation` or
@@ -131,8 +188,10 @@ const MODEL_ALLOWED: FactStatus[] = ['INFERRED_EVENT','TAROT_INTERPRETATION',
 | Budget exceeded | `budget_denied`; user sees a clear limit message, never a crash; content still saves. |
 | Refusal | Treated as a valid terminal state (`status: 'refusal'`), surfaced honestly, reading preserved. |
 
-Implemented in `src/ai/run.ts` (Phase 00) and tested branch-by-branch in `src/ai/__tests__/run.test.ts`
-against the mock provider. Timeout policy detail: the first timeout retries at the same tier, the
+Implemented in `src/ai/run.ts` (Phase 00; streaming variant Phase 04) and tested branch-by-branch
+in `src/ai/__tests__/run.test.ts` and `runStreamObject.test.ts` against the mock provider, and
+end to end (row states, reading intact) in `src/__tests__/invariants/reading-survives-ai-failure.test.ts`
+and `src/interpretation/__tests__/interpretation.integration.test.ts`. Timeout policy detail: the first timeout retries at the same tier, the
 second downgrades one tier (`deep → standard → fast`), a third fails soft; at `fast` there is no
 downgrade so it is retry-once-then-fail. Rate-limit backoff is `500ms · 2^n` ±50% jitter, capped
 at 8s. The breaker counts 429/5xx/unknown failures across runs and, while open, returns
@@ -156,12 +215,24 @@ Every branch is covered by a test using the mock provider's fault injection
 - Interpretations are immutable and cached — regeneration is explicit and metered.
 - Retrieval context is hard-capped (max objects and max tokens); overflow drops lowest-ranked
   evidence rather than truncating mid-object.
-- `ai_calls` powers cost-per-active-user and cost-per-task dashboards (§16).
+- `ai_calls` powers cost-per-active-user and cost-per-task dashboards (§16). Written by
+  `DbTelemetry` (`src/ai/telemetry.ts`, the one file in `src/ai/` allowed to touch the database)
+  through the service-role surface; `/dev/ai-usage` reads it (calls, tokens, cost, p50/p95 latency,
+  error classes by task and model). A telemetry failure is logged by class and never fails the run.
 
 ## Eval suite
 
 `pnpm eval` (never in CI, costs money) runs `src/ai/tasks/*/fixtures/*.json` against the real provider
 and checks: schema validity, deck-system purity, hedged register (banned-phrase scan), citation
-integrity, and refusal-to-invent on deliberately evidence-poor fixtures. `pnpm test` runs the same
-fixtures against the mock provider for determinism. Baselines live in
+integrity, and refusal-to-invent on deliberately evidence-poor fixtures. `pnpm eval --dry` runs the
+same pipeline against the mock provider (proves the runner, costs nothing). Baselines live in
 `src/ai/tasks/<task>/fixtures/__baselines__/` and are reviewed by a human on change.
+
+Phase 04 fixtures: four `interpret_reading` readings (RWS three-card with a note, RWS Celtic cross
+open reflection at `deep`, Thoth three-card for an `experienced` reader, Thoth one-card money
+question) and seven `classify_safety` questions. Per interpretation the runner records: schema,
+deck purity, register, positional specificity (each per-card text names its position or card),
+note acknowledgement (a 3-gram of the note or an explicit reference appears), hedge density,
+prompts end in a question mark, and the expected safety category. Each baseline file has a
+`human_review` block to fill in — the "specific, not fortune-cookie" judgement (§3.3) is a
+person's, not the script's.

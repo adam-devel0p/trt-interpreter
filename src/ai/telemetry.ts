@@ -1,7 +1,11 @@
 /**
- * AI call telemetry + budget hook. The `ai_calls` table lands in Phase 04; until then the
- * default sink keeps records in memory. Records are content-free by type: IDs, counts, classes.
+ * AI call telemetry + budget hook. Records are content-free by type: IDs, counts, classes.
+ * The database sink writes `ai_calls` through the service-role surface (this is the one file
+ * in src/ai/ allowed to touch the database, by lint rule). Recording never throws into the
+ * caller: a telemetry failure is logged by class and swallowed, the model result still stands.
  */
+import { insertAiCall } from '@/db/admin';
+import { errorClassOf, logger } from '@/observability/logger';
 import type { ObjectRef, RunStatus, TaskId } from './types';
 
 export interface AiCallRecord {
@@ -43,3 +47,36 @@ export class MemoryTelemetry implements AiTelemetrySink {
 }
 
 export const noopTelemetry: AiTelemetrySink = { record: async () => {} };
+
+/** Persists every run to `ai_calls`. */
+export class DbTelemetry implements AiTelemetrySink {
+  async record(rec: AiCallRecord): Promise<void> {
+    try {
+      await insertAiCall({
+        userId: rec.userId,
+        task: rec.task,
+        modelId: rec.modelId,
+        promptVersion: rec.promptVersion,
+        schemaVersion: rec.schemaVersion,
+        tokensIn: rec.tokensIn,
+        tokensOut: rec.tokensOut,
+        costMicros: rec.costMicros,
+        latencyMs: rec.latencyMs,
+        status: rec.status,
+        errorClass: rec.errorClass,
+        attempts: rec.attempts,
+        objectRefs: rec.objectRefs,
+      });
+    } catch (err) {
+      logger.warn('ai.telemetry_failed', { errorClass: errorClassOf(err) });
+    }
+  }
+}
+
+/** Fan-out: memory for tests and the health probe, database for the ledger. */
+export class MultiTelemetry implements AiTelemetrySink {
+  constructor(private readonly sinks: AiTelemetrySink[]) {}
+  async record(rec: AiCallRecord): Promise<void> {
+    await Promise.all(this.sinks.map((s) => s.record(rec)));
+  }
+}

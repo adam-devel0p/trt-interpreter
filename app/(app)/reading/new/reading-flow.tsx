@@ -14,6 +14,7 @@ import { CardEntry } from '@/ui/components/card-entry';
 import { ChoiceButton } from '@/ui/components/choice-button';
 import { FormMessage } from '@/ui/components/field';
 import { FocusHeading } from '@/ui/components/focus-heading';
+import { LocalTime } from '@/ui/components/local-time';
 import { ShuffleReveal } from '@/ui/components/shuffle-reveal';
 import { cn } from '@/ui/lib/cn';
 import { drawCardsAction, saveDraftAction, saveReadingAction } from '../actions';
@@ -30,6 +31,8 @@ export interface ReadingFlowProps {
   spreads: SpreadView[];
   defaults: { deckId: string | null; source: ReadingSource; useReversals: boolean };
   serverDraft: D.ReadingDraft | null;
+  /** AI consent on: the question is checked for repeats before drawing (FR-25). */
+  repeatCheck: boolean;
 }
 
 const STORAGE_KEY = 'tarot-journal:reading-draft';
@@ -52,7 +55,13 @@ const STEP_TITLE: Record<D.FlowStep, string> = {
  * battery resumes here. `data-deck` on the root follows the chosen deck so the accent changes
  * the moment a deck is picked.
  */
-export function ReadingFlow({ decks, spreads, defaults, serverDraft }: ReadingFlowProps) {
+export function ReadingFlow({
+  decks,
+  spreads,
+  defaults,
+  serverDraft,
+  repeatCheck,
+}: ReadingFlowProps) {
   const router = useRouter();
   const defaultDeck = decks.find((d) => d.deck.id === defaults.deckId) ?? decks[0] ?? null;
   const [draft, setDraft] = React.useState<D.ReadingDraft | null>(null);
@@ -161,7 +170,7 @@ export function ReadingFlow({ decks, spreads, defaults, serverDraft }: ReadingFl
 
       <div className="mt-5 flex flex-1 flex-col">
         {draft.step === 'question' ? (
-          <QuestionStep draft={draft} update={update} />
+          <QuestionStep draft={draft} update={update} repeatCheck={repeatCheck} />
         ) : draft.step === 'life_area' ? (
           <LifeAreaStep draft={draft} update={update} />
         ) : draft.step === 'spread' ? (
@@ -216,8 +225,97 @@ type StepProps = {
   update: (fn: (d: D.ReadingDraft) => D.ReadingDraft) => void;
 };
 
-function QuestionStep({ draft, update }: StepProps) {
+interface RepeatPrior {
+  id: string;
+  question: string | null;
+  occurred_at: string;
+  spread: { name: string };
+}
+
+/** Repeated-question check timing: never make the person wait on it (§10). */
+const REPEAT_CHECK_TIMEOUT_MS = 2500;
+
+function QuestionStep({ draft, update, repeatCheck }: StepProps & { repeatCheck: boolean }) {
   const id = 'reading-question';
+  const [checking, setChecking] = React.useState(false);
+  const [nudge, setNudge] = React.useState<RepeatPrior[] | null>(null);
+  const checkedFor = React.useRef<string | null>(null);
+
+  const advance = () => update((d) => D.advance(d));
+
+  /**
+   * FR-25: on Continue, ask the server whether this question has been asked a few times today.
+   * Consent-gated on the server as well; any failure or delay simply continues.
+   */
+  const continueWithCheck = async () => {
+    const question = draft.question.trim();
+    if (!repeatCheck || !question || checkedFor.current === question) {
+      advance();
+      return;
+    }
+    setChecking(true);
+    checkedFor.current = question;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REPEAT_CHECK_TIMEOUT_MS);
+    try {
+      const res = await fetch('/api/readings/repeat-check', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ question }),
+        signal: controller.signal,
+      });
+      const body = (await res.json()) as { nudge?: boolean; priorReadings?: RepeatPrior[] };
+      if (body.nudge && body.priorReadings?.length) {
+        setNudge(body.priorReadings);
+        return;
+      }
+    } catch {
+      /* fail soft */
+    } finally {
+      clearTimeout(timer);
+      setChecking(false);
+    }
+    advance();
+  };
+
+  if (nudge) {
+    return (
+      <div role="region" aria-labelledby="repeat-h" className="flex flex-1 flex-col gap-4">
+        <div className="rounded-card bg-surface p-4 hairline">
+          <p id="repeat-h" className="font-medium">
+            You’ve asked this a few times today.
+          </p>
+          <p className="mt-1 text-sm text-fg-muted">
+            Another draw is always yours to take. It can also help to look at what is driving the
+            uncertainty — your earlier readings on this are here.
+          </p>
+          <ul className="mt-3 flex flex-col gap-2 text-sm" aria-label="Earlier readings">
+            {nudge.map((r) => (
+              <li key={r.id}>
+                <Link
+                  href={`/reading/${r.id}`}
+                  className="text-accent underline underline-offset-4"
+                >
+                  {r.question ?? 'Open reflection'} · {r.spread.name}
+                </Link>
+                <span className="text-fg-muted">
+                  {' '}
+                  · <LocalTime iso={r.occurred_at} />
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <Button type="button" size="lg" className="w-full" onClick={advance}>
+          Draw anyway
+        </Button>
+        <Button asChild variant="secondary" className="w-full">
+          <Link href={`/reading/${nudge[0]!.id}`}>Look at what’s driving the uncertainty</Link>
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-1 flex-col gap-4">
       <div className="flex flex-col gap-1.5">
@@ -234,9 +332,9 @@ function QuestionStep({ draft, update }: StepProps) {
           placeholder="Anything on your mind. It can be a sentence, a name, a worry."
           onChange={(e) => update((d) => D.setQuestion(d, e.target.value))}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey && D.canAdvance(draft)) {
+            if (e.key === 'Enter' && !e.shiftKey && D.canAdvance(draft) && !checking) {
               e.preventDefault();
-              update((d) => D.advance(d));
+              void continueWithCheck();
             }
           }}
           className="prose-content w-full rounded-control bg-surface px-3 py-2 text-fg hairline placeholder:text-fg-faint"
@@ -247,10 +345,10 @@ function QuestionStep({ draft, update }: StepProps) {
         type="button"
         size="lg"
         className="w-full"
-        disabled={!D.canAdvance(draft)}
-        onClick={() => update((d) => D.advance(d))}
+        disabled={!D.canAdvance(draft) || checking}
+        onClick={() => void continueWithCheck()}
       >
-        Continue
+        {checking ? 'One moment…' : 'Continue'}
       </Button>
       <Button
         type="button"

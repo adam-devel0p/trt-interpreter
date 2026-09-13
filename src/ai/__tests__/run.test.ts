@@ -58,7 +58,7 @@ describe('runObject — happy path', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.value).toEqual({ category: 'none', severity: 0 });
-    expect(r.meta.modelId).toBe('fast-model');
+    expect(r.meta.modelId).toBe('mock/fast-model');
     expect(r.meta.repaired).toBe(false);
     expect(r.attempts).toBe(1);
     expect(mock.calls[0]?.tier).toBe('fast');
@@ -74,7 +74,7 @@ describe('runObject — happy path', () => {
 
   it('honours modelHint over the registry tier', async () => {
     const r = await runner.runObject(req({ modelHint: 'deep' }));
-    expect(r.ok && r.meta.modelId).toBe('deep-model');
+    expect(r.ok && r.meta.modelId).toBe('mock/deep-model');
   });
 });
 
@@ -119,7 +119,7 @@ describe('runObject — timeout', () => {
     mock.failWith('timeout', 2);
     const r = await runner.runObject(req({ modelHint: 'standard', timeoutMs: 10 }));
     expect(r.ok).toBe(true);
-    expect(r.ok && r.meta.modelId).toBe('fast-model');
+    expect(r.ok && r.meta.modelId).toBe('mock/fast-model');
     expect(mock.calls.map((c) => c.tier)).toEqual(['standard', 'standard', 'fast']);
   });
 

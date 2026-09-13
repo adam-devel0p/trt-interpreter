@@ -97,7 +97,8 @@ test.describe('reading loop', () => {
       page.getByRole('list', { name: 'Cards by position' }).getByRole('listitem'),
     ).toHaveCount(3);
     await expect(page.getByRole('heading', { name: 'AI interpretation' })).toBeVisible();
-    await expect(page.getByRole('main')).toContainText('Not generated.');
+    // Consent is off for this user: no model runs and the slot says so plainly (Phase 04).
+    await expect(page.getByRole('main')).toContainText('AI interpretation is off.');
     await expect(page.getByLabel('In your own words')).toHaveValue(
       'A lot of swords for a job question.',
     );

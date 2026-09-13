@@ -23,6 +23,11 @@ import {
   customSpreadInputSchema,
   deleteCustomSpread,
 } from '@/db/queries/spreads';
+import {
+  FEEDBACK_REASON_MAX,
+  linkQuestionAsk,
+  setInterpretationFeedback,
+} from '@/db/queries/interpretations';
 import { readingDraftSchema, type ReadingDraft } from '@/domain/readings/draft';
 import { drawCards, type DrawnCard, type DrawRecord } from '@/domain/readings/draw';
 import {
@@ -108,6 +113,10 @@ export async function saveReadingAction(raw: unknown): Promise<ActionResult<{ id
   try {
     const id = await createReading(client, parsed.data as CreateReadingInput);
     await deleteServerDraft(client, user.id).catch(() => undefined);
+    // FR-25: attach the pre-draw question ask (if one was checked) to this reading. No model.
+    if (parsed.data.question && !parsed.data.is_open_reflection) {
+      await linkQuestionAsk(client, user.id, parsed.data.question, id).catch(() => undefined);
+    }
     logger.info('app.reading.saved', {
       userId: user.id,
       objectType: 'reading',
@@ -224,6 +233,43 @@ export async function deleteReadingAction(id: unknown): Promise<ActionResult> {
   );
   if (result.ok) redirect(HOME_PATH);
   return result;
+}
+
+/** Thumbs + optional reason on an interpretation (§16). A user write; never logged. */
+export async function setInterpretationFeedbackAction(
+  interpretationId: unknown,
+  feedback: unknown,
+  reason: unknown,
+): Promise<ActionResult> {
+  const user = await requireUser();
+  const parsed = z
+    .object({
+      id: z.string().uuid(),
+      feedback: z.union([z.literal(1), z.literal(-1)]).nullable(),
+      reason: z.string().max(FEEDBACK_REASON_MAX).nullable(),
+    })
+    .safeParse({ id: interpretationId, feedback, reason });
+  if (!parsed.success) return { ok: false, message: GENERIC_FAILED };
+  try {
+    await setInterpretationFeedback(
+      await getSessionClient(),
+      parsed.data.id,
+      parsed.data.feedback,
+      parsed.data.reason,
+    );
+    logger.info('app.interpretation.feedback', {
+      userId: user.id,
+      objectType: 'interpretation',
+      objectId: parsed.data.id,
+    });
+    return { ok: true, value: undefined };
+  } catch (err) {
+    logger.warn('app.interpretation.feedback_failed', {
+      userId: user.id,
+      errorClass: errorClassOf(err),
+    });
+    return { ok: false, message: GENERIC_FAILED };
+  }
 }
 
 // ── Custom spreads (FR-05) ────────────────────────────────────────────────────────────────

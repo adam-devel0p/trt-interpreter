@@ -1,0 +1,120 @@
+{
+  "fixture": "rws-three-card-job",
+  "description": "RWS · Situation/Advice/Outcome · a job decision with a note that leads.",
+  "provider": "mock",
+  "model": "claude-opus-5",
+  "prompt_version": "interpret_reading/1.0.0",
+  "schema_version": "interpretation/1.0.0",
+  "ran_at": "2026-09-13T02:25:25.512Z",
+  "safety": {
+    "category": "none",
+    "severity": "low"
+  },
+  "depth": "standard",
+  "checks": {
+    "schema": {
+      "pass": true
+    },
+    "deck_purity": {
+      "pass": true,
+      "detail": []
+    },
+    "register": {
+      "pass": true,
+      "detail": []
+    },
+    "positional": {
+      "pass": true,
+      "detail": [
+        {
+          "position": "Past",
+          "card": "Eight of Pentacles",
+          "mentions_position": true,
+          "mentions_card": true
+        },
+        {
+          "position": "Present",
+          "card": "The Tower",
+          "mentions_position": true,
+          "mentions_card": true
+        },
+        {
+          "position": "Future",
+          "card": "Six of Wands",
+          "mentions_position": true,
+          "mentions_card": true
+        }
+      ]
+    },
+    "note_acknowledged": {
+      "pass": true,
+      "detail": true
+    },
+    "hedge_density": {
+      "pass": true,
+      "detail": 11
+    },
+    "prompts": {
+      "pass": true,
+      "detail": [
+        "What would change if you treated Eight of Pentacles as describing you rather than the situation?",
+        "Which of these cards felt truest the moment you saw it, before you read anything?"
+      ]
+    }
+  },
+  "terminal": {
+    "type": "done",
+    "attempts": 1,
+    "meta": {
+      "modelId": "claude-opus-5",
+      "promptVersion": "mock-1",
+      "schemaVersion": "mock-1",
+      "tokensIn": 100,
+      "tokensOut": 50,
+      "costMicros": 0,
+      "latencyMs": 12,
+      "repaired": false
+    }
+  },
+  "streamed_chars": 1970,
+  "output": {
+    "synthesis": "Taken together, these cards suggest that “Should I take the job in Lisbon?” may be less about a decision than about what Eight of Pentacles in the Past position is asking you to notice.",
+    "per_card": [
+      {
+        "position_index": 0,
+        "text": "In the Past position, Eight of Pentacles may point to diligence as one thread running through “Should I take the job in Lisbon?”. One way to read this is as a question rather than an answer: what would diligence look like here, in practice?",
+        "nuances": [
+          "Read another way, Eight of Pentacles here might describe how the situation feels from the inside rather than what it is."
+        ],
+        "card_id": "00000000-0000-4000-8000-00000000000a"
+      },
+      {
+        "position_index": 1,
+        "text": "In the Present position, The Tower may point to a disaster averted as one thread running through “Should I take the job in Lisbon?”. One way to read this is as a question rather than an answer: what would a disaster averted look like here, in practice?",
+        "nuances": [
+          "Read another way, The Tower here might describe how the situation feels from the inside rather than what it is."
+        ],
+        "card_id": "00000000-0000-4000-8000-00000000000b"
+      },
+      {
+        "position_index": 2,
+        "text": "In the Future position, Six of Wands may point to recognition as one thread running through “Should I take the job in Lisbon?”. One way to read this is as a question rather than an answer: what would recognition look like here, in practice?",
+        "nuances": [
+          "Read another way, Six of Wands here might describe how the situation feels from the inside rather than what it is."
+        ],
+        "card_id": "00000000-0000-4000-8000-00000000000c"
+      }
+    ],
+    "combined": "Read as a whole, the Eight of Pentacles, The Tower, Six of Wands seem to describe a movement from diligence toward something you have not named yet. Your own note already touches this, and the cards mostly add texture to what you noticed. It may help to hold the reading loosely and return to it once something has moved.",
+    "reflective_prompts": [
+      "What would change if you treated Eight of Pentacles as describing you rather than the situation?",
+      "Which of these cards felt truest the moment you saw it, before you read anything?"
+    ]
+  },
+  "human_review": {
+    "reviewed_by": null,
+    "reviewed_at": null,
+    "verdict": null,
+    "notes": null
+  }
+}

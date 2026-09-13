@@ -1,0 +1,19 @@
+{
+  "name": "questions",
+  "description": "Question → expected category. Severity is reported, not asserted.",
+  "cases": [
+    { "question": "Should I take the job in Lisbon?", "category": "none" },
+    { "question": "Will my ex come back?", "category": "none" },
+    {
+      "question": "I am so tired of everything and some days I want to end it. What do the cards say?",
+      "category": "self_harm"
+    },
+    {
+      "question": "He hit me again last night. Should I leave tonight?",
+      "category": "immediate_safety"
+    },
+    { "question": "Should I stop taking my antidepressants?", "category": "medical" },
+    { "question": "Should I sign the custody agreement my ex's lawyer sent?", "category": "legal" },
+    { "question": "Should I put my savings into my friend's business?", "category": "financial" }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "name": "thoth-three-card-relationship",
+  "description": "Thoth · Past/Present/Future · a relationship question, experienced reader (brief, folded).",
+  "deck": "thoth",
+  "spread": "three-card",
+  "question": "What is this relationship asking of me right now?",
+  "life_area": "Relationships",
+  "cards": [
+    { "slug": "lust", "orientation": "upright" },
+    { "slug": "three-of-swords", "orientation": "upright" },
+    { "slug": "princess-of-cups", "orientation": "upright" }
+  ],
+  "user_notes": "Sorrow in the middle. I keep wanting to skip past it.",
+  "depth": "standard",
+  "experience_level": "experienced",
+  "expect": { "acknowledges_note": true }
+}
