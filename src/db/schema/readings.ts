@@ -1,0 +1,202 @@
+import { sql } from 'drizzle-orm';
+import {
+  boolean,
+  check,
+  index,
+  integer,
+  jsonb,
+  pgPolicy,
+  pgTable,
+  smallint,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
+import { authUid, authenticatedRole, authUsers } from 'drizzle-orm/supabase';
+import { cards, decks, spreads } from './decks';
+import { followUpStatus, orientation, readingSource } from './enums';
+
+/**
+ * Readings (docs/DATA_MODEL.md#readings--phase-03).
+ *
+ * A reading is the user's own record: question (or open reflection), spread, deck, cards,
+ * orientation, their notes. It is written transactionally by `public.create_reading()` before
+ * any AI exists in the flow, and nothing generated ever lives in these columns (invariant 4:
+ * raw user text is never discarded or overwritten). `rng` is the audit record of a digital
+ * draw (FR-04); null for physical readings. `deck_id` is persisted on every reading and each
+ * card resolves through `cards`, so deck identity is permanent (§6.7, invariant 3).
+ */
+export const readings = pgTable(
+  'readings',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => authUsers.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    /** When the reading happened; physical readings may be back-dated. */
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
+    question: text('question'),
+    isOpenReflection: boolean('is_open_reflection').notNull().default(false),
+    /** Optional, never required (§6.2). Stable taxonomy key; labels live in domain/readings/types. */
+    lifeArea: text('life_area'),
+    /**
+     * No cascade: deleting a spread that readings use is refused (checked at statement end, so
+     * an account deletion that removes both still succeeds).
+     */
+    spreadId: uuid('spread_id')
+      .notNull()
+      .references(() => spreads.id),
+    deckId: uuid('deck_id')
+      .notNull()
+      .references(() => decks.id),
+    source: readingSource('source').notNull(),
+    usesReversals: boolean('uses_reversals').notNull(),
+    /** The user's own interpretation ("What I notice"). Theirs alone; AI text lives elsewhere. */
+    userNotes: text('user_notes'),
+    followUpStatus: followUpStatus('follow_up_status').notNull().default('unresolved'),
+    revisitAt: timestamp('revisit_at', { withTimezone: true }),
+    /** Digital draws: { algorithm, seed, drawn_at, deck_id, deck_size, reversal_probability }. */
+    rng: jsonb('rng'),
+    metadataVersion: integer('metadata_version').notNull().default(1),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check('readings_source_rng_check', sql`(${t.source} = 'digital') = (${t.rng} is not null)`),
+    check('readings_question_check', sql`${t.isOpenReflection} or ${t.question} is not null`),
+    index('readings_user_created_idx').on(t.userId, t.createdAt.desc()),
+    index('readings_user_occurred_idx').on(t.userId, t.occurredAt.desc()),
+    index('readings_user_revisit_idx')
+      .on(t.userId, t.revisitAt)
+      .where(sql`${t.revisitAt} is not null`),
+    pgPolicy('readings_select', {
+      for: 'select',
+      to: authenticatedRole,
+      using: sql`${t.userId} = ${authUid}`,
+    }),
+    pgPolicy('readings_insert', {
+      for: 'insert',
+      to: authenticatedRole,
+      withCheck: sql`${t.userId} = ${authUid}`,
+    }),
+    pgPolicy('readings_update', {
+      for: 'update',
+      to: authenticatedRole,
+      using: sql`${t.userId} = ${authUid}`,
+      withCheck: sql`${t.userId} = ${authUid}`,
+    }),
+    pgPolicy('readings_delete', {
+      for: 'delete',
+      to: authenticatedRole,
+      using: sql`${t.userId} = ${authUid}`,
+    }),
+  ],
+).enableRLS();
+
+export type Reading = typeof readings.$inferSelect;
+
+/**
+ * One row per spread position. `user_id` is denormalised so the policy is cheap; the policy
+ * additionally requires the parent reading to exist and be the caller's, so a row can never be
+ * attached to someone else's reading. A trigger (`reading_cards_check_deck`) rejects a card
+ * from another deck than the reading's, and a reversed card where the deck or the reading does
+ * not use reversals.
+ */
+export const readingCards = pgTable(
+  'reading_cards',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    readingId: uuid('reading_id')
+      .notNull()
+      .references(() => readings.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => authUsers.id, { onDelete: 'cascade' }),
+    positionIndex: smallint('position_index').notNull(),
+    positionKey: text('position_key').notNull(),
+    cardId: uuid('card_id')
+      .notNull()
+      .references(() => cards.id),
+    orientation: orientation('orientation').notNull().default('upright'),
+    /** The user's own words about this card in this position; never generated. */
+    userMeaning: text('user_meaning'),
+    sortOrder: smallint('sort_order').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check('reading_cards_position_check', sql`${t.positionIndex} >= 0`),
+    uniqueIndex('reading_cards_reading_position_idx').on(t.readingId, t.positionIndex),
+    index('reading_cards_user_created_idx').on(t.userId, t.createdAt.desc()),
+    pgPolicy('reading_cards_select', {
+      for: 'select',
+      to: authenticatedRole,
+      using: sql`${t.userId} = ${authUid}`,
+    }),
+    pgPolicy('reading_cards_insert', {
+      for: 'insert',
+      to: authenticatedRole,
+      withCheck: sql`${t.userId} = ${authUid} and exists (select 1 from ${readings} r where r.id = ${t.readingId} and r.user_id = ${authUid})`,
+    }),
+    pgPolicy('reading_cards_update', {
+      for: 'update',
+      to: authenticatedRole,
+      using: sql`${t.userId} = ${authUid}`,
+      withCheck: sql`${t.userId} = ${authUid} and exists (select 1 from ${readings} r where r.id = ${t.readingId} and r.user_id = ${authUid})`,
+    }),
+    pgPolicy('reading_cards_delete', {
+      for: 'delete',
+      to: authenticatedRole,
+      using: sql`${t.userId} = ${authUid}`,
+    }),
+  ],
+).enableRLS();
+
+export type ReadingCard = typeof readingCards.$inferSelect;
+
+/**
+ * The in-progress reading, one per user, upserted from the first card onward so a dead phone
+ * battery mid-entry loses nothing (§6.2 flow rules). Deleted on save. The payload is the
+ * client draft (`domain/readings/draft.ts`), validated on restore, never trusted for the save
+ * itself.
+ */
+export const readingDrafts = pgTable(
+  'reading_drafts',
+  {
+    userId: uuid('user_id')
+      .primaryKey()
+      .references(() => authUsers.id, { onDelete: 'cascade' }),
+    payload: jsonb('payload').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    pgPolicy('reading_drafts_select', {
+      for: 'select',
+      to: authenticatedRole,
+      using: sql`${t.userId} = ${authUid}`,
+    }),
+    pgPolicy('reading_drafts_insert', {
+      for: 'insert',
+      to: authenticatedRole,
+      withCheck: sql`${t.userId} = ${authUid}`,
+    }),
+    pgPolicy('reading_drafts_update', {
+      for: 'update',
+      to: authenticatedRole,
+      using: sql`${t.userId} = ${authUid}`,
+      withCheck: sql`${t.userId} = ${authUid}`,
+    }),
+    pgPolicy('reading_drafts_delete', {
+      for: 'delete',
+      to: authenticatedRole,
+      using: sql`${t.userId} = ${authUid}`,
+    }),
+  ],
+).enableRLS();
+
+export type ReadingDraftRow = typeof readingDrafts.$inferSelect;

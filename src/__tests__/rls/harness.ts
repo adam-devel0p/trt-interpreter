@@ -59,6 +59,8 @@ export interface IsolationOptions {
   mutatedValue: unknown;
   /** Column holding the owner's auth.uid(). Default `user_id`; `profiles` is keyed by `id`. */
   ownerColumn?: string;
+  /** Primary-key column. Default `id`; `reading_drafts` is keyed by `user_id`. */
+  idColumn?: string;
   /**
    * The row already exists for A (created by a trigger, e.g. `profiles`). The harness then reads
    * it instead of inserting, skips the spoofed insert (a PK conflict would mask the RLS check) and
@@ -86,32 +88,33 @@ export async function expectRlsIsolation(
   opts: IsolationOptions,
 ): Promise<void> {
   const owner = opts.ownerColumn ?? 'user_id';
+  const pk = opts.idColumn ?? 'id';
   let rowA: Record<string, unknown>;
   let id: string;
   if (opts.preexisting) {
     const existing = await f.a.client.from(table).select('*').eq(owner, f.a.id).single();
     expect(existing.error, `A must already own a ${table} row`).toBeNull();
     rowA = existing.data as Record<string, unknown>;
-    id = rowA.id as string;
+    id = rowA[pk] as string;
   } else {
     rowA = rowFactory(f.a.id);
     const ins = await f.a.client.from(table).insert(rowA).select('*').single();
     expect(ins.error, `A insert into ${table}`).toBeNull();
-    id = (ins.data as { id: string }).id;
+    id = (ins.data as Record<string, string>)[pk]!;
   }
 
-  const ownRead = await f.a.client.from(table).select('id').eq('id', id);
+  const ownRead = await f.a.client.from(table).select(pk).eq(pk, id);
   expect(ownRead.data).toHaveLength(1);
 
-  const bRead = await f.b.client.from(table).select('id').eq('id', id);
+  const bRead = await f.b.client.from(table).select(pk).eq(pk, id);
   expect(bRead.error).toBeNull();
   expect(bRead.data, `B must not read A's ${table} row`).toHaveLength(0);
 
   if (opts.hasPublicRows) {
-    const anonRow = await f.anon.from(table).select('id').eq('id', id);
+    const anonRow = await f.anon.from(table).select(pk).eq(pk, id);
     expect(anonRow.data ?? [], `anon must not read A's ${table} row`).toHaveLength(0);
   } else {
-    const anonRead = await f.anon.from(table).select('id');
+    const anonRead = await f.anon.from(table).select(pk);
     expect(anonRead.data ?? [], `anon must read nothing from ${table}`).toHaveLength(0);
   }
 
@@ -123,20 +126,20 @@ export async function expectRlsIsolation(
   const bUpdate = await f.b.client
     .from(table)
     .update({ [opts.mutableColumn]: opts.mutatedValue })
-    .eq('id', id)
-    .select('id');
+    .eq(pk, id)
+    .select(pk);
   expect(bUpdate.data ?? []).toHaveLength(0);
-  const afterUpdate = await f.a.client.from(table).select(opts.mutableColumn).eq('id', id).single();
+  const afterUpdate = await f.a.client.from(table).select(opts.mutableColumn).eq(pk, id).single();
   expect((afterUpdate.data as unknown as Record<string, unknown>)[opts.mutableColumn]).toEqual(
     rowA[opts.mutableColumn],
   );
 
-  const bDelete = await f.b.client.from(table).delete().eq('id', id).select('id');
+  const bDelete = await f.b.client.from(table).delete().eq(pk, id).select(pk);
   expect(bDelete.data ?? []).toHaveLength(0);
-  const stillThere = await f.a.client.from(table).select('id').eq('id', id);
+  const stillThere = await f.a.client.from(table).select(pk).eq(pk, id);
   expect(stillThere.data).toHaveLength(1);
 
-  const aDelete = await f.a.client.from(table).delete().eq('id', id).select('id');
+  const aDelete = await f.a.client.from(table).delete().eq(pk, id).select(pk);
   if (opts.preexisting) {
     expect(aDelete.data ?? [], `A must not delete own ${table} row`).toHaveLength(0);
   } else {

@@ -130,19 +130,39 @@ RLS: select `user_id is null or user_id = auth.uid()` to anon + authenticated; i
 
 ## Readings — Phase 03
 
-**`readings`** — `id`, `user_id`, `created_at`, `occurred_at` (physical readings may be back-dated),
-`question text null`, `is_open_reflection boolean`, `life_area text null` (never required — §6.2),
-`spread_id`, `deck_id`, `source reading_source`, `uses_reversals boolean`,
-`user_notes text` (the user's own interpretation — §6.3, never overwritten),
-`follow_up_status follow_up_status default 'unresolved'`, `revisit_at timestamptz null`,
-`rng jsonb` (algorithm, seed, drawn-at — proves the LLM did not choose cards, FR-04),
-`metadata_version int`, `deleted_at`.
-Indexes: `(user_id, created_at desc)`, `(user_id, revisit_at)` partial where not null,
-GIN FTS over `question || user_notes` (Phase 05).
+**`readings`** — `id`, `user_id`, `created_at`, `occurred_at` (defaults to now; physical readings
+may be back-dated), `question text null`, `is_open_reflection boolean`, `life_area text null`
+(never required — §6.2; stable key from `LIFE_AREAS` in `domain/readings/types.ts`), `spread_id`
+(FK `spreads`, **no cascade**: deleting a spread in use is refused, but an account deletion that
+removes both still succeeds because the check runs at statement end), `deck_id` (FK `decks`),
+`source reading_source`, `uses_reversals boolean`, `user_notes text null` (the user's own
+interpretation — §6.3, never overwritten), `follow_up_status follow_up_status default
+'unresolved'`, `revisit_at timestamptz null`, `rng jsonb null` (`{algorithm, seed, drawn_at,
+deck_id, deck_size, reversal_probability}` — proves the LLM did not choose cards, FR-04),
+`metadata_version int default 1` (bumped when cards are replaced), `deleted_at`, `updated_at`.
+Checks: `(source = 'digital') = (rng is not null)`; `is_open_reflection or question is not null`.
+Trigger `readings_check_deck`: `uses_reversals` may only be true when the deck supports reversals.
+Indexes: `(user_id, created_at desc)`, `(user_id, occurred_at desc)`, `(user_id, revisit_at)`
+partial where not null, GIN FTS over `question || user_notes` (Phase 05).
 
-**`reading_cards`** — `id`, `reading_id`, `position_index`, `position_key`, `card_id`,
-`orientation orientation`, `user_meaning text null`, `sort_order`. Unique `(reading_id, position_index)`.
-`card_id` resolves through `cards` so deck identity is permanent (§6.7).
+**`reading_cards`** — `id`, `reading_id` (cascade), `user_id` (denormalised, cascade),
+`position_index`, `position_key` (copied from the spread's position at save time), `card_id`
+(FK `cards`, no cascade), `orientation orientation default 'upright'`, `user_meaning text null`,
+`sort_order`, `created_at`. Unique `(reading_id, position_index)`; index `(user_id, created_at
+desc)` for the picker's recent-cards row. `card_id` resolves through `cards` so deck identity is
+permanent (§6.7). Trigger `reading_cards_check_deck`: the card must belong to the reading's deck,
+and `reversed` is only allowed when both the deck and the reading use reversals.
+
+**`reading_drafts`** — `user_id` (PK, cascade), `payload jsonb` (the client draft,
+`domain/readings/draft.ts`, re-validated on restore), `updated_at`. One in-progress reading per
+user, upserted from the first card onward, deleted on save.
+
+**Functions** (migration `0004_readings`, `SECURITY INVOKER` so RLS applies and `user_id` is
+always `auth.uid()`): `create_reading(p jsonb) → uuid` inserts the reading and its cards in one
+transaction, refusing a card count that does not match `spreads.card_count`;
+`replace_reading_cards(p_reading_id, p_cards jsonb)` deletes and re-inserts every position
+atomically and bumps `metadata_version`. Both are granted to `authenticated` and `service_role`
+only.
 
 **`interpretations`** — Phase 04. `id`, `reading_id`, `status enum('pending','streaming','complete','failed')`,
 `synthesis text` (the one-line layer), `per_card jsonb` `[{position_index, card_id, text, nuances[]}]`,
@@ -288,8 +308,10 @@ Variants used so far: `profiles` is keyed on `id = auth.uid()` and has no delete
 policies. Column-level rules that RLS cannot express (old vs new row, e.g. `profiles.plan`) are
 `BEFORE UPDATE` triggers that check `auth.role()`.
 
-Child tables without their own `user_id` (e.g. `reading_cards`) use an `exists` policy against the
-parent **and** carry a denormalised `user_id` where the table is large enough for the join to matter.
+Child tables (e.g. `reading_cards`) carry a denormalised `user_id` **and** an `exists` check against
+the parent on insert/update, so a row can never be attached to someone else's reading even with
+the caller's own `user_id`. Tables keyed by `user_id` alone (`reading_drafts`) pass
+`idColumn: 'user_id'` to the isolation harness.
 Reference tables (`decks`, `cards`, `card_aliases`, `card_archetypes`, `card_archetype_members`) are
 `for select using (true)` to `authenticated` + `anon` (public reference pages) and writable only by
 the service role — tested with `expectPublicReadOnly()`. `spreads` is mixed: built-in rows

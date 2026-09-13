@@ -2,13 +2,16 @@
 
 The first thing to read in any new session. Update it at the end of every phase.
 
-**Current state:** Phase 02 complete — both decks seeded deck-natively (156 cards, Thoth with
-Knight/Queen/Prince/Princess, Disks, Atu names and titles, no reversals), archetypes as metadata
-only, 161 search aliases that never rename, 5 laid-out spreads, public-domain RWS art bundled and
-Thoth rendered typographically, `Card` / `CardPicker` / `SpreadLayout`, `/decks` in-app and public
-`/cards` + `/spreads` pages, Profile deck preferences, invariant `thoth-never-substitutes-rws` live.
-Full gate green (72 e2e × 4 runs).
-**Next phase:** [Phase 03 — Reading loop (no AI)](phases/phase-03-reading-loop.md)
+**Current state:** Phase 03 complete — the reading loop works end to end with zero model calls:
+seven-step flow (question / open reflection, optional life area, spread incl. custom, deck with
+instant accent + naming switch, source, cards by server-side seeded draw or physical entry with
+reversals/reorder/back-date, "what I notice"), transactional save through `create_reading()`,
+drafts in sessionStorage + `reading_drafts`, detail screen with reference meanings per position and
+an honest "Not generated" AI slot, edit/delete, follow-up status, post-save revisit chips, custom
+spreads, Home "Still open", 40 demo readings over 6 months. Invariant
+`opening-reading-makes-no-ai-call` live. Physical 3-card log: 20.5 s human-paced.
+Full gate green (90 e2e × 8 runs, 1 load-related flake fixed by a 10 s expect timeout).
+**Next phase:** [Phase 04 — AI boundary + interpretation](phases/phase-04-ai-interpretation.md)
 
 ## Phase status
 
@@ -17,7 +20,7 @@ Full gate green (72 e2e × 4 runs).
 | 00 | [Foundations & rails](phases/phase-00-foundations.md) | ⚠️ complete with deferrals | [report](phases/completed/phase-00-report.md) | 2026-09-12 · local Supabase on ports 55321–55329 |
 | 01 | [Auth, profile, onboarding](phases/phase-01-auth-onboarding.md) | ⚠️ complete with deferrals | [report](phases/completed/phase-01-report.md) | 2026-09-12 · Google OAuth needs owner credentials to finish end to end |
 | 02 | [Deck reference: RWS + Thoth](phases/phase-02-deck-reference.md) | ✅ complete | [report](phases/completed/phase-02-report.md) | 2026-09-12 · Thoth text-only + no reversals by design; RWS art committed (27 MB) |
-| 03 | [Reading loop (no AI)](phases/phase-03-reading-loop.md) | ⬜ not started | — | |
+| 03 | [Reading loop (no AI)](phases/phase-03-reading-loop.md) | ✅ complete | [report](phases/completed/phase-03-report.md) | 2026-09-12 · Thoth reversals test done on RWS by design; PWA device check still open |
 | 04 | [AI boundary + interpretation](phases/phase-04-ai-interpretation.md) | ⬜ not started | — | |
 | 05 | [Journal, search, export](phases/phase-05-journal-search.md) | ⬜ not started | — | ← shippable journal |
 | 06 | [Structured memory](phases/phase-06-structured-memory.md) | ⬜ not started | — | |
@@ -37,7 +40,7 @@ Each must be unskipped by the phase shown and never weakened afterwards. See
 
 | Test | Unskipped in | Status |
 |---|---|---|
-| `opening-reading-makes-no-ai-call` | 03 | ⬜ |
+| `opening-reading-makes-no-ai-call` | 03 | ✅ |
 | `thoth-never-substitutes-rws` | 02 | ✅ |
 | `model-cannot-create-confirmed-fact` | 04 | ⬜ |
 | `reading-survives-ai-failure` | 04 | ⬜ |
@@ -73,7 +76,7 @@ Phases append here when they defer something, so nothing is lost between session
 
 | Item | Deferred in | Moved to | Reason |
 |---|---|---|---|
-| Install PWA on a physical phone, verify offline shell | 00 → 01 | 03 | No device in either session; manifest/SW verified by e2e only |
+| Install PWA on a physical phone, verify offline shell | 00 → 01 → 03 | 12 | No device in any session so far; manifest/SW verified by e2e only |
 | Google OAuth end to end with real credentials | 01 | owner / 12 | No client ID/secret available; wired and tested to the provider redirect |
 | Shared auth rate-limit store (in-memory today, per instance) | 01 | 12 | `RateLimitStore` interface ready; Supabase Auth limits sit behind it |
 | ~~`profiles.default_deck_id` FK to `decks`~~ | 01 | 02 ✅ | done in `0003_deck_reference` |
@@ -81,5 +84,8 @@ Phases append here when they defer something, so nothing is lost between session
 | `ai_calls` write in `telemetry.ts` | 00 | 04 | Table lands in 04; sink interface + memory sink in place |
 | Real per-user budgets (`BudgetPolicy`) | 00 | 11 | `usage_counters` lands in 11; hook wired and tested |
 | Sentry source-map upload | 00 | 12 | Scrubbing proven without it |
-| Live deck switch inside a flow (no navigation) | 02 | 03 | Reference page switches by link; the reading flow is where it matters |
+| ~~Live deck switch inside a flow (no navigation)~~ | 02 | 03 ✅ | Deck step switches accent and naming in place |
 | `fixtures/decks/` recorded fixtures | 02 | 04 | Purity tests use the pure seed modules; recorded fixtures belong with the first AI task |
+| Change deck or spread of a saved reading | 03 | 05 (if asked) | Edit covers question, date, life area and cards; a deck/spread change invalidates every card, so re-logging is the honest path for now |
+| Soft delete (`deleted_at`) for readings | 03 | 05 | Hard delete now (nothing derived exists); the purge job lands with the derived tables |
+| Server-side card search RPC / Thoth `strength` ranking | 03 | — | In the Thoth picker, `strength` ranks Nine of Wands (titled *Strength*) above Lust (alias); correct per Phase 02 ranking, noted for UX review |

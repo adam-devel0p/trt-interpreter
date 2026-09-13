@@ -15,6 +15,37 @@ embeddings; implement a **minimal question-only embedding path** here and genera
 
 ## Tasks
 
+From Phase 03 (see [completed/phase-03-report.md](completed/phase-03-report.md) §13):
+- Read a reading through `getReading(client, id)` (`src/db/queries/readings.ts`) → `ReadingView`:
+  the row plus `deck` (`DeckRow`), `spread` (`SpreadView` with `positions[].prompt`) and `cards[]`
+  each carrying the **full deck-native reference row** (`card.name/title/keywords/meaning_upright/
+  meaning_reversed/correspondences`), `orientation` and `position`. That is the whole interpretation
+  input; never join the archetype tables.
+- The detail screen is `src/ui/components/reading-detail.tsx` with an "AI interpretation" section
+  that currently renders the "Not generated." slot inside the tinted AI container. Replace that
+  slot with the streaming component; keep the section order (§6.3) and the container contract
+  (DESIGN_SYSTEM → distinguishing user text from AI text). The "Your interpretation" editor above
+  it is `UserNoteEditor`; the user's note is `reading.user_notes`.
+- `opening-reading-makes-no-ai-call.test.tsx` stubs `@/ai`, `@/ai/index`, `@/ai/run` and
+  `@/ai/providers/mock` to throw and scans the transitive import graph of `app/(app)/reading`,
+  `app/(app)/home` and the reading queries/components for `src/ai/`. The interpretation must be
+  triggered from a route handler / action that the **flow** calls after save, not from anything
+  the detail page imports at render time; add the interpretations query to the fake-client test
+  with a stored row and assert the same zero-call result.
+- Every reading write in `app/(app)/reading/actions.ts` happens before, and independently of,
+  anything you add. `saveReadingAction` returns `{ id }` and the flow navigates to
+  `/reading/[id]?saved=1`; kick off interpretation from there (or from a `?saved=1` island), never
+  from inside the save.
+- `hasAiConsent(profile)` gates every call; the demo user `demo-ben@tarot.local` has consent off
+  and `demo-ana@tarot.local` on, each with 20 seeded readings (`pnpm demo:seed`).
+- Deck purity has a mechanical foothold already: `deck.system`, `card.suit_label`, `card.rank_label`
+  and `card.name` on each `ReadingCardView` give you the allowed vocabulary; the other deck's
+  names for the same slots come from the seed modules (`RWS_DECK` / `THOTH_DECK`) for the
+  validator's banned list.
+- `readings.metadata_version` bumps when cards are replaced (`replace_reading_cards`); an
+  interpretation should record the version it was generated against so an edited reading shows
+  its interpretation as stale rather than silently wrong.
+
 ### 1. Real provider
 - `src/ai/providers/anthropic.ts` implementing `generateObject` + `generateStream` behind the policy
   already tested in Phase 00. Model IDs from env via `registry.ts`; no model ID in business code.

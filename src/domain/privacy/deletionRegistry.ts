@@ -9,6 +9,8 @@
  * (`profiles`, `user_flags`, `reminder_settings`) are registered under the `user` root.
  * Phase 02: deck reference tables are global (no user rows) and listed in `REFERENCE_TABLES`;
  * `spreads` carries a nullable `user_id` for custom spreads, so it is registered.
+ * Phase 03: `readings`, `reading_cards` (root `reading` and, via the denormalised column, the
+ * user root) and `reading_drafts`.
  */
 
 export type RootType = 'reading' | 'life_event' | 'journey' | 'entity' | 'user';
@@ -21,7 +23,7 @@ export interface CascadeTarget {
 }
 
 export const DELETION_REGISTRY: Record<RootType, readonly CascadeTarget[]> = {
-  reading: [],
+  reading: [{ table: 'reading_cards', via: 'cascade', note: 'FK readings.id on delete cascade' }],
   life_event: [],
   journey: [],
   entity: [],
@@ -34,6 +36,13 @@ export const DELETION_REGISTRY: Record<RootType, readonly CascadeTarget[]> = {
     },
     { table: 'user_flags', via: 'cascade' },
     { table: 'reminder_settings', via: 'cascade' },
+    { table: 'readings', via: 'cascade', note: 'auth.users FK; cascades to reading_cards' },
+    {
+      table: 'reading_cards',
+      via: 'cascade',
+      note: 'denormalised user_id FK as well as the parent',
+    },
+    { table: 'reading_drafts', via: 'cascade', note: 'one in-progress draft per user' },
     {
       table: 'spreads',
       via: 'cascade',

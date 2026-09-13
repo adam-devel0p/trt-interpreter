@@ -12,15 +12,18 @@ export function FocusHeading({
   children,
   className,
   as: Tag = 'h1',
+  autoFocus = true,
 }: {
   children: React.ReactNode;
   className?: string;
   as?: 'h1' | 'h2';
+  /** Pass false when the step's own primary control (e.g. the card picker) should take focus. */
+  autoFocus?: boolean;
 }) {
   const ref = React.useRef<HTMLHeadingElement>(null);
   React.useEffect(() => {
-    ref.current?.focus({ preventScroll: false });
-  }, []);
+    if (autoFocus) ref.current?.focus({ preventScroll: false });
+  }, [autoFocus]);
   return (
     <Tag
       ref={ref}

@@ -95,6 +95,12 @@ describe('thoth-never-substitutes-rws', () => {
       'app/(app)/decks',
       'app/(marketing)/cards',
       'app/(marketing)/spreads',
+      // Phase 03: the reading loop renders cards from readings → cards rows only.
+      'app/(app)/reading',
+      'src/db/queries/readings.ts',
+      'src/ui/components/reading-detail.tsx',
+      'src/ui/components/card-entry.tsx',
+      'src/ui/components/shuffle-reveal.tsx',
     ];
     const ARCHETYPE_REF = /card_archetype|cardArchetype|archetypeKeyFor|\barchetypes?\b/i;
 
@@ -125,11 +131,18 @@ describe('thoth-never-substitutes-rws', () => {
       }
     });
 
-    it('the deck query module selects from cards/decks only', () => {
-      const src = readFileSync(path.resolve('src/db/queries/decks.ts'), 'utf8');
-      const fromCalls = [...src.matchAll(/\.from\('([a-z_]+)'\)/g)].map((m) => m[1]);
-      expect(fromCalls.length).toBeGreaterThan(0);
-      for (const t of fromCalls) expect(['decks', 'cards', 'card_aliases', 'spreads']).toContain(t);
+    it('the deck and reading query modules never select from the archetype tables', () => {
+      for (const [file, allowed] of [
+        ['src/db/queries/decks.ts', ['decks', 'cards', 'card_aliases', 'spreads']],
+        ['src/db/queries/readings.ts', ['readings', 'reading_cards', 'reading_drafts']],
+      ] as const) {
+        const src = readFileSync(path.resolve(file), 'utf8');
+        const fromCalls = [...src.matchAll(/\.from\('([a-z_]+)'\)/g)].map((m) => m[1]);
+        expect(fromCalls.length, file).toBeGreaterThan(0);
+        for (const t of fromCalls) expect(allowed, `${file}: ${t}`).toContain(t);
+        // Embedded selects name their tables too: none may be an archetype table.
+        expect(src).not.toMatch(/card_archetype/);
+      }
     });
   });
 

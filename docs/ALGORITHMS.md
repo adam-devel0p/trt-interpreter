@@ -190,10 +190,16 @@ Mostly deterministic, no generation:
 
 ## 6. Digital draw RNG (FR-04, §6.2)
 
-- `crypto.randomInt` / Fisher–Yates over the 78-card deck, executed server-side before any model call.
-- `readings.rng` stores `{algorithm, seed, drawn_at, deck_id, reversal_probability}` so the draw is
-  auditable and provably independent of the LLM.
-- Reversals only when the reading uses them; probability 0.5 by default, configurable, and disabled
-  entirely for users who do not use reversals with Thoth (§6.7).
-- Statistical test in CI: 100k draws → uniform position distribution within tolerance, no duplicate
-  card within a spread, reversal rate within tolerance.
+- `src/domain/readings/draw.ts`: a partial Fisher–Yates shuffle over the deck's 78 card IDs in
+  `sort_order`, driven by `xoshiro128**` (`prng.ts`) seeded from 16 bytes of `crypto.randomBytes`
+  in `drawCardsAction`. Executed server-side before any model call.
+- `readings.rng` stores `{algorithm: 'fisher-yates/xoshiro128**', seed, drawn_at, deck_id,
+  deck_size, reversal_probability}`; `replayDraw(record, cardIds, count)` reproduces the exact
+  cards and orientations, so the draw is auditable and provably independent of the LLM. A 128-bit
+  seed is used because a 32-bit one cannot reach every 5-card outcome (≈ 9·10¹⁰ > 2³²).
+- Reversals only when the reading uses them (`deck.supports_reversals && profile.use_reversals`);
+  `REVERSAL_PROBABILITY = 0.5` (`thresholds.ts`); probability 0 and never a reversed card
+  otherwise (Thoth, §6.7). The database trigger `reading_cards_check_deck` enforces the same rule.
+- Statistical test (`draw.test.ts`, 100k three-card draws): every card within 5σ of uniform in
+  every position, no duplicate card within a spread, reversal rate within 0.005 of 0.5.
+

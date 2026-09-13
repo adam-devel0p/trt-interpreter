@@ -10,7 +10,16 @@ describe('deletion registry', () => {
 
   it('reads Drizzle tables structurally (sanity check on the detector)', () => {
     expect(coveredTables()).toEqual(
-      new Set(['jobs', 'profiles', 'user_flags', 'reminder_settings', 'spreads']),
+      new Set([
+        'jobs',
+        'profiles',
+        'user_flags',
+        'reminder_settings',
+        'spreads',
+        'readings',
+        'reading_cards',
+        'reading_drafts',
+      ]),
     );
     // Simulate a new user-owned table that nobody registered.
     const fake = { ...schema, ghost: cloneWithName(schema.reminderSettings, 'ghost_table') };

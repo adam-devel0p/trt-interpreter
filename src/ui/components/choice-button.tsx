@@ -22,7 +22,8 @@ export function ChoiceButton({
       aria-pressed={selected}
       className={cn(
         'flex min-h-14 w-full flex-col items-start gap-0.5 rounded-card bg-surface px-4 py-3 text-left hairline transition-colors hover:bg-surface-2',
-        selected && 'ring-2 ring-accent',
+        // `hairline` owns box-shadow, so the selected state is an outline, not a ring.
+        selected && 'bg-accent-soft/50 outline-2 outline-accent',
         className,
       )}
       {...props}

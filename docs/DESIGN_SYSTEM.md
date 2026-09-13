@@ -119,3 +119,17 @@ glyphs inside a double hairline frame on a radial accent-soft ground. It is the 
 first-class rendering, not a placeholder (see [LICENSING.md](LICENSING.md)). Reversal is shown by
 rotation **and** a visible "Reversed" chip; alt text is always deck-native
 ("Lust — Thoth", "Strength, reversed — Rider–Waite–Smith").
+
+Phase 03 built `ShuffleReveal` (card backs shuffle for ~1.1 s, then each card turns face-up into
+its slot with a 380 ms stagger; one tap or Enter skips; instant under reduced motion; orientation
+announced in a polite live region), `CardEntry` (physical entry: layout with the active slot, one
+row per position with a labelled `aria-pressed` Reversed toggle, move up/down and remove, and the
+`CardPicker` focused underneath — a three-card reading is three searches and three Enters),
+`UserNoteEditor` (the user's words in the content serif on plain ground, autosaving after a
+pause and on blur with a Saving/Saved/could-not-save status line; a failed save never touches the
+text), `ReadingDetail` (§6.3 sections in order; the AI slot is an honest "Not generated" in the
+tinted container until Phase 04) and `LocalTime` (server renders UTC, the browser re-renders in
+its own zone). `ChoiceButton`'s selected state is now an outline + soft accent ground — the
+`hairline` utility owns `box-shadow`, so a Tailwind ring is invisible on it; use outlines for
+selection on hairlined surfaces. `FocusHeading` takes `autoFocus={false}` when a step's own control
+(the picker) should receive focus.

@@ -29,6 +29,13 @@
       "when": 1789224467239,
       "tag": "0003_deck_reference",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789228819751,
+      "tag": "0004_readings",
+      "breakpoints": true
     }
   ]
 }

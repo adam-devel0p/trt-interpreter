@@ -56,11 +56,15 @@ test.describe('onboarding', () => {
     await tabTo(page, page.getByRole('button', { name: 'Allow AI interpretation' }));
     await page.keyboard.press('Enter');
 
-    // Straight into the first reading (Phase 03 stub), then Home.
+    // Straight into the first reading (§6.1 step 13), then Home via the nav.
     await expect(page).toHaveURL(/\/reading\/new$/);
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Your first reading');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('What are you asking?');
     await expectNoSeriousA11y(page);
-    await tabTo(page, page.getByRole('link', { name: 'Go to Home' }));
+    await tabTo(
+      page,
+      page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Home' }),
+      40,
+    );
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/\/home$/);
     await expect(page.getByRole('link', { name: 'Start a reading' })).toBeVisible();

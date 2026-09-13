@@ -67,10 +67,10 @@ export class DeckQueryError extends Error {
   }
 }
 
-const DECK_COLUMNS =
+export const DECK_COLUMNS =
   'id, slug, name, system, tradition_notes, supports_reversals, art_strategy, license_note, sort_order';
 
-const CARD_VIEW_COLUMNS =
+export const CARD_VIEW_COLUMNS =
   'id, deck_id, slug, name, title, arcana, suit, suit_label, rank_label, number, numeral, element, ' +
   'astrology, correspondences, art_asset_path, sort_order';
 
@@ -79,10 +79,10 @@ const CARD_DETAIL_COLUMNS =
   ', keywords_upright, keywords_reversed, meaning_upright, meaning_reversed, symbolism, ' +
   'card_aliases(alias, kind)';
 
-const SPREAD_COLUMNS =
+export const SPREAD_COLUMNS =
   'id, user_id, slug, name, description, positions, layout, is_builtin, deck_scope, card_count, sort_order';
 
-interface RawCard {
+export interface RawCard {
   id: string;
   deck_id: string;
   slug: string;
@@ -107,7 +107,7 @@ interface RawCard {
   card_aliases?: SearchableAlias[];
 }
 
-function toView(raw: RawCard, deck: Pick<DeckRow, 'system' | 'name'>): CardView {
+export function toCardView(raw: RawCard, deck: Pick<DeckRow, 'system' | 'name'>): CardView {
   return {
     id: raw.id,
     deck_id: raw.deck_id,
@@ -165,7 +165,7 @@ export async function listCards(client: UserClient, deck: DeckRow): Promise<Pick
     .order('sort_order');
   if (error) throw new DeckQueryError('cards read failed', error.code);
   return ((data ?? []) as unknown as RawCard[]).map((r) => ({
-    ...toView(r, deck),
+    ...toCardView(r, deck),
     aliases: r.card_aliases ?? [],
   }));
 }
@@ -185,7 +185,7 @@ export async function getCardBySlug(
   if (!data) return null;
   const r = data as unknown as RawCard;
   return {
-    ...toView(r, deck),
+    ...toCardView(r, deck),
     keywords_upright: r.keywords_upright ?? [],
     keywords_reversed: r.keywords_reversed ?? [],
     meaning_upright: r.meaning_upright ?? '',

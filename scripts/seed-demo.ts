@@ -1,6 +1,7 @@
 import './_env';
 import { parseArgs } from 'node:util';
 import { authAdmin, closeAdmin, platformSql } from '../src/db/admin';
+import { seedReadings } from './seed-demo-readings';
 
 /**
  * Demo journal generator (docs/IMPLEMENTATION_PLAN.md §3.10). Produces a coherent fictional
@@ -81,7 +82,10 @@ async function seedUsers(ctx: SeedContext): Promise<void> {
   }
 }
 
-const SEEDERS: Seeder[] = [{ name: 'users', phase: '01', run: seedUsers }];
+const SEEDERS: Seeder[] = [
+  { name: 'users', phase: '01', run: seedUsers },
+  { name: 'readings', phase: '03', run: seedReadings },
+];
 
 async function main() {
   const { values } = parseArgs({

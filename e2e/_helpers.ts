@@ -5,6 +5,8 @@ import { randomUUID } from 'node:crypto';
 export async function expectNoSeriousA11y(page: Page) {
   // After a soft navigation Next applies <title> a tick later than the body; audit the settled page.
   await expect(page).toHaveTitle(/\S/);
+  // Colour transitions are ≤ 250ms (tokens); a contrast check mid-transition samples a blend.
+  await page.waitForTimeout(300);
   const results = await new AxeBuilder({ page }).analyze();
   const serious = results.violations.filter(
     (v) => v.impact === 'serious' || v.impact === 'critical',

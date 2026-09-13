@@ -35,7 +35,7 @@ checks were actually performed.
   weakened to make a feature pass:
   - `model-cannot-create-confirmed-fact.test.ts`
   - `thoth-never-substitutes-rws.test.tsx` (live since Phase 02: seed data, a source scan of every render path for archetype references, and the rendered `Card` markup)
-  - `opening-reading-makes-no-ai-call.test.ts` (spies on the provider; asserts zero calls)
+  - `opening-reading-makes-no-ai-call.test.tsx` (live since Phase 03: a transitive import-graph scan proves nothing under the reading routes, queries or detail component reaches `src/ai/`; with every AI entry point stubbed to throw, `getReading` against a PostgREST-shaped fake touches only `readings` and `ReadingDetail` renders both decks' readings complete from stored data)
   - `reading-survives-ai-failure.test.ts`
   - `card-overlap-alone-never-correlates.test.ts`
   - `rejected-link-not-resuggested.test.ts`
@@ -45,6 +45,10 @@ checks were actually performed.
   - `no-journal-content-in-logs.test.ts`
   - `raw-text-never-overwritten.test.ts`
   - `alias-merge-preserves-historical-roles.test.ts`
+- **E2E timing is measured, not assumed.** `e2e/reading.spec.ts` records `physical-3-card-ms`
+  (scripted) and `physical-3-card-human-paced-ms` (120 ms per keystroke, 700 ms think time per tap)
+  as test annotations and fails above 60 s. `expectNoSeriousA11y()` waits 300 ms for colour
+  transitions before auditing, otherwise axe samples a blended colour mid-transition.
 - **E2E users are real.** Specs sign up through the UI, or call `createReadyUser()` (admin API,
   onboarding pre-completed) from `e2e/_helpers.ts`; email links are read from Mailpit
   (`latestEmailLink()`), so magic link and password reset are exercised end to end. Playwright

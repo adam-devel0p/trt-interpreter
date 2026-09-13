@@ -18,3 +18,8 @@ export { CardPicker } from './card-picker';
 export { SpreadLayout } from './spread-layout';
 export { CardDetail } from './card-detail';
 export { DeckBrowser } from './deck-browser';
+export { CardEntry } from './card-entry';
+export { ShuffleReveal, CardBack } from './shuffle-reveal';
+export { UserNoteEditor } from './user-note-editor';
+export { ReadingDetail } from './reading-detail';
+export { LocalTime, formatReadingDate } from './local-time';
