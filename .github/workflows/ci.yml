@@ -74,6 +74,8 @@ jobs:
         run: pnpm check:client-bundle
       - name: install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
+      # Demo accounts are e2e infrastructure (docs/TESTING.md): journal.spec signs in as demo-cleo.
+      - run: pnpm demo:seed
       - run: pnpm test:e2e
         env:
           CI: true
