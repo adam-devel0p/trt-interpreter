@@ -1,0 +1,162 @@
+{
+  "name": "journey-arcs",
+  "description": "Readings over six months with two real threads (a partner named Maya; a job at the agency), a few one-offs, and a Thoth reading inside the relationship thread. Entity ids and theme slugs are what materialisation would have produced; expectations pin the assignment and creation boundaries.",
+  "entities": { "maya": "Maya", "agency": "the agency", "leeds": "Leeds" },
+  "objects": [
+    {
+      "id": "r1",
+      "day": 0,
+      "question": "How is it going with Maya?",
+      "entities": ["maya"],
+      "themes": [
+        { "slug": "trust", "weight": 0.8 },
+        { "slug": "communication", "weight": 0.6 }
+      ],
+      "deck": "rws"
+    },
+    {
+      "id": "r2",
+      "day": 3,
+      "question": "Should I apply for the design lead role?",
+      "entities": ["agency"],
+      "themes": [
+        { "slug": "decision", "weight": 0.9 },
+        { "slug": "ambition", "weight": 0.7 }
+      ],
+      "deck": "rws"
+    },
+    {
+      "id": "r3",
+      "day": 20,
+      "question": "What does Maya need from me right now?",
+      "entities": ["maya"],
+      "themes": [
+        { "slug": "care", "weight": 0.7 },
+        { "slug": "communication", "weight": 0.7 }
+      ],
+      "deck": "thoth"
+    },
+    {
+      "id": "r4",
+      "day": 24,
+      "question": "Take the offer at the agency or stay?",
+      "entities": ["agency"],
+      "themes": [
+        { "slug": "decision", "weight": 0.9 },
+        { "slug": "change", "weight": 0.6 }
+      ],
+      "deck": "rws"
+    },
+    {
+      "id": "r5",
+      "day": 45,
+      "question": null,
+      "entities": [],
+      "themes": [{ "slug": "restlessness", "weight": 0.5 }],
+      "deck": "rws"
+    },
+    {
+      "id": "r6",
+      "day": 60,
+      "question": "How are things really with Maya?",
+      "entities": ["maya"],
+      "themes": [
+        { "slug": "distance", "weight": 0.8 },
+        { "slug": "endings", "weight": 0.6 }
+      ],
+      "deck": "rws"
+    },
+    {
+      "id": "r7",
+      "day": 70,
+      "question": "What am I not seeing about my manager Priya at the agency?",
+      "entities": ["agency"],
+      "themes": [
+        { "slug": "conflict", "weight": 0.7 },
+        { "slug": "decision", "weight": 0.4 }
+      ],
+      "deck": "thoth"
+    },
+    {
+      "id": "r8",
+      "day": 90,
+      "question": "What does the autumn hold for my health?",
+      "entities": [],
+      "themes": [
+        { "slug": "health", "weight": 0.8 },
+        { "slug": "stability", "weight": 0.4 }
+      ],
+      "deck": "rws"
+    },
+    {
+      "id": "r9",
+      "day": 120,
+      "question": "Will the new routine stick?",
+      "entities": [],
+      "themes": [
+        { "slug": "health", "weight": 0.7 },
+        { "slug": "stability", "weight": 0.5 }
+      ],
+      "deck": "rws"
+    }
+  ],
+  "expectClusters": [
+    { "members": ["r1", "r3", "r6"], "status": "active", "sharedEntity": "maya" },
+    { "members": ["r2", "r4", "r7"], "status": "active", "sharedEntity": "agency" },
+    { "members": ["r8", "r9"], "status": "suggested" }
+  ],
+  "assignments": [
+    {
+      "object": {
+        "id": "n1",
+        "day": 80,
+        "question": "Maya says I go quiet when it matters",
+        "entities": ["maya"],
+        "themes": [{ "slug": "communication", "weight": 0.8 }]
+      },
+      "journey": ["r1", "r3", "r6"],
+      "expect": "auto"
+    },
+    {
+      "object": {
+        "id": "n2",
+        "day": 80,
+        "question": "A quiet week",
+        "entities": [],
+        "themes": [
+          { "slug": "communication", "weight": 0.8 },
+          { "slug": "trust", "weight": 0.5 }
+        ]
+      },
+      "journey": ["r1", "r3", "r6"],
+      "expect": "none"
+    },
+    {
+      "object": {
+        "id": "n3",
+        "day": 85,
+        "question": "Do I stay at the agency through the winter?",
+        "entities": ["agency"],
+        "themes": [{ "slug": "patience", "weight": 0.6 }]
+      },
+      "journey": ["r2", "r4", "r7"],
+      "expect": "pending",
+      "note": "the shared entity alone is a suggestion, not a filing: no theme or question in common"
+    },
+    {
+      "object": {
+        "id": "n4",
+        "day": 300,
+        "question": "Is Leeds the right move?",
+        "entities": ["leeds"],
+        "themes": [
+          { "slug": "decision", "weight": 0.9 },
+          { "slug": "change", "weight": 0.6 }
+        ],
+        "note": "shares the decision theme with the career journey but no entity, long after it went quiet"
+      },
+      "journey": ["r2", "r4", "r7"],
+      "expect": "none"
+    }
+  ]
+}

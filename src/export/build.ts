@@ -9,6 +9,9 @@ import {
   entities,
   entityAliases,
   entityMentions,
+  journeyMembers,
+  journeys,
+  journeyThemeProgression,
   entityRoles,
   extractions,
   interpretations,
@@ -237,6 +240,31 @@ export async function buildExportArchive(
         .from(predictions)
         .where(inArray(predictions.readingId, readingIds))
         .orderBy(predictions.createdAt, predictions.id)
+    : [];
+
+  // Phase 07: journeys with their progression steps nested; members on deleted readings are
+  // excluded with them, and a step's source ids are scrubbed the same way.
+  const journeyRows = await db
+    .select()
+    .from(journeys)
+    .where(eq(journeys.userId, userId))
+    .orderBy(journeys.createdAt, journeys.id);
+  const journeyIds = journeyRows.map((j) => j.id);
+  const memberRows = (
+    journeyIds.length
+      ? await db
+          .select()
+          .from(journeyMembers)
+          .where(inArray(journeyMembers.journeyId, journeyIds))
+          .orderBy(journeyMembers.addedAt, journeyMembers.id)
+      : []
+  ).filter(liveObject);
+  const progressionRows = journeyIds.length
+    ? await db
+        .select()
+        .from(journeyThemeProgression)
+        .where(inArray(journeyThemeProgression.journeyId, journeyIds))
+        .orderBy(journeyThemeProgression.journeyId, journeyThemeProgression.sequenceIndex)
     : [];
 
   const cardsByReading = new Map<string, typeof cardRows>();
@@ -518,6 +546,71 @@ export async function buildExportArchive(
         updated_at: isoReq(p.updatedAt),
       };
     }),
+    'journeys.json': journeyRows.map((j) => {
+      if (j.mergedIntoId)
+        link('journey_merged_into', ['journey', j.id], ['journey', j.mergedIntoId]);
+      return {
+        id: j.id,
+        title: j.title,
+        title_source: j.titleSource,
+        rationale: j.rationale,
+        summary: j.summary,
+        status: j.status,
+        started_at: isoReq(j.startedAt),
+        last_activity_at: isoReq(j.lastActivityAt),
+        ended_at: iso(j.endedAt),
+        confidence: Number(j.confidence),
+        created_by: j.createdBy,
+        reasons: j.reasons,
+        user_confirmed: j.userConfirmed,
+        accepted_at: iso(j.acceptedAt),
+        dismissed_at: iso(j.dismissedAt),
+        merged_into_id: j.mergedIntoId,
+        model_id: j.modelId,
+        prompt_version: j.promptVersion,
+        schema_version: j.schemaVersion,
+        named_at: iso(j.namedAt),
+        created_at: isoReq(j.createdAt),
+        updated_at: isoReq(j.updatedAt),
+        theme_progression: progressionRows
+          .filter((s) => s.journeyId === j.id)
+          .map((s) => ({
+            id: s.id,
+            sequence_index: s.sequenceIndex,
+            theme_id: s.themeId,
+            period_start: s.periodStart,
+            period_end: s.periodEnd,
+            source_object_ids: s.sourceObjectIds.filter((oid) => readingIds.includes(oid)),
+          }))
+          .filter((s) => s.source_object_ids.length > 0)
+          .map((s) => {
+            link(
+              'progression_theme_is',
+              ['journey_theme_progression', s.id],
+              ['theme', s.theme_id],
+            );
+            for (const oid of s.source_object_ids)
+              link('progression_source', ['journey_theme_progression', s.id], ['reading', oid]);
+            return s;
+          }),
+      };
+    }),
+    'journey_members.json': memberRows.map((m) => {
+      link('journey_member_of', ['journey_member', m.id], ['journey', m.journeyId]);
+      link('journey_holds', ['journey', m.journeyId], [m.objectType, m.objectId]);
+      return {
+        id: m.id,
+        journey_id: m.journeyId,
+        object_type: m.objectType,
+        object_id: m.objectId,
+        confidence: Number(m.confidence),
+        created_by: m.createdBy,
+        state: m.state,
+        signals: m.signals ?? null,
+        reasons: m.reasons,
+        added_at: isoReq(m.addedAt),
+      };
+    }),
     'links.json': links,
   };
 
@@ -541,6 +634,7 @@ export async function buildExportArchive(
       'question_asks.json carries hashes of questions, not the text; the text is in readings.json.',
       'Readings you deleted are not included.',
       'extractions.json, entities.json, entity_mentions.json, object_themes.json and predictions.json are derived by the app and can be regenerated; metadata_overrides.json holds your corrections to them.',
+      'journeys.json and journey_members.json are gathered by the app from those; a journey you accepted, renamed or built carries user_confirmed = true.',
     ],
   } satisfies ExportManifest);
 

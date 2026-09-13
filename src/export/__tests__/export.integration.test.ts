@@ -55,7 +55,11 @@ describe('export (integration)', () => {
       notes: 'first note about my girlfriend',
     });
     await updateReadingNotes(user.client, a.id, 'second note about my girlfriend');
-    const { interpretation: first, extraction } = await attachDerived(user, a, { memory: true });
+    const {
+      interpretation: first,
+      extraction,
+      journey,
+    } = await attachDerived(user, a, { memory: true, journey: true });
     const second = await storeInterpretation(user, a); // regenerate: first is superseded
     const b = await makeReading(user, refs, {
       deck: 'thoth',
@@ -66,6 +70,9 @@ describe('export (integration)', () => {
     });
     const gone = await makeReading(user, refs, { question: 'Deleted before export' });
     await softDeleteReading(user.client, gone.id);
+    // Phase 07: the deleted reading also sat in the journey; its membership must not export.
+    const { addReadingToJourney } = await import('@/db/queries/journeys');
+    await addReadingToJourney(user.client, user.id, journey!, gone.id);
 
     const exportId = await requestExport(user.client, user.id);
     const job = await enqueue('export_user_data', { exportId }, { userId: user.id });
@@ -192,6 +199,32 @@ describe('export (integration)', () => {
     const preds = files['predictions.json'] as { reading_id: string; fact_status: string }[];
     expect(preds.every((p) => p.fact_status === 'POSSIBILITY')).toBe(true);
     expect(JSON.stringify(files['predictions.json'])).not.toMatch(/probab/i);
+    // Phase 07: journeys with nested progression, members, and their links.
+    const journeysOut = files['journeys.json'] as {
+      id: string;
+      title: string;
+      title_source: string;
+      user_confirmed: boolean;
+      theme_progression: { source_object_ids: string[] }[];
+    }[];
+    const j = journeysOut.find((x) => x.id === journey)!;
+    expect(j).toMatchObject({ title: 'Test journey', title_source: 'user', user_confirmed: true });
+    for (const step of j.theme_progression) expect(step.source_object_ids).not.toContain(gone.id);
+    const members = files['journey_members.json'] as {
+      journey_id: string;
+      object_id: string;
+      state: string;
+    }[];
+    expect(
+      members.some(
+        (m) => m.journey_id === journey && m.object_id === a.id && m.state === 'confirmed',
+      ),
+    ).toBe(true);
+    expect(members.some((m) => m.object_id === gone.id)).toBe(false);
+    expect(
+      links.some((l) => l.kind === 'journey_holds' && l.from.id === journey && l.to.id === a.id),
+    ).toBe(true);
+    expect(manifest.schema_version).toBe('export/1.2.0');
     expect(JSON.stringify(files)).not.toContain(gone.id);
     expect(JSON.stringify(files)).not.toContain('Deleted before export');
     expect(JSON.stringify(files)).not.toMatch(/ai_calls/);

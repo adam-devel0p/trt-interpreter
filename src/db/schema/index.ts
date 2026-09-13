@@ -6,3 +6,4 @@ export * from './readings';
 export * from './ai';
 export * from './journal';
 export * from './memory';
+export * from './journeys';

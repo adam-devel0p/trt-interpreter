@@ -58,7 +58,7 @@ describe('deleting-reading-purges-derived (integration)', () => {
     });
     await updateReadingNotes(user.client, reading.id, 'second words about my girlfriend in Leeds');
     await updateReadingNotes(user.client, reading.id, 'third words about my girlfriend in Leeds');
-    await attachDerived(user, reading, { memory: true });
+    await attachDerived(user, reading, { memory: true, journey: true });
     const keep = await makeReading(user, refs, { question: 'Keep me, Alex' });
     await attachDerived(user, keep, { memory: true });
 
@@ -73,6 +73,7 @@ describe('deleting-reading-purges-derived (integration)', () => {
       object_themes: await countRows('object_themes', 'object_id', reading.id),
       entity_mentions: await countRows('entity_mentions', 'object_id', reading.id),
       predictions: await countRows('predictions', 'reading_id', reading.id),
+      journey_members: await countRows('journey_members', 'object_id', reading.id),
     };
     expect(before).toMatchObject({
       reading_cards: 3,
@@ -86,6 +87,7 @@ describe('deleting-reading-purges-derived (integration)', () => {
     });
     expect(before.object_themes).toBeGreaterThanOrEqual(2);
     expect(before.entity_mentions).toBeGreaterThanOrEqual(2);
+    expect(before.journey_members).toBe(1);
     // The entities themselves are the user's memory, not the reading's: they survive the purge.
     const entitiesBefore = await countRows('entities', 'user_id', user.id);
 
@@ -114,6 +116,7 @@ describe('deleting-reading-purges-derived (integration)', () => {
       'metadata_overrides',
       'object_themes',
       'entity_mentions',
+      'journey_members',
     ]);
     for (const table of DELETION_REGISTRY.reading.map((t) => t.table)) {
       const column = POLYMORPHIC.has(table) ? 'object_id' : 'reading_id';

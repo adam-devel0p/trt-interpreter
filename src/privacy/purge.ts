@@ -3,6 +3,7 @@ import { and, eq, isNotNull, lt, sql } from 'drizzle-orm';
 import { insertDeletionReceipt, platformDb } from '@/db/admin';
 import { readings } from '@/db/schema';
 import { DELETION_REGISTRY } from '@/domain/privacy/deletionRegistry';
+import { journeysOfReadings, refreshJourneys } from '@/journeys/refresh';
 import { logger } from '@/observability/logger';
 
 /**
@@ -63,6 +64,11 @@ export const READING_DEPENDENT_COUNTERS: Record<string, Counter> = {
     ),
   predictions: (id) =>
     countWhere(sql`select count(*)::int as n from public.predictions where reading_id = ${id}`),
+  // Phase 07
+  journey_members: (id) =>
+    countWhere(
+      sql`select count(*)::int as n from public.journey_members where object_type = 'reading' and object_id = ${id}`,
+    ),
 };
 
 /** Explicit steps for registry targets that no FK reaches (`via: 'job'`). */
@@ -90,6 +96,11 @@ const READING_JOB_REMOVERS: Record<string, Remover> = {
   entity_mentions: async (id) => {
     await platformDb().execute(
       sql`delete from public.entity_mentions where object_type = 'reading' and object_id = ${id}`,
+    );
+  },
+  journey_members: async (id) => {
+    await platformDb().execute(
+      sql`delete from public.journey_members where object_type = 'reading' and object_id = ${id}`,
     );
   },
 };
@@ -130,6 +141,9 @@ export async function purgeReading(
     counts[table] = await counter(readingId);
   }
 
+  // Journeys this reading sat in: refreshed after the delete so every progression step and
+  // recurring-symbol claim drops the vanished source (evidence integrity, spec §19).
+  const journeyIds = await journeysOfReadings([readingId]);
   await db.transaction(async (tx) => {
     for (const target of DELETION_REGISTRY.reading) {
       if (target.via !== 'job') continue;
@@ -146,6 +160,7 @@ export async function purgeReading(
     if (left !== 0) throw new PurgeError(`${table} still holds ${left} row(s) after purge`);
   }
   counts.readings = 1;
+  await refreshJourneys(journeyIds);
 
   const receipt = await insertDeletionReceipt({
     userId: row.userId,

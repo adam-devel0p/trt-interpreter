@@ -1,0 +1,47 @@
+{
+  "fixture": "workplace",
+  "description": "Readings about a job at one employer: a role, an offer, a review. Expect the employer or the situation in the title, not a card and not advice.",
+  "provider": "mock",
+  "model": "mock/claude-sonnet-5",
+  "prompt_version": "propose_journey/1.0.0",
+  "schema_version": "journey_proposal/1.0.0",
+  "ran_at": "2026-09-13T12:32:57.196Z",
+  "checks": {
+    "schema": {
+      "pass": true
+    },
+    "title_shape": {
+      "pass": true,
+      "detail": "The agency and decision"
+    },
+    "no_card_name": {
+      "pass": true
+    },
+    "names_subject": {
+      "pass": true,
+      "detail": "agency"
+    },
+    "no_prediction": {
+      "pass": true,
+      "detail": "Every one of the 3 entries names the agency."
+    },
+    "confidence_band": {
+      "pass": true,
+      "detail": "high"
+    },
+    "rationale_one_sentence": {
+      "pass": true
+    }
+  },
+  "output": {
+    "title": "The agency and decision",
+    "rationale": "Every one of the 3 entries names the agency.",
+    "confidence": "high"
+  },
+  "human_review": {
+    "reviewed_by": null,
+    "reviewed_at": null,
+    "verdict": null,
+    "notes": null
+  }
+}

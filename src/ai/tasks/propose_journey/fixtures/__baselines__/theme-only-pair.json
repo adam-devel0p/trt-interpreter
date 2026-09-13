@@ -1,0 +1,47 @@
+{
+  "fixture": "theme-only-pair",
+  "description": "Two readings six weeks apart sharing only health and routine themes, no person or place. A thematic title at medium confidence — or low, which keeps the placeholder — is acceptable; a confident claim is not.",
+  "provider": "mock",
+  "model": "mock/claude-sonnet-5",
+  "prompt_version": "propose_journey/1.0.0",
+  "schema_version": "journey_proposal/1.0.0",
+  "ran_at": "2026-09-13T12:32:57.179Z",
+  "checks": {
+    "schema": {
+      "pass": true
+    },
+    "title_shape": {
+      "pass": true,
+      "detail": "Health and stability"
+    },
+    "no_card_name": {
+      "pass": true
+    },
+    "names_subject": {
+      "pass": true,
+      "detail": null
+    },
+    "no_prediction": {
+      "pass": true,
+      "detail": "The entries keep returning to health and stability."
+    },
+    "confidence_band": {
+      "pass": true,
+      "detail": "medium"
+    },
+    "rationale_one_sentence": {
+      "pass": true
+    }
+  },
+  "output": {
+    "title": "Health and stability",
+    "rationale": "The entries keep returning to health and stability.",
+    "confidence": "medium"
+  },
+  "human_review": {
+    "reviewed_by": null,
+    "reviewed_at": null,
+    "verdict": null,
+    "notes": null
+  }
+}

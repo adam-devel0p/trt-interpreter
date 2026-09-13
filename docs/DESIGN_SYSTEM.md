@@ -105,6 +105,7 @@ Every async surface needs all four states designed, and each phase's review chec
 `AppShell` · `BottomNav` · `PageHeader` · `Card` (tarot card render, art or typographic treatment,
 orientation-aware) · `CardPicker` (fast deck-native search-select for physical entry) · `SpreadLayout`
 · `ShuffleReveal` · `LayeredInterpretation` · `SafetyResourceCard` · `UserNoteEditor` · `InferredChip` · `EvidenceList` ·
+`JourneyTimeline` · `ThemeProgression` · `RecurringSymbols` ·
 `SourceCitation` · `TimelineItem` · `JourneyTimeline` · `ThemeProgression` · `ConfidenceBadge` ·
 `ConnectionProposal` (confirm/maybe/unrelated) · `OutcomeSelector` · `AskComposer` · `AnswerWithSources`
 · `PaywallSheet` · `EmptyState` · `Skeleton` · `ErrorState` · `ConfirmDestructive`.
@@ -197,4 +198,32 @@ was matched" disclosure, and the corrections — merge into another entry (the o
 confirmation names what moves and that it can be undone; the target page shows an undo notice),
 split off mentions (checkboxes + a name), remove. The journal's filter panel gained *Mentions*
 (an entity select, only when the user has entities).
+
+Phase 07 built the **Journey** screens (`app/(app)/journey/`, the product's centrepiece, §6.5).
+The list: the one suggestion as a dashed `bg-surface-ai` card ("Possibly a journey" · *Keep it
+as a journey* / *Not a journey* — dismissal is for good, and any further suggestions wait,
+"offered one at a time"), then *Ongoing*, then *Quiet or closed*, each row with reading
+count, start date and "gathered automatically" until the user touches it; *Start a journey
+yourself* is always there (invariant 10 cuts both ways). The detail, eight sections in the
+spec's order, every one with a real empty state: a deterministic **narrative header** in the
+page description ("3 readings and no confirmed outcomes yet since April, across both decks.
+3 readings are still open."); the **timeline** (`JourneyTimeline`: month `<h3>` headings that
+stick, one `<ol>` per month, each reading an `<article data-deck>` with its deck's accent and
+deck-native card names, a follow-up chip, "gathered here — suggested" or "here because you
+said so", and inline *keep* / *remove* — a removal is announced and offered back in an undo
+bar above the timeline, so it survives the item disappearing); pending suggestions in a
+"Might belong here" block with *Yes, part of this* / *No*; **theme progression**
+(`ThemeProgression`: a `sr-only` sentence "The themes moved from uncertainty, then
+conflict…", then a wrapped `<ol>` of `<details>` steps with arrows, each opening to its
+source readings — never a chart); **recurring symbols** (`RecurringSymbols`: `<details>` rows
+labelled with kind and deck — "card · Thoth" — a context sentence and the source readings);
+**open loops** (linked cards); **confirmed outcomes** and **possible connections** as honest
+placeholders until Phase 08; **Ask about this journey** as a disabled button "coming soon";
+and **Manage**: rename (the hint says whether the title is a placeholder, a suggestion or
+yours; renaming pins it), close/reopen, a journal link, merge (a `<select>` + the destructive
+confirmation, undo from the target's notice), split (checkboxes + a name), delete (names what
+stays). On the reading detail, **Connections** gained a *Journeys* row: a solid "you" chip, an
+`InferredChip` "suggested" with why / keep / ×, or the inline question "Part of *X*?" with
+*Yes* / *No*, plus *Add to a journey* (a select, or a new one). Home's *Worth a look* shows
+the single suggestion card. The journal's filter panel gained *Journey*.
 

@@ -24,7 +24,8 @@ export type LogNamespace =
   | 'privacy'
   | 'billing'
   | 'app'
-  | 'memory';
+  | 'memory'
+  | 'journeys';
 export type LogEvent = `${LogNamespace}.${string}`;
 
 /** The complete set of props a log line may carry. Extend deliberately; never add prose fields. */
@@ -54,6 +55,8 @@ export interface LogProps {
   errorClass?: string;
   jobId?: string;
   jobKind?: string;
+  journeyId?: string;
+  state?: string;
   flag?: string;
   enabled?: boolean;
   migration?: string;
@@ -103,6 +106,8 @@ const ALLOWED_KEYS: ReadonlySet<string> = new Set<keyof LogProps>([
   'errorClass',
   'jobId',
   'jobKind',
+  'journeyId',
+  'state',
   'flag',
   'enabled',
   'migration',

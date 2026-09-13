@@ -52,7 +52,13 @@ job). **Phase 06:** the `reading` root gained `predictions` (cascade) and `extra
 `(object_type, object_id)`, removed by explicit steps); the `entity` root holds
 `entity_aliases`, `entity_roles`, `entity_mentions` (cascade) and `entity_merges` (`via: 'job'`,
 removed by `deleteEntity()` for either side); the `user` root lists all ten new tables
-(`themes` user rows only). `life_event` and `journey` roots are still empty. The purge job
+(`themes` user rows only). **Phase 07:** the `reading` root gained `journey_members`
+(`via: 'job'`, keyed by `(object_type, object_id)`); after the delete the purge refreshes the
+journeys the reading sat in, so every progression step loses the vanished source. The
+`journey` root holds `journey_members` and `journey_theme_progression` (cascade) — deleting
+a journey never deletes its readings. "Delete AI artifacts" removes journeys the user never
+touched (`user_confirmed = false`) and `auto` / `pending` memberships of the rest. The
+`life_event` root is still empty. The purge job
 (`src/privacy/purge.ts`) is *driven by* the `reading` root: it counts every registered table
 before the delete, runs the `job` steps, deletes the reading (cascades do the rest), verifies
 every count is zero afterwards and writes the counts into a receipt — a registry table with no

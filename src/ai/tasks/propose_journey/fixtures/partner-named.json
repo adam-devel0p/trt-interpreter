@@ -1,0 +1,32 @@
+{
+  "name": "partner-named",
+  "description": "Three readings over ten weeks that all resolve to the same partner and share relational themes. Expect a plain title naming her, high confidence, no verdict.",
+  "current_title": "Maya",
+  "shared_entities": ["Maya"],
+  "shared_themes": ["Distance", "Communication"],
+  "entries": [
+    {
+      "occurred_on": "2026-04-11",
+      "question": "How is it going with Maya?",
+      "entities": ["Maya"],
+      "themes": ["Trust", "Distance", "Communication"]
+    },
+    {
+      "occurred_on": "2026-05-16",
+      "question": "What is the move to Leeds asking of me?",
+      "entities": ["Maya", "Leeds"],
+      "themes": ["Change", "Home", "Distance", "Communication"]
+    },
+    {
+      "occurred_on": "2026-06-20",
+      "question": "What does Maya need from me right now?",
+      "entities": ["Maya"],
+      "themes": ["Care", "Communication", "Distance"]
+    }
+  ],
+  "expect": {
+    "confidence_any": ["high", "medium"],
+    "must_mention": "Maya",
+    "forbid": ["heartbreak", "leave", "will"]
+  }
+}

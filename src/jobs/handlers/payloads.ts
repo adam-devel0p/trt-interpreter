@@ -27,3 +27,11 @@ export const reprocessExtractionsPayload = z
   })
   .strict();
 export type ReprocessExtractionsPayload = z.infer<typeof reprocessExtractionsPayload>;
+
+/** Phase 07: name a journey the discovery step created. Ids only. */
+export const proposeJourneyPayload = z
+  .object({
+    journeyId: z.string().uuid(),
+  })
+  .strict();
+export type ProposeJourneyPayload = z.infer<typeof proposeJourneyPayload>;

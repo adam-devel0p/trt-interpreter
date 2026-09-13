@@ -19,6 +19,31 @@ connections* sections.
 
 ## Tasks
 
+From Phase 07 (see [completed/phase-07-report.md](completed/phase-07-report.md) §13):
+- **Timeline union is ready:** `TimelineEntry` (`src/domain/journeys/timeline.ts`) has `event` and
+  `outcome` members and `JourneyTimeline` renders them; `journey_members.object_type` already
+  admits `life_event` and `outcome`. Add event/outcome members and extend `getJourney()`'s read.
+- **RLS for polymorphic members:** `journey_members`' `ownsObject` checks readings only — the 08
+  migration must add an `exists` on `life_events` for `life_event` rows (and the RLS test).
+- **Features for events:** `loadReadingFeatures` (`src/journeys/features.ts`) is reading-only; an
+  event loader over `life_events` + its `object_themes` / `entity_mentions` feeds the same
+  `ObjectFeatures` shape, and `assignReading` needs an event sibling.
+- **`refreshJourney` is the one derived-rows hook** (activity, status, progression) — call it after
+  any write that changes a journey's live members (`auto` / `confirmed` only; `pending` is not yet
+  part of it).
+- **Sections to fill:** `app/(app)/journey/[id]/page.tsx` renders *Confirmed outcomes* and *Possible
+  connections* as placeholders in the right order; `narrativeHeader` already takes
+  `confirmedOutcomes` and `events`.
+- **Correlation inputs:** `journeysOfReadings()` (`src/journeys/refresh.ts`) gives the journeys a set
+  of readings sit in (the journey-overlap signal of §3); `loadJourneyLinks()` in
+  `memory/candidates.ts` gives entity ↔ journey membership.
+- **Purge:** the reading purge refreshes affected journeys after the delete; the event purge must do
+  the same. **Export** is at `export/1.2.0` (`journeys.json` nests progression) — events, outcomes
+  and links bump it to 1.3.0.
+- **Still open from 06/07:** prediction retraction on reprocess and re-scoring dependent `links` on
+  entity or journey merge/split (`apply_journey_merge` moves member rows only).
+
+
 ### 1. Schema
 `life_events`, `event_media`, `predictions` (extended), `outcomes`, `links` per
 [../DATA_MODEL.md](../DATA_MODEL.md#events-predictions-outcomes-links--phase-08). RLS on all.

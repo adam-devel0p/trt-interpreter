@@ -31,6 +31,7 @@ describe('deleting-reading-purges-derived', () => {
       'metadata_overrides',
       'object_themes',
       'entity_mentions',
+      'journey_members',
     ]);
     const purgeSrc = read('src/privacy/purge.ts');
     for (const t of jobTargets) expect(purgeSrc).toMatch(new RegExp(`delete from public\\.${t}`));
@@ -42,6 +43,7 @@ describe('deleting-reading-purges-derived', () => {
       '0005_ai_interpretation',
       '0006_journal',
       '0007_structured_memory',
+      '0008_journeys',
     ]
       .map((m) => read(`src/db/migrations/${m}.sql`))
       .join('\n');
@@ -81,10 +83,12 @@ describe('deleting-reading-purges-derived', () => {
 
     const journalSql = read('src/db/migrations/0006_journal.sql');
     expect(journalSql).toMatch(/search_readings[\s\S]*WHERE r\.deleted_at IS NULL/);
-    // Phase 06 replaced the function (entity filter); the live definition must keep the filter.
-    expect(read('src/db/migrations/0007_structured_memory.sql')).toMatch(
-      /search_readings[\s\S]*WHERE r\.deleted_at IS NULL/,
-    );
+    // Phases 06 and 07 replaced the function (entity, journey filters); the live definition
+    // must keep the filter.
+    for (const m of ['0007_structured_memory', '0008_journeys'])
+      expect(read(`src/db/migrations/${m}.sql`)).toMatch(
+        /search_readings[\s\S]*WHERE r\.deleted_at IS NULL/,
+      );
     expect(journalSql).toMatch(/replace_reading_cards[\s\S]*deleted_at IS NULL/);
     expect(read('src/export/build.ts')).toContain('isNull(readings.deletedAt)');
   });

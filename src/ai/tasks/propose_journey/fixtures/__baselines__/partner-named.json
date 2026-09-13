@@ -1,0 +1,47 @@
+{
+  "fixture": "partner-named",
+  "description": "Three readings over ten weeks that all resolve to the same partner and share relational themes. Expect a plain title naming her, high confidence, no verdict.",
+  "provider": "mock",
+  "model": "mock/claude-sonnet-5",
+  "prompt_version": "propose_journey/1.0.0",
+  "schema_version": "journey_proposal/1.0.0",
+  "ran_at": "2026-09-13T12:32:57.161Z",
+  "checks": {
+    "schema": {
+      "pass": true
+    },
+    "title_shape": {
+      "pass": true,
+      "detail": "Maya and distance"
+    },
+    "no_card_name": {
+      "pass": true
+    },
+    "names_subject": {
+      "pass": true,
+      "detail": "Maya"
+    },
+    "no_prediction": {
+      "pass": true,
+      "detail": "Every one of the 3 entries names Maya."
+    },
+    "confidence_band": {
+      "pass": true,
+      "detail": "high"
+    },
+    "rationale_one_sentence": {
+      "pass": true
+    }
+  },
+  "output": {
+    "title": "Maya and distance",
+    "rationale": "Every one of the 3 entries names Maya.",
+    "confidence": "high"
+  },
+  "human_review": {
+    "reviewed_by": null,
+    "reviewed_at": null,
+    "verdict": null,
+    "notes": null
+  }
+}

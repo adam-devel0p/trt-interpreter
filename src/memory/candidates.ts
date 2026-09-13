@@ -1,7 +1,14 @@
 import 'server-only';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { platformDb } from '@/db/admin';
-import { entities, entityAliases, entityRoles } from '@/db/schema';
+import {
+  entities,
+  entityAliases,
+  entityMentions,
+  entityRoles,
+  journeyMembers,
+  journeys,
+} from '@/db/schema';
 import { normalizeAlias } from '@/domain/entities/normalize';
 import type { CandidateEntity, MentionInput } from '@/domain/entities/resolve';
 import { TRIGRAM_MIN } from '@/domain/entities/thresholds';
@@ -11,12 +18,63 @@ import { TRIGRAM_MIN } from '@/domain/entities/thresholds';
  * active entity of the user is a structural candidate (kind, recency and roles score it);
  * Postgres computes the pg_trgm similarity between the mention and the entity's aliases and
  * label (step 2), so the pure resolver never touches the database. Journeys (Phase 07) and
- * embeddings (Phase 09) plug into the same shape.
+ * Journeys (Phase 07) fill `journeyIds` — the journeys whose live members mention the
+ * entity (`auto` / `user` rows) — and `journeysExist`; embeddings (Phase 09) plug into the
+ * same shape.
  */
 
 export interface CandidateSet {
   all: CandidateEntity[];
   byId: Map<string, CandidateEntity>;
+  /** The user has at least one growable journey, so the journey signal is available. */
+  journeysExist: boolean;
+}
+
+/** Growable journeys (not dismissed, merged or closed) per entity, and per reading. */
+export async function loadJourneyLinks(userId: string): Promise<{
+  byEntity: Map<string, string[]>;
+  byReading: Map<string, string[]>;
+  exists: boolean;
+}> {
+  const db = platformDb();
+  const rows = await db
+    .select({
+      journeyId: journeyMembers.journeyId,
+      objectId: journeyMembers.objectId,
+      entityId: entityMentions.entityId,
+    })
+    .from(journeyMembers)
+    .innerJoin(journeys, eq(journeys.id, journeyMembers.journeyId))
+    .leftJoin(
+      entityMentions,
+      and(
+        eq(entityMentions.objectType, journeyMembers.objectType),
+        eq(entityMentions.objectId, journeyMembers.objectId),
+        inArray(entityMentions.resolution, ['auto', 'user']),
+      ),
+    )
+    .where(
+      and(
+        eq(journeys.userId, userId),
+        isNull(journeys.dismissedAt),
+        isNull(journeys.mergedIntoId),
+        ne(journeys.status, 'closed'),
+        eq(journeyMembers.objectType, 'reading'),
+        inArray(journeyMembers.state, ['auto', 'confirmed']),
+      ),
+    );
+  const byEntity = new Map<string, string[]>();
+  const byReading = new Map<string, string[]>();
+  for (const r of rows) {
+    const rl = byReading.get(r.objectId) ?? [];
+    if (!rl.includes(r.journeyId)) rl.push(r.journeyId);
+    byReading.set(r.objectId, rl);
+    if (!r.entityId) continue;
+    const el = byEntity.get(r.entityId) ?? [];
+    if (!el.includes(r.journeyId)) el.push(r.journeyId);
+    byEntity.set(r.entityId, el);
+  }
+  return { byEntity, byReading, exists: rows.length > 0 };
 }
 
 export async function loadCandidates(userId: string): Promise<CandidateSet> {
@@ -25,9 +83,9 @@ export async function loadCandidates(userId: string): Promise<CandidateSet> {
     .select()
     .from(entities)
     .where(and(eq(entities.userId, userId), eq(entities.status, 'active')));
-  if (rows.length === 0) return { all: [], byId: new Map() };
+  if (rows.length === 0) return { all: [], byId: new Map(), journeysExist: false };
   const ids = rows.map((r) => r.id);
-  const [aliasRows, roleRows] = await Promise.all([
+  const [aliasRows, roleRows, journeyLinks] = await Promise.all([
     db
       .select({ entityId: entityAliases.entityId, norm: entityAliases.aliasNormalized })
       .from(entityAliases)
@@ -41,6 +99,7 @@ export async function loadCandidates(userId: string): Promise<CandidateSet> {
       })
       .from(entityRoles)
       .where(inArray(entityRoles.entityId, ids)),
+    loadJourneyLinks(userId),
   ]);
   const aliases = new Map<string, string[]>();
   for (const a of aliasRows) aliases.set(a.entityId, [...(aliases.get(a.entityId) ?? []), a.norm]);
@@ -58,8 +117,9 @@ export async function loadCandidates(userId: string): Promise<CandidateSet> {
     roles: roles.get(r.id) ?? [],
     lastSeenAt: r.lastSeenAt.toISOString(),
     userConfirmed: r.userConfirmed,
+    journeyIds: journeyLinks.byEntity.get(r.id) ?? [],
   }));
-  return { all, byId: new Map(all.map((c) => [c.id, c])) };
+  return { all, byId: new Map(all.map((c) => [c.id, c])), journeysExist: journeyLinks.exists };
 }
 
 /**

@@ -20,9 +20,18 @@ export interface SimEntity {
   userConfirmed: boolean;
 }
 
+export interface SimJourneys {
+  /** Journeys the mention's object sits in (Phase 07 signal). */
+  objectJourneyIds: string[];
+  /** Journeys every entity is taken to sit in. */
+  entityJourneyIds: string[];
+}
+
 export class SimStore {
   entities: SimEntity[] = [];
   private seq = 0;
+  /** When set, the journey signal is available (`journeysExist`) with these memberships. */
+  journeys: SimJourneys | null = null;
 
   private nextId(prefix: string): string {
     this.seq += 1;
@@ -39,6 +48,7 @@ export class SimStore {
       roles: e.roles,
       lastSeenAt: e.lastSeenAt,
       userConfirmed: e.userConfirmed,
+      ...(this.journeys ? { journeyIds: this.journeys.entityJourneyIds } : {}),
       trigramSimilarity: Math.max(
         trigramSimilarity(norm, normalizeAlias(e.canonicalLabel)),
         ...e.aliases.map((a) => trigramSimilarity(norm, a)),
@@ -58,7 +68,11 @@ export class SimStore {
 
   /** Resolve and apply, as the materialiser would. Returns the decision for assertions. */
   mention(m: MentionInput): Decision {
-    const decision = resolveMention(m, this.candidates(m));
+    const decision = resolveMention(
+      m,
+      this.candidates(m),
+      this.journeys ? { journeysExist: true, journeyIds: this.journeys.objectJourneyIds } : {},
+    );
     this.apply(decision, m);
     return decision;
   }

@@ -64,7 +64,7 @@ export async function latestEmailLink(to: string): Promise<string> {
  */
 export async function createReadyUser(
   tag: string,
-  opts: { aiConsent?: boolean; extraction?: boolean } = {},
+  opts: { aiConsent?: boolean; extraction?: boolean; journeys?: boolean } = {},
 ) {
   const { createClient } = await import('@supabase/supabase-js');
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -97,6 +97,16 @@ export async function createReadyUser(
       .from('user_flags')
       .upsert(
         { user_id: data.user.id, flag: 'ai_extraction', enabled: true, set_by: 'rollout' },
+        { onConflict: 'user_id,flag' },
+      );
+    if (flag.error) throw new Error(`flag upsert failed: ${flag.error.message}`);
+  }
+  // Phase 07: journeys are flag-gated the same way.
+  if (opts.journeys) {
+    const flag = await admin
+      .from('user_flags')
+      .upsert(
+        { user_id: data.user.id, flag: 'journey_autocreate', enabled: true, set_by: 'rollout' },
         { onConflict: 'user_id,flag' },
       );
     if (flag.error) throw new Error(`flag upsert failed: ${flag.error.message}`);
@@ -215,4 +225,21 @@ export async function seedReadings(userId: string, specs: SeedReadingSpec[]): Pr
 /** Sign in as one of the `pnpm demo:seed` accounts. */
 export async function signInAsDemo(page: Page, email: string) {
   await signInViaUi(page, email, 'demo-password-123');
+}
+
+/**
+ * Queue the extraction the save action would have queued for readings inserted directly
+ * (Phase 07 specs seed history, then let the cron batch extract and gather it).
+ */
+export async function enqueueExtractions(userId: string, readingIds: string[]): Promise<void> {
+  const admin = await adminClient();
+  const { error } = await admin.from('jobs').insert(
+    readingIds.map((readingId) => ({
+      kind: 'extract_reading_metadata',
+      payload: { readingId, force: false },
+      user_id: userId,
+      max_attempts: 5,
+    })),
+  );
+  if (error) throw new Error(`enqueue failed: ${error.message}`);
 }

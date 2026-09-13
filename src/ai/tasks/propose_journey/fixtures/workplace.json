@@ -1,0 +1,32 @@
+{
+  "name": "workplace",
+  "description": "Readings about a job at one employer: a role, an offer, a review. Expect the employer or the situation in the title, not a card and not advice.",
+  "current_title": "the agency",
+  "shared_entities": ["the agency"],
+  "shared_themes": ["Decision", "Ambition"],
+  "entries": [
+    {
+      "occurred_on": "2026-04-04",
+      "question": "Should I apply for the design lead role at the agency?",
+      "entities": ["the agency"],
+      "themes": ["Ambition", "Decision", "Confidence"]
+    },
+    {
+      "occurred_on": "2026-04-25",
+      "question": "Take the offer or stay at the agency?",
+      "entities": ["the agency"],
+      "themes": ["Decision", "Ambition"]
+    },
+    {
+      "occurred_on": "2026-09-07",
+      "question": "What should I focus on before the review at the agency?",
+      "entities": ["the agency"],
+      "themes": ["Decision", "Anxiety", "Ambition"]
+    }
+  ],
+  "expect": {
+    "confidence_any": ["high", "medium"],
+    "must_mention": "agency",
+    "forbid": ["quit", "promotion is coming", "will"]
+  }
+}

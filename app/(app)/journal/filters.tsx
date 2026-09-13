@@ -27,12 +27,15 @@ export function JournalFilters({
   decks,
   spreads,
   entities,
+  journeys,
 }: {
   filters: Filters;
   decks: { slug: string; name: string }[];
   spreads: { id: string; name: string }[];
   /** Phase 06: the user's active entities; the select is omitted when there are none. */
   entities?: { id: string; name: string }[];
+  /** Phase 07: the user's journeys; the select is omitted when there are none. */
+  journeys?: { id: string; title: string }[];
 }) {
   const router = useRouter();
   const formRef = React.useRef<HTMLFormElement>(null);
@@ -44,6 +47,7 @@ export function JournalFilters({
         filters.deck !== null ||
         filters.spread !== null ||
         filters.entity !== null ||
+        filters.journey !== null ||
         filters.source !== null ||
         filters.followUp !== null ||
         filters.hasNotes !== null ||
@@ -183,6 +187,24 @@ export function JournalFilters({
               {entities.map((e) => (
                 <option key={e.id} value={e.id}>
                   {e.name}
+                </option>
+              ))}
+            </select>
+          </Labelled>
+        ) : null}
+        {journeys && journeys.length > 0 ? (
+          <Labelled id="journal-journey" label="Journey">
+            <select
+              id="journal-journey"
+              name="journey"
+              defaultValue={filters.journey ?? ''}
+              onChange={submit}
+              className={selectClass}
+            >
+              <option value="">Any journey</option>
+              {journeys.map((j) => (
+                <option key={j.id} value={j.id}>
+                  {j.title}
                 </option>
               ))}
             </select>

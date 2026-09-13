@@ -22,6 +22,10 @@
  * by `(object_type, object_id)` and removed by the purge job. The `entity` root is populated:
  * aliases, roles and mentions cascade from `entities`; `entity_merges` hold ids only and are
  * removed by the entity delete path. `themes` (user rows) cascade from the user.
+ * Phase 07: journeys. `journey_members` are keyed by `(object_type, object_id)` and removed
+ * by the purge job (which then refreshes the journeys they sat in, so progression steps
+ * lose the deleted source); the `journey` root holds members and progression steps
+ * (cascade). Deleting a journey never deletes its readings.
  * The `purge_deleted` job (`src/privacy/purge.ts`) is driven by the `reading` root of this
  * registry and a test asserts its receipt names every table listed here.
  */
@@ -55,9 +59,21 @@ export const DELETION_REGISTRY: Record<RootType, readonly CascadeTarget[]> = {
     { table: 'object_themes', via: 'job', note: 'keyed by (object_type, object_id)' },
     { table: 'entity_mentions', via: 'job', note: 'keyed by (object_type, object_id)' },
     { table: 'predictions', via: 'cascade', note: 'FK readings.id on delete cascade' },
+    {
+      table: 'journey_members',
+      via: 'job',
+      note: 'keyed by (object_type, object_id); the journeys they sat in are refreshed after',
+    },
   ],
   life_event: [],
-  journey: [],
+  journey: [
+    { table: 'journey_members', via: 'cascade', note: 'FK journeys.id on delete cascade' },
+    {
+      table: 'journey_theme_progression',
+      via: 'cascade',
+      note: 'FK journeys.id on delete cascade; member readings are never deleted',
+    },
+  ],
   entity: [
     { table: 'entity_aliases', via: 'cascade', note: 'FK entities.id on delete cascade' },
     { table: 'entity_roles', via: 'cascade', note: 'FK entities.id on delete cascade' },
@@ -122,6 +138,9 @@ export const DELETION_REGISTRY: Record<RootType, readonly CascadeTarget[]> = {
     { table: 'entity_mentions', via: 'cascade' },
     { table: 'entity_merges', via: 'cascade', note: 'ids only' },
     { table: 'predictions', via: 'cascade', note: 'POSSIBILITY rows; no probability ever' },
+    { table: 'journeys', via: 'cascade' },
+    { table: 'journey_members', via: 'cascade' },
+    { table: 'journey_theme_progression', via: 'cascade', note: 'evidence ids only' },
   ],
 };
 

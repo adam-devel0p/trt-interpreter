@@ -128,7 +128,10 @@ export function DeleteAiArtifactsControl({ counts }: { counts: AiArtifactCounts 
         `${plural(counts.safety_flags, 'topic flag')}, ` +
         `${plural(counts.question_embeddings, 'question fingerprint')}, ` +
         `${plural(memory, 'suggested theme, mention or possibility', 'suggested themes, mentions and possibilities')} and ` +
-        `${plural(counts.entities, 'unconfirmed person or place', 'unconfirmed people and places')} ` +
+        `${plural(counts.entities, 'unconfirmed person or place', 'unconfirmed people and places')}` +
+        (counts.journeys + counts.journey_members > 0
+          ? ` and ${plural(counts.journeys, 'automatically gathered journey')} (with ${plural(counts.journey_members, 'suggested membership')}) `
+          : ' ') +
         'will be removed. Every reading, card and note you wrote stays exactly as it is, and so do your own corrections. This cannot be undone.';
   return (
     <div className="flex flex-col items-end gap-2">

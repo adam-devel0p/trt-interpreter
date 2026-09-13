@@ -14,6 +14,9 @@ import { logger } from '@/observability/logger';
  * confirmed (their aliases and roles cascade). What stays: `metadata_overrides` (the user's
  * corrections — they re-apply on the next extraction), confirmed themes, user-linked
  * mentions, edited predictions, confirmed entities, merge receipts.
+ * Phase 07: journeys the user never touched (`user_confirmed = false`) go with their
+ * members and progression; `auto` / `pending` members of kept journeys go too (their
+ * evidence is being deleted). Accepted, renamed or hand-built journeys stay.
  */
 
 export interface AiArtifactTarget {
@@ -34,6 +37,8 @@ export const AI_ARTIFACT_TARGETS: readonly AiArtifactTarget[] = [
   },
   { table: 'predictions', where: [{ column: 'user_edited', op: 'eq', value: false }] },
   { table: 'entities', where: [{ column: 'user_confirmed', op: 'eq', value: false }] },
+  { table: 'journeys', where: [{ column: 'user_confirmed', op: 'eq', value: false }] },
+  { table: 'journey_members', where: [{ column: 'state', op: 'in', value: ['auto', 'pending'] }] },
 ];
 
 export const AI_ARTIFACT_TABLES = [
@@ -45,6 +50,8 @@ export const AI_ARTIFACT_TABLES = [
   'entity_mentions',
   'predictions',
   'entities',
+  'journeys',
+  'journey_members',
 ] as const;
 export type AiArtifactTable = (typeof AI_ARTIFACT_TABLES)[number];
 export type AiArtifactCounts = Record<AiArtifactTable, number>;

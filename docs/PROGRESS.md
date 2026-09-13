@@ -2,24 +2,30 @@
 
 The first thing to read in any new session. Update it at the end of every phase.
 
-**Current state:** Phase 06 complete — saved readings grow structured memory. The
-`extract_reading_metadata` job runs after save (cron, never the request), gated on consent and
-the `ai_extraction` flag (env default off; per-user `user_flags` rollout), writes append-only
-`extractions` (`extraction/1.0.0`, versioned, materialised before marked complete) and derives
-themes on a seeded taxonomy, `POSSIBILITY` predictions, and entities through the pure resolver
-(`domain/entities/resolve.ts`: exact / trigram / name↔descriptor / role channels, 0.85 · 0.60 ·
-0.08 thresholds, one question per reading, temporal roles never rewritten — trigger-enforced).
-The reading detail's *Connections* shows every inferred value as a labelled chip with "why?" and
-a one-tap correction; corrections are `metadata_overrides` that survive re-extraction and
-`reprocess_extractions`. *People & places* under Profile: rename, aliases, roles, merge with a
-receipt and undo (`apply_entity_merge` / `undo_entity_merge`), split, remove. Prompt context
-excludes tentative entities by construction. Purge, delete-AI-artifacts and export
-(`export/1.1.0`) cover all ten new tables; the journal filters by entity. Demo: Maya under four
-names with a partner → ex-partner change, an employer, a city, a live merge. Invariants live:
-`alias-merge-preserves-historical-roles`; `model-cannot-create-confirmed-fact` extended to
-memory rows. Full gate green (114 e2e). Owner-side deferrals: real-model eval for extraction
-(then flip the flag), as for 04.
-**Next phase:** [Phase 07 — Journeys](phases/phase-07-journeys.md)
+**Current state:** Phase 07 complete — journeys form themselves from evidence. After a
+reading's memory is materialised, a model-free step (`src/journeys/`, pure scoring in
+`src/domain/journeys/`) files it into active journeys at affinity ≥ 0.70, asks "Part of *X*?"
+inline at 0.50–0.70, and clusters what is still unfiled: ≥ 3 readings across ≥ 14 days sharing
+a resolved entity or a theme pair become an `active` journey, weaker shapes one dismissible
+`suggested` card (dismissal remembered for good). Deviations from the written formula, each
+forced by the fixture arc and documented in ALGORITHMS §2: entity overlap is the overlap
+coefficient against a majority *core*, theme overlap is directional, a suggestion floor of 0.25
+exists, only active/dormant journeys gather by assignment, and the entity resolver's journey
+signal is unavailable (not zero) when either side is in no journey. Naming is the consent- and
+flag-gated `propose_journey` job (`journey_proposal/1.0.0`); a rename pins the title. The
+Journey detail has all eight §6.5 sections from stored rows: honest header, interleaved
+timeline built on a `TimelineEntry` union (events/outcomes slot in), evidence-backed theme
+progression (`source_object_ids` non-empty by check), deck-native recurring symbols (Lust ≠
+Strength, Disks ≠ Pentacles), open loops, placeholders, disabled Ask; management: accept,
+dismiss, rename, close/reopen, merge with undo (`apply_journey_merge` / `undo_journey_merge`),
+split, delete, add, keep, remove with undo. Reading detail shows memberships with confidence
+treatment; Home shows the one suggestion; the journal filters by journey; purge, export
+(`export/1.2.0`) and delete-AI-artifacts cover the three tables. Demo: a mixed-deck *Me and
+Maya*, an RWS-only *The agency and ambition* with open loops and pending questions, three weak
+suggestions — all produced by the real pipeline. Full gate green (118 e2e). Owner-side
+deferrals: the comprehension check with an unfamiliar person, the real-model naming eval, then
+`FLAG_JOURNEY_AUTOCREATE`.
+**Next phase:** [Phase 08 — Events, outcomes, correlation](phases/phase-08-events-outcomes.md)
 
 ## Phase status
 
@@ -32,7 +38,7 @@ memory rows. Full gate green (114 e2e). Owner-side deferrals: real-model eval fo
 | 04 | [AI boundary + interpretation](phases/phase-04-ai-interpretation.md) | ⚠️ complete with deferrals | [report](phases/completed/phase-04-report.md) | 2026-09-13 · real-model eval + human baseline review need provider keys (owner) |
 | 05 | [Journal, search, export](phases/phase-05-journal-search.md) | ✅ complete | [report](phases/completed/phase-05-report.md) | 2026-09-13 · ← shippable journal; `removeUserStorage()` ready for 12's account job |
 | 06 | [Structured memory](phases/phase-06-structured-memory.md) | ⚠️ complete with deferrals | [report](phases/completed/phase-06-report.md) | 2026-09-13 · real-model extraction eval + flag default need provider keys (owner) |
-| 07 | [Journeys](phases/phase-07-journeys.md) | ⬜ not started | — | |
+| 07 | [Journeys](phases/phase-07-journeys.md) | ⚠️ complete with deferrals | [report](phases/completed/phase-07-report.md) | 2026-09-13 · comprehension check + real-model naming eval are owner tasks |
 | 08 | [Events, outcomes, correlation](phases/phase-08-events-outcomes.md) | ⬜ not started | — | |
 | 09 | [Retrieval + Ask My History](phases/phase-09-retrieval-ask.md) | ⬜ not started | — | ← MVP complete; run §22 study |
 | 10 | [Summaries + retrospectives](phases/phase-10-summaries-retrospectives.md) | ⬜ not started | — | |
@@ -95,6 +101,14 @@ Add anything a phase discovered but could not settle. Remove when resolved.
 - The mock extractor is English-only rule scaffolding; the real prompt has not been run. If
   real-model precision is poor, raise `TENTATIVE` toward the auto band (§4.4) — the resolver
   already leans tentative.
+- **Journeys with the mock extractor are theme-starved.** The demo notes were enriched with the
+  words the rule-based mock catches; with the real model theme overlap will be richer and the
+  suggestion floor (`SUGGEST_MIN_AFFINITY` 0.25) may need raising — watch suggestions per week
+  before flipping `FLAG_JOURNEY_AUTOCREATE`.
+- Batch discovery (demo seed, reprocess) surfaces every weak cluster of a history at once; the UI
+  offers one suggestion at a time. Incremental use surfaces them as they form.
+- Existing memberships are never re-scored by later corrections (by design); the one-tap remove
+  is the correction path. A "re-evaluate memberships" job is a possible Phase 12 item.
 - The two soft-deleted demo rows stay soft-deleted: nothing enqueues the `purge_deleted` sweep
   (`{readingId: null}`) yet — a cron entry or `pnpm jobs:sweep` is a Phase 12 ops item.
 
@@ -121,11 +135,11 @@ Phases append here when they defer something, so nothing is lost between session
 | Region-aware safety resources | 04 | 11/12 | No region known (`profiles.locale = 'en'`); international + US/UK lines shown |
 | ~~Purge `safety_flags` with the reading~~ | 04 | 05 ✅ | explicit remover in `src/privacy/purge.ts`, receipt counts it |
 | ~~Interpretations in journal list / export~~ | 04 | 05 ✅ | list preview = current `synthesis`; export carries every generation |
-| ~~Entity~~ / journey filters in the journal | 05 | 06 ✅ / 07 | entity landed in 06 (`entity=` + `EXISTS` on `entity_mentions`); journey follows the same three edits |
+| ~~Entity / journey filters in the journal~~ | 05 | 06 ✅ / 07 ✅ | `entity=` in 06, `journey=` in 07 (`EXISTS` on `journey_members`, state ≠ removed) |
 | ~~Extractions~~ + summaries in "Delete AI artifacts" and in the export | 05 | 06 ✅ / 10 | extractions, themes, mentions, predictions, entities in both (export/1.1.0); summaries in 10 |
 | Real-model `pnpm eval` for `extract_reading_metadata`, human read of the four baselines, then `FLAG_AI_EXTRACTION=true` | 06 | owner (any time) | no provider key; mock baseline recorded (recall 100 %, precision 88 %) |
 | Embedding channel for entity candidates (`embeddingSimilarity`) | 06 | 09 | needs entity context vectors; hook + threshold exist |
-| Journey overlap signal in resolution | 06 | 07 | renormalised out until journeys exist |
+| ~~Journey overlap signal in resolution~~ | 06 | 07 ✅ | `loadJourneyLinks()`; null (not zero) when either side is in no journey; arcs pass under three variants |
 | Re-score `links` on merge / split; prediction retraction on reprocess | 06 | 08 | no links / outcomes yet; ids kept stable |
 | Per-reading lock against overlapping extraction jobs | 06 | 12 | dedupe covers `queued` only |
 | `MemoryPanel` / entity controls in `/dev/ui` | 06 | 12 | islands bound to actions; `InferredChip` is in the gallery |
@@ -135,3 +149,10 @@ Phases append here when they defer something, so nothing is lost between session
 | `purge_deleted` sweep scheduling (`{readingId: null}`) | 05 | 12 | cron entry / script; today only per-reading jobs are enqueued |
 | Purge e2e users' export archives | 05 | 12 | with the `%@test.local` user purge |
 | `rng.deck_id` on a digital reading whose deck was changed in edit | 05 | when `rng` is surfaced | the draw record stays as the audit of the original draw |
+| Comprehension check of the Journey screen with an unfamiliar person (§22), answer recorded verbatim in the 07 report | 07 | owner (any time) | no second person in the session |
+| Real-model `pnpm eval` for `propose_journey`, human read of the three baselines, then `FLAG_JOURNEY_AUTOCREATE=true` | 07 | owner (any time) | no provider key; mock baselines recorded |
+| `semantic_similarity` (0.25 weight) in journey affinity | 07 | 09 | needs retrieval-document vectors; renormalised out meanwhile |
+| Events, outcomes, connections on the Journey screen; polymorphic-member RLS for `life_event` rows | 07 | 08 | `TimelineEntry` union and placeholders ready |
+| `journey_narrative` header; scoped "Ask about this journey" | 07 | 10 / 09 | deterministic header and a disabled button until then |
+| `MemberControls` / `SuggestedJourneyCard` / `JourneyPanel` in `/dev/ui` | 07 | 12 | islands bound to actions |
+| Re-evaluate existing memberships after many corrections; journey scroll instrumentation at 100+ | 07 | 12 | one-tap remove is the correction path; 100-member read is 5 queries |

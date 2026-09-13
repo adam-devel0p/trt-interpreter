@@ -26,7 +26,13 @@ import {
 import { extractionPayloadSchema } from '@/domain/extraction/schema';
 import { modelBorn } from '@/domain/facts/writeGate';
 import { logger } from '@/observability/logger';
-import { candidatesForMention, loadCandidates, type CandidateSet } from './candidates';
+import { materializeJourneysSafely } from '@/journeys/materialize';
+import {
+  candidatesForMention,
+  loadCandidates,
+  loadJourneyLinks,
+  type CandidateSet,
+} from './candidates';
 
 /**
  * Materialise a reading's structured memory from its newest extraction **with the user's
@@ -127,6 +133,9 @@ export async function materializeReading(
   const themeCount = await materializeThemes(userId, readingId, extraction.id, eff);
   const ent = await materializeEntities(userId, readingId, extraction.id, at, eff);
   const predictionCount = await materializePredictions(userId, readingId, extraction.id, eff);
+  // Phase 07: assignment and discovery run on the resolved mentions and themes just written.
+  // Derived from derived — a failure here is logged and never fails the extraction.
+  await materializeJourneysSafely(readingId);
 
   logger.info('memory.materialized', {
     userId,
@@ -291,6 +300,8 @@ async function materializeEntities(
   if (stale.length) await db.delete(entityMentions).where(inArray(entityMentions.id, stale));
 
   let candidates: CandidateSet = await loadCandidates(userId);
+  // Journey signal (ALGORITHMS §1): the journeys this reading already sits in.
+  const journeyIds = (await loadJourneyLinks(userId)).byReading.get(readingId) ?? [];
   let created = 0;
   let asks = existing.filter(
     (m) => m.resolution !== 'user' && wanted.has(m.mentionNormalized) && m.askCandidates?.length,
@@ -382,7 +393,10 @@ async function materializeEntities(
 
     // 4. Resolve.
     const scored = await candidatesForMention(userId, candidates, m);
-    let decision = resolveMention(m, scored);
+    let decision = resolveMention(m, scored, {
+      journeysExist: candidates.journeysExist,
+      journeyIds,
+    });
     if (decision.kind === 'ask' && asks >= MAX_ASKS_PER_OBJECT) {
       decision = {
         kind: 'tentative',

@@ -319,13 +319,49 @@ moves chosen mentions to a new user-confirmed entity. `search_readings(p)` gaine
 
 ## Journeys — Phase 07
 
-**`journeys`** — `id`, `user_id`, `title`, `summary text null`, `status journey_status`,
-`started_at`, `last_activity_at`, `ended_at null`, `confidence numeric`, `created_by created_by`,
-`accepted_at timestamptz null` (user accepted a suggestion), `dismissed_at`.
-**`journey_members`** — `journey_id`, `object_type enum('reading','life_event','outcome')`, `object_id`,
-`confidence`, `created_by`, `user_confirmed boolean`, `added_at`. Unique `(journey_id, object_type, object_id)`.
-**`journey_theme_progression`** — `journey_id`, `sequence_index`, `theme_id`, `period_start`,
-`period_end`, `source_object_ids uuid[]` (§6.5 theme progression, always evidence-backed).
+Built in `0008_journeys` (Drizzle: `src/db/schema/journeys.ts`). A journey is an evolving
+subject grown from evidence by rule code (`src/domain/journeys`, executed by
+`src/journeys/`); the model only proposes a title (`propose_journey`), and any user action
+pins what it touched. Rule-side writes come from the assignment step after extraction
+(service role); every user action runs through RLS.
+
+**`journeys`** — `id`, `user_id`, `title`, `title_source created_by` (`rule` = placeholder
+from what the members share, `model` = proposed, `user` = renamed, which pins it),
+`rationale` (the model's one-line reason for its title, never a fact), `summary` (10),
+`status journey_status` (`suggested | active | dormant | closed`), `started_at`,
+`last_activity_at`, `ended_at`, `confidence numeric(4,3)` (mean pairwise affinity of the
+cluster; 1 for user-created), `created_by` (`rule` or `user` — never `model`), `reasons
+text[]` (sentences, no numbers), `user_confirmed` (default false; set by accept, rename,
+close, add, keep, remove, merge, split), `accepted_at`, `dismissed_at` (a dismissed
+suggestion stays, hidden, so it is never re-suggested — §19), `merged_into_id` (self FK, set
+null; check: only with `status = 'closed'`), `merge_snapshot jsonb` (moved member ids and
+dropped duplicate rows, for `undo_journey_merge`), `model_id`, `prompt_version`,
+`schema_version`, `named_at` (provenance of a proposed title), `created_at`, `updated_at`.
+Four policies keyed on `user_id`.
+
+**`journey_members`** — `id`, `user_id`, `journey_id` (cascade), `object_type` (`reading |
+life_event | outcome`, check), `object_id`, `confidence`, `created_by`, `state` (`auto |
+pending | confirmed | removed`, check): `auto` = affinity ≥ 0.70, rule-added, removable in
+one tap; `pending` = 0.50–0.70, asked about inline on the reading; `confirmed` = the user
+accepted or added it; `removed` = the user took it out — the row stays so assignment never
+re-adds it, and undo flips it back. `signals jsonb`, `reasons text[]` (the "why?"),
+`added_at`, `updated_at`. Unique `(journey_id, object_type, object_id)`. Four policies; insert
+and update require the journey and (for readings) the reading to be the caller's.
+
+**`journey_theme_progression`** — `id`, `user_id`, `journey_id` (cascade), `sequence_index`,
+`theme_id` (cascade), `period_start date`, `period_end date`, `source_object_ids uuid[]`
+**not null with `cardinality ≥ 1` by check** — a step without evidence is not representable.
+Recomputed by `refreshJourney()` from live members (not removed, reading not deleted) after
+every assignment, user action and purge. Unique `(journey_id, sequence_index)`. Four policies,
+parent must be own.
+
+**Functions** (`SECURITY INVOKER`, granted to `authenticated, service_role`):
+`apply_journey_merge(p_source, p_target)` moves the source's members to the target (rows the
+target already holds are dropped into the snapshot), closes the source with `merged_into_id`
+and pins both; `undo_journey_merge(p_source)` restores it exactly;
+`apply_journey_split(p_source, p_title, p_member_ids) → uuid` moves chosen member rows to a
+new user-created journey (refuses moving every member). `search_readings(p)` gained
+`journey_id` (EXISTS on `journey_members`, `state <> 'removed'`).
 
 ---
 

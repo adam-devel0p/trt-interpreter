@@ -17,6 +17,8 @@ import * as extractReading from './tasks/extract_reading_metadata';
 import { mockExtraction } from './tasks/extract_reading_metadata/mock';
 import * as interpretReading from './tasks/interpret_reading';
 import { mockInterpretation } from './tasks/interpret_reading/mock';
+import * as proposeJourney from './tasks/propose_journey';
+import { mockJourneyProposal } from './tasks/propose_journey/mock';
 import { DbTelemetry, MemoryTelemetry, MultiTelemetry } from './telemetry';
 import type { EmbedRequest, EmbedResult } from './types';
 
@@ -37,6 +39,10 @@ const VERSIONS: Record<string, { promptVersion: string; schemaVersion: string }>
     promptVersion: extractReading.PROMPT_VERSION,
     schemaVersion: extractReading.SCHEMA_VERSION,
   },
+  propose_journey: {
+    promptVersion: proposeJourney.PROMPT_VERSION,
+    schemaVersion: proposeJourney.SCHEMA_VERSION,
+  },
 };
 
 export function taskVersions(task: string): { promptVersion: string; schemaVersion: string } {
@@ -49,6 +55,7 @@ export function mockFixtures() {
     interpret_reading: { default: mockInterpretation },
     classify_safety: { default: mockSafety },
     extract_reading_metadata: { default: mockExtraction },
+    propose_journey: { default: mockJourneyProposal },
   };
 }
 

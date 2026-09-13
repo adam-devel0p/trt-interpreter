@@ -1,7 +1,9 @@
 import Link from 'next/link';
 import { FIRST_READING_PATH } from '@/auth/routes';
 import { getSessionClient, requireUser } from '@/auth/session';
+import { nextSuggestedJourney } from '@/db/queries/journeys';
 import { listReadings } from '@/db/queries/readings';
+import { SuggestedJourneyCard } from '../journey/suggested-card';
 import { Button } from '@/ui/components/button';
 import { EmptyState } from '@/ui/components/empty-state';
 import { PageHeader } from '@/ui/components/page-header';
@@ -17,9 +19,11 @@ export const dynamic = 'force-dynamic';
  */
 export default async function Page() {
   await requireUser();
-  const open = (
-    await listReadings(await getSessionClient(), { limit: 1, followUp: 'unresolved' })
-  )[0];
+  const client = await getSessionClient();
+  const [open, suggested] = await Promise.all([
+    listReadings(client, { limit: 1, followUp: 'unresolved' }).then((r) => r[0]),
+    nextSuggestedJourney(client),
+  ]);
   return (
     <>
       <PageHeader title="Home" />
@@ -68,10 +72,14 @@ export default async function Page() {
         <h2 id="insight-heading" className="mb-3 font-serif text-xl">
           Worth a look
         </h2>
-        <EmptyState
-          title="No insight yet"
-          description="After a few readings, one connection at a time will appear here — with the entries it came from."
-        />
+        {suggested ? (
+          <SuggestedJourneyCard journey={suggested} />
+        ) : (
+          <EmptyState
+            title="No insight yet"
+            description="After a few readings, one connection at a time will appear here — with the entries it came from."
+          />
+        )}
       </section>
     </>
   );

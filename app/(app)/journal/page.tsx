@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { FIRST_READING_PATH } from '@/auth/routes';
 import { getSessionClient, requireUser } from '@/auth/session';
 import { listDecks, listSpreads } from '@/db/queries/decks';
+import { listJourneys, orderForList } from '@/db/queries/journeys';
 import { listEntities } from '@/db/queries/memory';
 import { countReadings, searchJournal } from '@/db/queries/journal';
 import { hasActiveFilters, parseJournalParams } from '@/domain/journal/filters';
@@ -28,11 +29,15 @@ export default async function JournalPage({
   await requireUser();
   const client = await getSessionClient();
   const filters = parseJournalParams(raw);
-  const [page, decks, spreads, entities, total] = await Promise.all([
+  const [page, decks, spreads, entities, journeys, total] = await Promise.all([
     searchJournal(client, filters),
     listDecks(client),
     listSpreads(client),
     listEntities(client),
+    listJourneys(client).then((all) => {
+      const o = orderForList(all);
+      return [...o.active, ...o.rest, ...o.suggested];
+    }),
     countReadings(client),
   ]);
   const active = hasActiveFilters(filters);
@@ -62,6 +67,7 @@ export default async function JournalPage({
             decks={decks.map((d) => ({ slug: d.slug, name: d.name }))}
             spreads={spreads.map((s) => ({ id: s.id, name: s.name }))}
             entities={entities.map((e) => ({ id: e.id, name: e.canonical_label }))}
+            journeys={journeys.map((j) => ({ id: j.id, title: j.title }))}
           />
           <JournalList
             key={JSON.stringify(rawParams)}

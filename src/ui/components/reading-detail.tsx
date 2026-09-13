@@ -29,6 +29,11 @@ export interface ReadingDetailSlots {
    * section explains what will appear here.
    */
   connections?: React.ReactNode;
+  /**
+   * Journeys (Phase 07): the journeys this reading sits in, with confidence treatment
+   * (suggested / asked / yours) and the manual add. Rendered inside Connections.
+   */
+  journeys?: React.ReactNode;
 }
 
 export interface ReadingDetailProps {
@@ -159,6 +164,14 @@ export function ReadingDetail({ reading, justSaved = false, slots, cardHref }: R
         <h2 id="connections-h" className="mb-2 font-serif text-xl">
           Connections
         </h2>
+        {slots.journeys ? (
+          <div className="mb-4" data-testid="reading-journeys">
+            <h3 className="mb-1.5 text-xs font-medium tracking-wide text-fg-muted uppercase">
+              Journeys
+            </h3>
+            {slots.journeys}
+          </div>
+        ) : null}
         {slots.connections ?? (
           <p className="rounded-card border border-dashed border-hairline-strong px-4 py-3 text-sm text-fg-muted">
             The people, places and themes in this reading — and later, life events, journeys and

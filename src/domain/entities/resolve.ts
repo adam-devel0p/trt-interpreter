@@ -243,14 +243,21 @@ function kindAgreement(m: MentionInput, c: CandidateEntity): number {
   return 0;
 }
 
+/**
+ * Journey overlap (Phase 07): Jaccard between the journeys the mention's object sits in and
+ * the journeys the candidate has been mentioned in. Unavailable (renormalised out) until the
+ * user has journeys, and also when either side is in none — a reading outside every journey
+ * says nothing about who it means, and must not drag every candidate down by the signal's
+ * weight the moment the user's first journey appears.
+ */
 function journeyOverlap(c: CandidateEntity, opts: ResolveOptions): number | null {
   if (!opts.journeysExist) return null;
   const mine = new Set(opts.journeyIds ?? []);
   const theirs = c.journeyIds ?? [];
-  if (mine.size === 0 && theirs.length === 0) return 0;
+  if (mine.size === 0 || theirs.length === 0) return null;
   const shared = theirs.filter((j) => mine.has(j)).length;
   const union = new Set([...mine, ...theirs]).size;
-  return union === 0 ? 0 : shared / union;
+  return shared / union;
 }
 
 /** Score one candidate against a mention. Exported for the boundary tests. */

@@ -1,0 +1,26 @@
+{
+  "name": "theme-only-pair",
+  "description": "Two readings six weeks apart sharing only health and routine themes, no person or place. A thematic title at medium confidence — or low, which keeps the placeholder — is acceptable; a confident claim is not.",
+  "current_title": "Health and stability",
+  "shared_entities": [],
+  "shared_themes": ["Health", "Stability"],
+  "entries": [
+    {
+      "occurred_on": "2026-07-30",
+      "question": "What does the autumn hold for my health?",
+      "entities": [],
+      "themes": ["Health", "Patience", "Stability"]
+    },
+    {
+      "occurred_on": "2026-09-10",
+      "question": "Will the new routine stick?",
+      "entities": [],
+      "themes": ["Stability", "Change", "Confidence", "Health"]
+    }
+  ],
+  "expect": {
+    "confidence_any": ["medium", "low"],
+    "must_mention": null,
+    "forbid": ["will", "recover", "illness"]
+  }
+}

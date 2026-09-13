@@ -3,6 +3,7 @@ import path from 'node:path';
 import { getTableConfig } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
 import { interpretations } from '@/db/schema/ai';
+import { journeyMembers, journeys } from '@/db/schema/journeys';
 import { entities, entityMentions, objectThemes, predictions } from '@/db/schema/memory';
 import {
   MODEL_ALLOWED,
@@ -178,5 +179,38 @@ describe('model-cannot-create-confirmed-fact', () => {
     expect(materialize).toMatch(
       /resolution: 'user',[\s\S]*reasons: \['You linked this yourself'\]/,
     );
+  });
+
+  it('5 · journeys and memberships written by rule code are never confirmed or user-sourced', () => {
+    // Schema: user_confirmed defaults false; a membership state is one of four values.
+    const j = getTableConfig(journeys);
+    const confirmed = j.columns.find((c) => c.name === 'user_confirmed')!;
+    expect(confirmed.notNull).toBe(true);
+    expect(String(confirmed.default)).toBe('false');
+    const m = getTableConfig(journeyMembers);
+    expect(m.checks.map((c) => c.name)).toContain('journey_members_state_check');
+    const migration = readFileSync(path.resolve('src/db/migrations/0008_journeys.sql'), 'utf8');
+    expect(migration).toMatch(/"user_confirmed" boolean DEFAULT false NOT NULL/);
+    expect(migration).toMatch(
+      /"journey_members_state_check" CHECK \("journey_members"\."state" in \('auto', 'pending', 'confirmed', 'removed'\)\)/,
+    );
+    // Rule code: every journey and member it inserts is `created_by: 'rule'`, unconfirmed, and
+    // a member's state comes from the assignment decision (`auto` | `pending`) or is `auto`
+    // for a discovered cluster — never `confirmed`. The naming job touches the title only
+    // where `title_source <> 'user'`.
+    const assign = readFileSync(path.resolve('src/journeys/assign.ts'), 'utf8');
+    const discover = readFileSync(path.resolve('src/journeys/discover.ts'), 'utf8');
+    for (const src of [assign, discover]) {
+      expect(src).not.toMatch(/state: 'confirmed'/);
+      expect(src).not.toMatch(/createdBy: 'user'/);
+      expect(src).not.toMatch(/userConfirmed: true/);
+    }
+    expect(assign).toMatch(/state: decision/);
+    expect(assign).toMatch(/if \(decision === 'none'\) continue/);
+    expect(discover).toMatch(/userConfirmed: false/);
+    const propose = readFileSync(path.resolve('src/journeys/propose.ts'), 'utf8');
+    expect(propose).toMatch(/ne\(journeys\.titleSource, 'user'\)/);
+    expect(propose).not.toMatch(/userConfirmed/);
+    expect(propose).not.toMatch(/acceptedAt/);
   });
 });

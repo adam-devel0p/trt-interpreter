@@ -40,6 +40,8 @@ describe('raw-text-never-overwritten', () => {
       'src/export',
       // Phase 06: extraction reads the words and writes only derived tables.
       'src/memory',
+      // Phase 07: journeys derive from derived rows and the question; they never write it.
+      'src/journeys',
     ].flatMap(files);
     expect(derived.length).toBeGreaterThan(20);
     const offenders: string[] = [];

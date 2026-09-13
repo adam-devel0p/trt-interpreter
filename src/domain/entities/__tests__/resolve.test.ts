@@ -21,7 +21,7 @@ import {
   TRIGRAM_MIN,
   WEIGHTS,
 } from '../thresholds';
-import { SimStore } from './simulate';
+import { SimStore, type SimJourneys } from './simulate';
 
 /**
  * Entity resolution against the hand-authored histories in `fixtures/history/` (spec §7.1,
@@ -56,86 +56,107 @@ const at = (day: number) => new Date(T0 + day * 86_400_000).toISOString();
 const dayOf = (spec: string | null) =>
   spec === null ? null : at(Number(spec.replace('day ', ''))).slice(0, 10);
 
+/**
+ * Walk one arc through the simulator. `journeys` switches the Phase 07 signal on: the arcs
+ * must decide the same way whether the user has no journeys, has journeys the reading and
+ * its entities all share, or has journeys the reading is not part of.
+ */
+function walkArc(fx: HistoryFixture, journeys: SimJourneys | null) {
+  const store = new SimStore();
+  store.journeys = journeys;
+  for (const step of fx.steps) {
+    const when = at(step.day);
+    for (const c of step.userCreates ?? []) store.userCreate(c.label, c.kind, c.roles, when);
+    for (const link of step.userLinks ?? []) {
+      const target = store.byLabel(link.entity)!;
+      const m: MentionInput = {
+        text: link.text,
+        kind: target.kind,
+        relation: null,
+        occurredAt: when,
+      };
+      // The user answered: the relation the descriptor carries becomes the role.
+      store.userLink({ ...m, relation: link.text.includes('ex') ? 'ex-partner' : null }, target.id);
+    }
+    for (const [i, mention] of step.mentions.entries()) {
+      const exp = step.expect[i]!;
+      expect(exp.text, `${fx.name} day ${step.day}`).toBe(mention.text);
+      const before = new Map(store.entities.map((e) => [e.id, e.canonicalLabel]));
+      const decision = store.mention({ ...mention, occurredAt: when });
+      const label = `${fx.name} day ${step.day} "${mention.text}"`;
+      // A journey the reading and the entity share is real evidence: it may lift a
+      // tentative link to auto (same entity), never anything else.
+      const lifted =
+        journeys?.objectJourneyIds.length &&
+        exp.decision === 'tentative' &&
+        decision.kind === 'auto';
+      if (lifted) {
+        // From here the arc's later expectations describe a history that no longer exists
+        // (the entity gained the role the link carried); the steps so far are verified.
+        expect(before.get((decision as { entityId: string }).entityId), label).toBe(exp.entity);
+        return;
+      }
+      expect(decision.kind, `${label} → ${JSON.stringify(decision)}`).toBe(exp.decision);
+      if (decision.kind === 'new') {
+        const created = store.entities.at(-1)!;
+        expect(created.canonicalLabel, label).toBe(exp.entity);
+        expect(
+          created.roles.map((r) => r.role),
+          label,
+        ).toEqual(exp.roles ?? []);
+      }
+      if (decision.kind === 'auto' || decision.kind === 'tentative') {
+        expect(before.get(decision.entityId), label).toBe(exp.entity);
+        if (exp.renamedTo) expect(store.byId(decision.entityId).canonicalLabel).toBe(exp.renamedTo);
+        if (exp.entityRoles)
+          expect(
+            store
+              .byId(decision.entityId)
+              .roles.filter((r) => !r.validTo)
+              .map((r) => r.role),
+          ).toEqual(exp.entityRoles);
+        if (decision.kind === 'tentative') {
+          // A tentative link changes nothing on the entity.
+          expect(store.byId(decision.entityId).canonicalLabel).toBe(before.get(decision.entityId));
+        }
+      }
+      if (decision.kind === 'ask') {
+        const roles = decision.candidates.map((c) => c.entity.roles.map((r) => r.role));
+        expect(roles.map((r) => r.join(',')).sort()).toEqual(
+          (exp.candidatesRoles ?? []).map((r) => r.join(',')).sort(),
+        );
+      }
+    }
+    for (const [label, roles] of Object.entries(step.expectRoles ?? {})) {
+      const e = store.byLabel(label)!;
+      expect(
+        e.roles.map((r) => ({ role: r.role, validFrom: r.validFrom, validTo: r.validTo })),
+        `${fx.name} day ${step.day} roles of ${label}`,
+      ).toEqual(
+        roles.map((r) => ({
+          role: r.role,
+          validFrom: dayOf(r.validFrom),
+          validTo: dayOf(r.validTo),
+        })),
+      );
+    }
+  }
+}
+
+const JOURNEY_VARIANTS: [string, SimJourneys | null][] = [
+  ['no journeys', null],
+  ['a shared journey', { objectJourneyIds: ['j1'], entityJourneyIds: ['j1'] }],
+  ['journeys elsewhere', { objectJourneyIds: [], entityJourneyIds: ['j1'] }],
+];
+
 describe('entity resolution · fixtures/history', () => {
   const files = readdirSync(FIXTURES_DIR).filter((f) => f.endsWith('.json'));
   expect(files.length).toBeGreaterThanOrEqual(3);
 
   for (const file of files) {
     const fx = JSON.parse(readFileSync(path.join(FIXTURES_DIR, file), 'utf8')) as HistoryFixture;
-    it(`${fx.name}: ${fx.description.split('.')[0]}`, () => {
-      const store = new SimStore();
-      for (const step of fx.steps) {
-        const when = at(step.day);
-        for (const c of step.userCreates ?? []) store.userCreate(c.label, c.kind, c.roles, when);
-        for (const link of step.userLinks ?? []) {
-          const target = store.byLabel(link.entity)!;
-          const m: MentionInput = {
-            text: link.text,
-            kind: target.kind,
-            relation: null,
-            occurredAt: when,
-          };
-          // The user answered: the relation the descriptor carries becomes the role.
-          store.userLink(
-            { ...m, relation: link.text.includes('ex') ? 'ex-partner' : null },
-            target.id,
-          );
-        }
-        for (const [i, mention] of step.mentions.entries()) {
-          const exp = step.expect[i]!;
-          expect(exp.text, `${fx.name} day ${step.day}`).toBe(mention.text);
-          const before = new Map(store.entities.map((e) => [e.id, e.canonicalLabel]));
-          const decision = store.mention({ ...mention, occurredAt: when });
-          const label = `${fx.name} day ${step.day} "${mention.text}"`;
-          expect(decision.kind, `${label} → ${JSON.stringify(decision)}`).toBe(exp.decision);
-          if (decision.kind === 'new') {
-            const created = store.entities.at(-1)!;
-            expect(created.canonicalLabel, label).toBe(exp.entity);
-            expect(
-              created.roles.map((r) => r.role),
-              label,
-            ).toEqual(exp.roles ?? []);
-          }
-          if (decision.kind === 'auto' || decision.kind === 'tentative') {
-            expect(before.get(decision.entityId), label).toBe(exp.entity);
-            if (exp.renamedTo)
-              expect(store.byId(decision.entityId).canonicalLabel).toBe(exp.renamedTo);
-            if (exp.entityRoles)
-              expect(
-                store
-                  .byId(decision.entityId)
-                  .roles.filter((r) => !r.validTo)
-                  .map((r) => r.role),
-              ).toEqual(exp.entityRoles);
-            if (decision.kind === 'tentative') {
-              // A tentative link changes nothing on the entity.
-              expect(store.byId(decision.entityId).canonicalLabel).toBe(
-                before.get(decision.entityId),
-              );
-            }
-          }
-          if (decision.kind === 'ask') {
-            const roles = decision.candidates.map((c) => c.entity.roles.map((r) => r.role));
-            expect(roles.map((r) => r.join(',')).sort()).toEqual(
-              (exp.candidatesRoles ?? []).map((r) => r.join(',')).sort(),
-            );
-          }
-        }
-        for (const [label, roles] of Object.entries(step.expectRoles ?? {})) {
-          const e = store.byLabel(label)!;
-          expect(
-            e.roles.map((r) => ({ role: r.role, validFrom: r.validFrom, validTo: r.validTo })),
-            `${fx.name} day ${step.day} roles of ${label}`,
-          ).toEqual(
-            roles.map((r) => ({
-              role: r.role,
-              validFrom: dayOf(r.validFrom),
-              validTo: dayOf(r.validTo),
-            })),
-          );
-        }
-      }
-    });
+    for (const [variant, journeys] of JOURNEY_VARIANTS)
+      it(`${fx.name} (${variant}): ${fx.description.split('.')[0]}`, () => walkArc(fx, journeys));
   }
 });
 
@@ -323,6 +344,20 @@ describe('entity resolution · thresholds sit on the right side of every boundar
     expect(withoutShared.signals.journey_overlap).toBe(0);
     expect(withShared.score).toBeGreaterThan(withoutShared.score);
     expect(without.signals.alias_exactness).toBe(ALIAS_EXACT);
+    // No data on one side — the reading is in no journey, or the entity is in none — is not
+    // evidence against: the signal is unavailable, not zero.
+    const outside = scoreCandidate(mention('Alex', { relation: 'friend' }), c, {
+      journeysExist: true,
+      journeyIds: [],
+    });
+    expect(outside.available).not.toContain('journey_overlap');
+    expect(outside.score).toBe(without.score);
+    const unplaced = scoreCandidate(
+      mention('Alex', { relation: 'friend' }),
+      { ...c, journeyIds: [] },
+      { journeysExist: true, journeyIds: ['j1'] },
+    );
+    expect(unplaced.available).not.toContain('journey_overlap');
   });
 
   it('reasons are human sentences that name the evidence, never numbers', () => {

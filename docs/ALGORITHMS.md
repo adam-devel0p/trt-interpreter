@@ -109,37 +109,95 @@ Measured on the fixtures (mock provider, `pnpm eval --dry`): entity recall 100 %
 ## 2. Journey assignment (§6.5, FR-10)
 
 A Journey is an evolving real-life subject, not a tag. The user must never be made to file things.
+Implemented in Phase 07: `src/domain/journeys/` (pure — `affinity.ts`, `cluster.ts`,
+`progression.ts`, `symbols.ts`), constants in `thresholds.ts`, executed by `src/journeys/`
+(`assign.ts`, `discover.ts`, `refresh.ts`) as the last step of `materializeReading()`; every
+boundary is covered by `__tests__/affinity.test.ts`, `cluster.test.ts` and the
+`fixtures/history/journeys/journey-arcs.json` arc.
 
 ### Assignment of a new reading/event to existing journeys
 ```
-affinity = 0.35·entity_overlap        // Jaccard over resolved, non-tentative entities
-         + 0.25·semantic_similarity   // retrieval-document cosine vs journey centroid
-         + 0.20·theme_overlap
-         + 0.10·question_similarity   // vs the journey's representative questions
-         + 0.10·temporal_activity     // journey active in last 60 days
+affinity = 0.35·entity_overlap        // overlap coefficient vs the journey's core entities
+         + 0.25·semantic_similarity   // retrieval-document cosine vs journey centroid (Phase 09)
+         + 0.20·theme_overlap         // share of the object's theme weight the journey carries
+         + 0.10·question_similarity   // best token Jaccard vs the journey's questions
+         + 0.10·temporal_activity     // 1 within 60 days of a member, linear to 0 over 120 more
 ```
-- affinity ≥ **0.70** → auto-assign (`created_by='model'`, `user_confirmed=false`, silently visible
-  in the Journey, removable in one tap).
-- **0.50**–0.70 → assign as `pending` and surface "Part of *Moving to Thailand*?" inline on the
-  reading detail, not as a blocking modal.
+- **Inputs** (`ObjectFeatures`, built by `src/journeys/features.ts` in a fixed number of
+  queries): resolved entities from `auto` + `user` mentions only — a tentative link never
+  files a reading; theme slugs with weights from `object_themes ⋈ themes`; the question as
+  written (tokenised, stopwords dropped, lightly stemmed); the date.
+- **Unavailable signals are renormalised out**, as in §1: `semantic_similarity` needs
+  vectors on both sides and is absent until Phase 09, so today the four remaining weights
+  are rescaled over 0.75. Thresholds keep their meaning now and later.
+- **Entity overlap** is the overlap coefficient (`|R ∩ core| / min(|R|, |core|)`) against the
+  journey's *core* — entities mentioned by at least half of its members
+  (`CORE_ENTITY_SHARE = 0.5`). A plain Jaccard filed readings that name two people wrongly
+  on the fixture arc (a reading about Maya *and* Leeds is still about Maya), and a passing
+  mention in a long journey is not what the journey is about.
+- **Theme overlap** is directional: Σ `w_R(slug) · share_J(slug)` / Σ `w_R(slug)` — how much
+  of what this reading is about the journey is also about. A journey about many things does
+  not dilute a reading that shares its core theme. Pair scores (below) average both directions.
+- affinity ≥ **0.70** → auto-assign (`state = 'auto'`, `created_by = 'rule'`, silently visible in
+  the Journey, removable in one tap).
+- **0.50**–0.70 → `state = 'pending'`: "Part of *Me and Maya*?" inline on the reading detail
+  (and under the journey's timeline), never a blocking modal. A shared entity alone, while
+  the journey is active, scores exactly 0.60 — a question, not a filing; a shared theme or
+  a similar question lifts it to auto.
 - < 0.50 → no assignment.
+- Only **active or dormant** journeys gather readings by assignment; a `suggested` journey is
+  a hypothesis the user has not accepted, and a `closed` one is finished. A row the reading
+  already has in a journey — any state, including `removed` — is never re-decided; only its
+  signals and reasons are refreshed (the same rule §1 applies to entity links).
+- Every membership carries `signals` and `reasons` — sentences naming the evidence, never
+  numbers ("Both mention Maya", "Shares the themes Distance and Communication", "Happened
+  while this was active").
 
 ### Journey creation
-- Create automatically when **≥ 3 objects** cluster with pairwise affinity ≥ 0.60 spanning
-  **≥ 14 days**, and at least one resolved entity or a stable theme pair is shared.
-  `status='active'`, title from `propose_journey`, `created_by='model'`.
-- Create as `status='suggested'` when the cluster is 2 objects or the signal is theme-only. Suggested
-  journeys appear on Home as a single dismissible card; dismissal is remembered.
-- The user can create, rename, merge, split, close and reopen journeys at any time; any user action
-  pins the title against model renaming.
+Runs over the user's readings not filed in an active, dormant or closed journey (`pending`
+counts as filed: an open question must not also seed a second journey; members of open
+*suggested* journeys stay in the pool). Pairwise affinity, then greedy clique growth — the
+strongest pair seeds a cluster, which grows by objects that clear the floor against **every**
+current member — in two passes:
+- **Active floor 0.60** (`CLUSTER_MIN_AFFINITY`): a cluster of **≥ 3 objects** spanning
+  **≥ 14 days** that shares a resolved entity across every member, or a stable theme pair
+  (two slugs every member carries), becomes `status = 'active'`, `created_by = 'rule'`,
+  title from `placeholderTitle()` (the shared entity, else the shared themes, else the
+  strongest theme) until `propose_journey` names it. Anything weaker at this floor (two
+  objects, a short span, no shared anchor) is `suggested`.
+- **Suggestion floor 0.25** (`SUGGEST_MIN_AFFINITY`) over the leftovers: about half of two
+  readings' theme weight in common while both are active reaches it; a shared entity or a
+  theme pair is still required, so a lone theme in common never becomes a journey.
+- A cluster that contains an open suggestion **grows** it (and promotes it to `active` when
+  it now meets the active criteria) instead of duplicating it; a cluster that adds nothing
+  to one is skipped. A cluster whose every member sat in a **dismissed** journey is dropped
+  — dismissal is remembered for good and only materially new evidence re-suggests (§19).
+- Discovery is bounded to the newest 200 unassigned objects (`DISCOVERY_MAX_OBJECTS`);
+  pairwise scoring is quadratic.
+- **Status upkeep** (`refreshJourney`): `active` ⇄ `dormant` at 120 days without a new
+  object (`DORMANT_AFTER_DAYS`); a `suggested` journey the user has not dismissed becomes
+  `active` once its live members satisfy the active criteria.
+- The user can create, rename, merge (with undo), split, close, reopen and delete journeys at
+  any time, and add, keep, remove (with undo) members; any user action sets
+  `user_confirmed` and a rename sets `title_source = 'user'`, which pins the title against
+  model renaming (the naming job writes only `where title_source <> 'user'`).
 - Journeys hold readings from both deck systems; **the UI always shows which deck and which card
   actually appeared** (§6.7 cross-deck history). Theme progression may generalise; card display never does.
 
 ### Theme progression (FR-17)
-Bucket a journey's objects into periods (adaptive: weekly if dense, monthly if sparse), take the top
-1–2 themes per bucket by weight, collapse consecutive duplicates, and keep `source_object_ids` for
-every step. Render as a labelled sequence (`uncertainty → conflict → decision → stability`), never as a
-chart. A step with fewer than 2 supporting objects is not shown.
+`themeProgression()`: bucket a journey's live objects into periods — weekly when the journey
+averages ≥ 1.5 objects a week, monthly otherwise — take the top 2 themes per bucket by summed
+weight, collapse consecutive duplicates (periods and sources merge), and keep
+`source_object_ids` for every step. A step with fewer than **2** supporting objects is not
+shown (`PROGRESSION_MIN_SUPPORT`). Rendered as a labelled sequence (`uncertainty → conflict →
+decision`) with a screen-reader sentence, never as a chart; each step opens to its sources.
+
+### Recurring symbols (§3.3)
+`recurringSymbols()`: cards by their own id, suits by `(deck, suit)`, themes by slug, each
+counted over distinct objects and shown when it appears in **≥ 2** (`RECURRENCE_MIN`) — with a
+context sentence ("Appeared in 3 of 9 readings between March and July, twice in the outcome
+position.") and its source readings. Thoth *Lust* and RWS *Strength* are two symbols; Disks
+are not Pentacles. No archetype mapping is consulted on any render path.
 
 ---
 

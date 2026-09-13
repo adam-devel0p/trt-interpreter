@@ -64,6 +64,15 @@ const ENTRY_POINTS = [
   'src/ui/components/card-entry.tsx',
   'src/ui/components/shuffle-reveal.tsx',
   'src/ui/components/user-note-editor.tsx',
+  // Phase 07: the journey pages, actions and query layer, and the assignment step the
+  // materialiser runs. Naming (`propose_journey`) is reached only through the lazy registry.
+  'app/(app)/journey',
+  'src/db/queries/journeys.ts',
+  'src/journeys/materialize.ts',
+  'src/journeys/refresh.ts',
+  'src/ui/components/journey-timeline.tsx',
+  'src/ui/components/theme-progression.tsx',
+  'src/ui/components/recurring-symbols.tsx',
 ];
 
 function listFiles(p: string): string[] {
@@ -191,8 +200,15 @@ describe('opening-reading-makes-no-ai-call', () => {
     expect(graph.has(path.resolve(ROOT, 'src/memory/materialize.ts'))).toBe(true);
     expect(graph.has(path.resolve(ROOT, 'src/memory/extract.ts'))).toBe(false);
     expect(graph.has(path.resolve(ROOT, 'src/jobs/handlers/extract-reading.ts'))).toBe(false);
+    // Phase 07: assignment, discovery and refresh are on the graph and AI-free; naming is not.
+    expect(graph.has(path.resolve(ROOT, 'src/journeys/assign.ts'))).toBe(true);
+    expect(graph.has(path.resolve(ROOT, 'src/journeys/discover.ts'))).toBe(true);
+    expect(graph.has(path.resolve(ROOT, 'src/journeys/propose.ts'))).toBe(false);
+    expect(graph.has(path.resolve(ROOT, 'src/jobs/handlers/propose-journey.ts'))).toBe(false);
     const registry = readFileSync(LAZY_REGISTRY, 'utf8');
-    expect(registry).not.toMatch(/^import .*(extract-reading|reprocess-extractions)/m);
+    expect(registry).not.toMatch(
+      /^import .*(extract-reading|reprocess-extractions|propose-journey)/m,
+    );
   });
 
   it('1b · the journal search is one RPC + embed, no model; the timeline renders from stored rows', async () => {
@@ -257,6 +273,7 @@ describe('opening-reading-makes-no-ai-call', () => {
       deck: null,
       spread: null,
       entity: null,
+      journey: null,
       source: null,
       followUp: null,
       hasNotes: null,

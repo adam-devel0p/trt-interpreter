@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import { getSessionClient, requireUser } from '@/auth/session';
 import { getInterpretationState, listSafetyFlags } from '@/db/queries/interpretations';
+import { getReadingJourneys } from '@/db/queries/journeys';
 import { getReadingMemory } from '@/db/queries/memory';
 import { getProfile, hasAiConsent } from '@/db/queries/profile';
 import { countReadingDependents, getReading, listNoteRevisions } from '@/db/queries/readings';
@@ -12,6 +13,7 @@ import { NoteHistory } from '@/ui/components/note-history';
 import { ReadingDetail } from '@/ui/components/reading-detail';
 import { ReadingControls, FollowUpControl, NotesEditor, RevisitChips } from './controls';
 import { InterpretationPanel } from './interpretation-panel';
+import { JourneyPanel } from './journey-panel';
 import { MemoryPanel } from './memory-panel';
 
 export const dynamic = 'force-dynamic';
@@ -35,16 +37,25 @@ export default async function ReadingPage({
   const client = await getSessionClient();
   const reading = await getReading(client, id);
   if (!reading) notFound();
-  const [profile, interpretation, safetyFlags, revisions, dependents, memory, extractionFlag] =
-    await Promise.all([
-      getProfile(client, user.id),
-      getInterpretationState(client, id),
-      listSafetyFlags(client, 'reading', id),
-      listNoteRevisions(client, id),
-      countReadingDependents(client, id),
-      getReadingMemory(client, reading),
-      flag('ai_extraction', { userId: user.id }),
-    ]);
+  const [
+    profile,
+    interpretation,
+    safetyFlags,
+    revisions,
+    dependents,
+    memory,
+    extractionFlag,
+    journeys,
+  ] = await Promise.all([
+    getProfile(client, user.id),
+    getInterpretationState(client, id),
+    listSafetyFlags(client, 'reading', id),
+    listNoteRevisions(client, id),
+    countReadingDependents(client, id),
+    getReadingMemory(client, reading),
+    flag('ai_extraction', { userId: user.id }),
+    getReadingJourneys(client, id),
+  ]);
   const consent = profile ? hasAiConsent(profile) : false;
   const depth = profile
     ? selectDepth({
@@ -100,6 +111,13 @@ export default async function ReadingPage({
             initial={interpretation}
             safetyFlags={safetyFlags}
             autoStart={justSaved && consent && interpretation.latest === null}
+          />
+        ),
+        journeys: (
+          <JourneyPanel
+            readingId={reading.id}
+            memberships={journeys.memberships}
+            options={journeys.options}
           />
         ),
         connections: (

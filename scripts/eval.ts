@@ -14,6 +14,8 @@ import * as interpretVersion from '../src/ai/tasks/interpret_reading/version';
 import { buildExtractRequest } from '../src/ai/tasks/extract_reading_metadata';
 import type { ExtractionPayload } from '../src/domain/extraction/schema';
 import * as extractVersion from '../src/ai/tasks/extract_reading_metadata/version';
+import { buildProposeJourneyRequest, type JourneyProposal } from '../src/ai/tasks/propose_journey';
+import * as proposeVersion from '../src/ai/tasks/propose_journey/version';
 import { normalizeAlias } from '../src/domain/entities/normalize';
 import { resolveThemeLabel } from '../src/domain/themes/taxonomy';
 import { closeAdmin } from '../src/db/admin';
@@ -78,6 +80,16 @@ interface ExtractFixture {
     possibilities_max: number;
     timeframe: boolean;
   };
+}
+
+interface ProposeFixture {
+  name: string;
+  description: string;
+  current_title: string;
+  shared_entities: string[];
+  shared_themes: string[];
+  entries: { occurred_on: string; question: string | null; entities: string[]; themes: string[] }[];
+  expect: { confidence_any: string[]; must_mention: string | null; forbid: string[] };
 }
 
 interface SafetyFixture {
@@ -336,6 +348,96 @@ async function main() {
     const precision = extractTotals.got ? extractTotals.hit / extractTotals.got : 1;
     summary.push(
       `extract_reading_metadata: entity recall ${(recall * 100).toFixed(0)}% · precision ${(precision * 100).toFixed(0)}% over ${extractTotals.expected} expected mentions`,
+    );
+  }
+
+  // ── propose_journey (Phase 07) ─────────────────────────────────────────────────────────
+  // Naming only. Checks: schema, a short plain title (2–6 words, no card names, no trailing
+  // punctuation), the shared entity named when there is one, no prediction words, a
+  // confidence band within the fixture's expectation, a one-sentence rationale.
+  const proposeDir = path.join(TASKS_DIR, 'propose_journey/fixtures/__baselines__');
+  mkdirSync(proposeDir, { recursive: true });
+  const cardNames = new Set(
+    [...RWS_DECK.cards, ...THOTH_DECK.cards].map((c) => c.name.toLowerCase()),
+  );
+  for (const fx of loadFixtures<ProposeFixture>('propose_journey')) {
+    const started = Date.now();
+    const req = buildProposeJourneyRequest(
+      {
+        entries: fx.entries,
+        shared_entities: fx.shared_entities,
+        shared_themes: fx.shared_themes,
+        current_title: fx.current_title,
+      },
+      {
+        userId: 'eval',
+        journeyId: fx.name,
+        themeSlugs: fx.shared_themes.map((t) => t.toLowerCase()),
+      },
+    );
+    const r = await runner.runObject({ ...req, userId: undefined });
+    const checks: Record<string, { pass: boolean; detail?: unknown }> = {};
+    let value: JourneyProposal | null = null;
+    if (r.ok) {
+      value = r.value;
+      const words = value.title.trim().split(/\s+/);
+      checks.schema = { pass: true };
+      checks.title_shape = {
+        pass: words.length >= 1 && words.length <= 6 && !/[.!?"]$/.test(value.title),
+        detail: value.title,
+      };
+      checks.no_card_name = {
+        pass: ![...cardNames].some((n) => value!.title.toLowerCase().includes(n)),
+      };
+      checks.names_subject = {
+        pass:
+          fx.expect.must_mention === null ||
+          value.title.toLowerCase().includes(fx.expect.must_mention.toLowerCase()),
+        detail: fx.expect.must_mention,
+      };
+      checks.no_prediction = {
+        pass: !fx.expect.forbid.some((w) =>
+          new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(
+            `${value!.title} ${value!.rationale}`,
+          ),
+        ),
+        detail: value.rationale,
+      };
+      checks.confidence_band = {
+        pass: fx.expect.confidence_any.includes(value.confidence),
+        detail: value.confidence,
+      };
+      checks.rationale_one_sentence = {
+        pass: value.rationale.length <= 240 && (value.rationale.match(/[.!?]/g) ?? []).length <= 2,
+      };
+    } else {
+      checks.schema = { pass: false, detail: { status: r.status, errorClass: r.errorClass } };
+    }
+    const failed = Object.entries(checks)
+      .filter(([, c]) => !c.pass)
+      .map(([k]) => k);
+    hardFailures += failed.length;
+    const line = `  propose   ${failed.length === 0 ? '✓' : '✗'} ${fx.name.padEnd(32)} ${r.ok ? `"${r.value.title}" (${r.value.confidence})` : `${r.status}/${r.errorClass}`} ${(Date.now() - started) / 1000}s${failed.length ? `  FAILED: ${failed.join(', ')}` : ''}`;
+    console.log(line);
+    summary.push(line.trim());
+    writeFileSync(
+      path.join(proposeDir, `${fx.name}.json`),
+      JSON.stringify(
+        {
+          fixture: fx.name,
+          description: fx.description,
+          provider,
+          model: r.ok ? r.meta.modelId : null,
+          prompt_version: proposeVersion.PROMPT_VERSION,
+          schema_version: proposeVersion.SCHEMA_VERSION,
+          ran_at: new Date().toISOString(),
+          checks,
+          output: value,
+          human_review: { reviewed_by: null, reviewed_at: null, verdict: null, notes: null },
+        },
+        null,
+        2,
+      ),
     );
   }
 

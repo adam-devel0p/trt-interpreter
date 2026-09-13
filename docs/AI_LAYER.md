@@ -83,7 +83,7 @@ Each task is a directory `src/ai/tasks/<task>/` containing `prompt.ts`, `schema.
 | `extract_reading_metadata` | 06 ✅ | standard | extraction payload | Themes, entities (mentions + relations), possibilities, timeframe (§7.2). Runs as the `extract_reading_metadata` job after save, never in the request path. `extract_reading_metadata/1.0.0` · `extraction/1.0.0` |
 | `extract_event_metadata` | 08 | standard | extraction payload | Same schema family as above (§6.4) |
 | `propose_entity_candidates` | 06 (folded) | fast | — | Folded into `extract_reading_metadata`'s `entities[]` (one call per save instead of two); resolution is decided in `domain/entities/resolve.ts`. The `TaskId` stays reserved. |
-| `propose_journey` | 07 | standard | title + confidence + rationale | Naming only; assignment decided in `domain/` |
+| `propose_journey` | 07 ✅ | standard | title + rationale + confidence band | Naming only; assignment decided in `domain/journeys`. Runs as the `propose_journey` job after discovery (consent + `journey_autocreate`), never in the request path; a user rename pins the title (`title_source = 'user'`); `low` confidence keeps the placeholder. Context is the minimum (§11): dates, questions, resolved entities from `entityContextForObjects`, theme labels — no notes. `propose_journey/1.0.0` · `journey_proposal/1.0.0` |
 | `explain_correlation` | 08 | fast | 1–2 sentence reason | Explains a score the code computed; may not invent the link |
 | `parse_history_query` | 09 | fast | intent, time range, entities, journey hints | Step 1 of §8.1 |
 | `answer_from_evidence` | 09 | deep | answer + citations + sufficiency | Citations validated against the package |

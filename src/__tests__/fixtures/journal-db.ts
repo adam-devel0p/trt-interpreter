@@ -140,7 +140,7 @@ export async function storeInterpretation(user: TestUser, reading: ReadingView) 
 export async function attachDerived(
   user: TestUser,
   reading: ReadingView,
-  opts: { memory?: boolean } = {},
+  opts: { memory?: boolean; journey?: boolean } = {},
 ) {
   const interpretation = await storeInterpretation(user, reading);
   const flag = await recordSafetyFlag(user.client, {
@@ -172,5 +172,14 @@ export async function attachDerived(
     extraction = out.extractionId;
     await applyCorrection(user.client, user.id, reading.id, { type: 'add_theme', label: 'Trust' });
   }
-  return { interpretation, flag, extraction };
+  // Phase 07: a user-built journey holding the reading (a confirmed member with a
+  // progression step once a second member with the same theme exists).
+  let journey: string | null = null;
+  if (opts.journey) {
+    const { createJourney } = await import('@/db/queries/journeys');
+    const { refreshJourney } = await import('@/journeys/refresh');
+    journey = await createJourney(user.client, user.id, 'Test journey', [reading.id]);
+    await refreshJourney(journey);
+  }
+  return { interpretation, flag, extraction, journey };
 }

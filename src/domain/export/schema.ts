@@ -6,8 +6,11 @@
  */
 import { z } from 'zod';
 
-/** 1.1.0 (Phase 06): extractions, overrides, themes, entities, mentions, predictions joined. */
-export const EXPORT_SCHEMA_VERSION = 'export/1.1.0';
+/**
+ * 1.1.0 (Phase 06): extractions, overrides, themes, entities, mentions, predictions joined.
+ * 1.2.0 (Phase 07): journeys (with progression steps nested) and journey members.
+ */
+export const EXPORT_SCHEMA_VERSION = 'export/1.2.0';
 
 export const EXPORT_FILES = [
   'profile.json',
@@ -27,6 +30,8 @@ export const EXPORT_FILES = [
   'entities.json',
   'entity_mentions.json',
   'predictions.json',
+  'journeys.json',
+  'journey_members.json',
   'links.json',
 ] as const;
 export type ExportFile = (typeof EXPORT_FILES)[number];
@@ -337,6 +342,61 @@ export const exportPredictionSchema = z
   })
   .strict();
 
+/** A journey with its theme progression nested; every step names its source objects. */
+export const exportJourneySchema = z
+  .object({
+    id: uuid,
+    title: z.string(),
+    title_source: z.string(),
+    rationale: z.string().nullable(),
+    summary: z.string().nullable(),
+    status: z.string(),
+    started_at: iso,
+    last_activity_at: iso,
+    ended_at: iso.nullable(),
+    confidence: z.number(),
+    created_by: z.string(),
+    reasons: z.array(z.string()).nullable(),
+    user_confirmed: z.boolean(),
+    accepted_at: iso.nullable(),
+    dismissed_at: iso.nullable(),
+    merged_into_id: uuid.nullable(),
+    model_id: z.string().nullable(),
+    prompt_version: z.string().nullable(),
+    schema_version: z.string().nullable(),
+    named_at: iso.nullable(),
+    created_at: iso,
+    updated_at: iso,
+    theme_progression: z.array(
+      z
+        .object({
+          id: uuid,
+          sequence_index: z.number().int().min(0),
+          theme_id: uuid,
+          period_start: z.string(),
+          period_end: z.string(),
+          source_object_ids: z.array(uuid).min(1),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+
+export const exportJourneyMemberSchema = z
+  .object({
+    id: uuid,
+    journey_id: uuid,
+    object_type: z.string(),
+    object_id: uuid,
+    confidence: z.number(),
+    created_by: z.string(),
+    state: z.string(),
+    signals: z.unknown().nullable(),
+    reasons: z.array(z.string()).nullable(),
+    added_at: iso,
+  })
+  .strict();
+
 export const LINK_KINDS = [
   'reading_uses_spread',
   'reading_uses_deck',
@@ -355,6 +415,12 @@ export const LINK_KINDS = [
   'mention_of',
   'prediction_of',
   'merged_into',
+  // Phase 07
+  'journey_member_of',
+  'journey_holds',
+  'progression_theme_is',
+  'progression_source',
+  'journey_merged_into',
 ] as const;
 
 export const exportLinkSchema = z
@@ -384,6 +450,8 @@ export const EXPORT_FILE_SCHEMAS = {
   'entities.json': z.array(exportEntitySchema),
   'entity_mentions.json': z.array(exportEntityMentionSchema),
   'predictions.json': z.array(exportPredictionSchema),
+  'journeys.json': z.array(exportJourneySchema),
+  'journey_members.json': z.array(exportJourneyMemberSchema),
   'links.json': z.array(exportLinkSchema),
 } as const satisfies Record<ExportFile, z.ZodType>;
 

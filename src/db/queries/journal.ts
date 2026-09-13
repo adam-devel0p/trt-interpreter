@@ -60,13 +60,13 @@ export interface JournalPage {
   matchedCardIds: string[];
 }
 
-const ITEM_SELECT =
+export const ITEM_SELECT =
   'id, occurred_at, updated_at, question, is_open_reflection, life_area, source, follow_up_status, ' +
   'revisit_at, user_notes, decks(id, slug, name, system), spreads(id, name, card_count), ' +
   `reading_cards(position_index, orientation, cards(${CARD_VIEW_COLUMNS})), ` +
   'interpretations(synthesis, status, superseded_by)';
 
-interface RawItem {
+export interface RawItem {
   id: string;
   occurred_at: string;
   updated_at: string;
@@ -83,7 +83,7 @@ interface RawItem {
   interpretations: { synthesis: string | null; status: string; superseded_by: string | null }[];
 }
 
-function toItem(raw: RawItem): JournalItem {
+export function toItem(raw: RawItem): JournalItem {
   const { decks: deck, spreads: spread, reading_cards, interpretations, ...row } = raw;
   return {
     ...row,
@@ -162,6 +162,7 @@ export async function searchJournal(
     deck_id: deckId,
     spread_id: filters.spread,
     entity_id: filters.entity,
+    journey_id: filters.journey,
     source: filters.source,
     follow_up: filters.followUp,
     has_notes: filters.hasNotes,
