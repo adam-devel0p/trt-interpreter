@@ -52,12 +52,15 @@ describe('deleting-reading-purges-derived (integration)', () => {
   });
 
   it('soft delete hides the reading everywhere; the purge removes every dependent and writes a receipt', async () => {
-    const reading = await makeReading(user, refs, { question: 'Purge me?', notes: 'first words' });
-    await updateReadingNotes(user.client, reading.id, 'second words');
-    await updateReadingNotes(user.client, reading.id, 'third words');
-    await attachDerived(user, reading);
-    const keep = await makeReading(user, refs, { question: 'Keep me' });
-    await attachDerived(user, keep);
+    const reading = await makeReading(user, refs, {
+      question: 'Should I purge this with Alex?',
+      notes: 'first words about my girlfriend in Leeds',
+    });
+    await updateReadingNotes(user.client, reading.id, 'second words about my girlfriend in Leeds');
+    await updateReadingNotes(user.client, reading.id, 'third words about my girlfriend in Leeds');
+    await attachDerived(user, reading, { memory: true });
+    const keep = await makeReading(user, refs, { question: 'Keep me, Alex' });
+    await attachDerived(user, keep, { memory: true });
 
     const before = {
       reading_cards: await countRows('reading_cards', 'reading_id', reading.id),
@@ -65,14 +68,26 @@ describe('deleting-reading-purges-derived (integration)', () => {
       question_embeddings: await countRows('question_embeddings', 'reading_id', reading.id),
       safety_flags: await countRows('safety_flags', 'object_id', reading.id),
       reading_note_revisions: await countRows('reading_note_revisions', 'reading_id', reading.id),
+      extractions: await countRows('extractions', 'object_id', reading.id),
+      metadata_overrides: await countRows('metadata_overrides', 'object_id', reading.id),
+      object_themes: await countRows('object_themes', 'object_id', reading.id),
+      entity_mentions: await countRows('entity_mentions', 'object_id', reading.id),
+      predictions: await countRows('predictions', 'reading_id', reading.id),
     };
-    expect(before).toEqual({
+    expect(before).toMatchObject({
       reading_cards: 3,
       interpretations: 1,
       question_embeddings: 1,
       safety_flags: 1,
       reading_note_revisions: 2,
+      extractions: 1,
+      metadata_overrides: 1,
+      predictions: 1,
     });
+    expect(before.object_themes).toBeGreaterThanOrEqual(2);
+    expect(before.entity_mentions).toBeGreaterThanOrEqual(2);
+    // The entities themselves are the user's memory, not the reading's: they survive the purge.
+    const entitiesBefore = await countRows('entities', 'user_id', user.id);
 
     // Not soft-deleted yet: the purge refuses. The user's delete is the only entry point.
     await expect(purgeReading(reading.id)).rejects.toBeInstanceOf(PurgeError);
@@ -93,10 +108,18 @@ describe('deleting-reading-purges-derived (integration)', () => {
     const batch = await runBatch({ jobId: job.id });
     expect(batch).toMatchObject({ claimed: 1, succeeded: 1, dead: 0, retried: 0 });
 
+    const POLYMORPHIC = new Set([
+      'safety_flags',
+      'extractions',
+      'metadata_overrides',
+      'object_themes',
+      'entity_mentions',
+    ]);
     for (const table of DELETION_REGISTRY.reading.map((t) => t.table)) {
-      const column = table === 'safety_flags' ? 'object_id' : 'reading_id';
+      const column = POLYMORPHIC.has(table) ? 'object_id' : 'reading_id';
       expect(await countRows(table, column, reading.id), `${table} after purge`).toBe(0);
     }
+    expect(await countRows('entities', 'user_id', user.id)).toBe(entitiesBefore);
     expect(await countRows('readings', 'id', reading.id)).toBe(0);
     expect((await getInterpretationState(user.client, reading.id)).latest).toBeNull();
 
@@ -115,6 +138,8 @@ describe('deleting-reading-purges-derived (integration)', () => {
     // The other reading is untouched, derived rows included.
     expect(await countRows('interpretations', 'reading_id', keep.id)).toBe(1);
     expect(await countRows('safety_flags', 'object_id', keep.id)).toBe(1);
+    expect(await countRows('extractions', 'object_id', keep.id)).toBe(1);
+    expect(await countRows('entity_mentions', 'object_id', keep.id)).toBeGreaterThanOrEqual(1);
     expect(await getReading(user.client, keep.id)).not.toBeNull();
 
     // Purging again is a no-op (already gone), and the sweep finds nothing.

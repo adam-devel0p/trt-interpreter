@@ -1,0 +1,122 @@
+{
+  "fixture": "relocation-place-family",
+  "description": "A move, a city, a parent, a friend, a horizon. Expect a place, two people, a home/change theme, a timeframe.",
+  "provider": "mock",
+  "model": "mock/claude-sonnet-5",
+  "prompt_version": "extract_reading_metadata/1.0.0",
+  "schema_version": "extraction/1.0.0",
+  "ran_at": "2026-09-13T06:59:40.174Z",
+  "checks": {
+    "schema": {
+      "pass": true
+    },
+    "entity_recall": {
+      "pass": true,
+      "detail": {
+        "recall": 1,
+        "missing": []
+      }
+    },
+    "entity_precision": {
+      "pass": true,
+      "detail": {
+        "precision": 1,
+        "extra": []
+      }
+    },
+    "no_pronouns": {
+      "pass": true,
+      "detail": []
+    },
+    "theme_sanity": {
+      "pass": true,
+      "detail": ["home", "change", "family"]
+    },
+    "life_area": {
+      "pass": true,
+      "detail": "home"
+    },
+    "possibilities": {
+      "pass": true,
+      "detail": []
+    },
+    "timeframe": {
+      "pass": true,
+      "detail": {
+        "start": null,
+        "end": null,
+        "text": "on Friday"
+      }
+    },
+    "no_probability": {
+      "pass": true
+    }
+  },
+  "output": {
+    "life_area": "home",
+    "entities": [
+      {
+        "mention": "My mum",
+        "kind": "person",
+        "confidence": 0.85,
+        "relation": "parent",
+        "context": "My mum thinks it is too far."
+      },
+      {
+        "mention": "Sam",
+        "kind": "person",
+        "confidence": 0.6,
+        "relation": null,
+        "context": "Sam says give it a month and see."
+      },
+      {
+        "mention": "Leeds",
+        "kind": "place",
+        "confidence": 0.7,
+        "relation": null,
+        "context": "What is the move to Leeds asking of me?"
+      }
+    ],
+    "themes": [
+      {
+        "label": "Home",
+        "category": "practical",
+        "weight": 0.95
+      },
+      {
+        "label": "Change",
+        "category": "situational",
+        "weight": 0.65
+      },
+      {
+        "label": "Family",
+        "category": "relational",
+        "weight": 0.65
+      }
+    ],
+    "event_mentions": [],
+    "goals": [],
+    "fears": [],
+    "decisions": [],
+    "timeframe": {
+      "start": null,
+      "end": null,
+      "text": "on Friday"
+    },
+    "possibilities": [],
+    "emotional_tone": null,
+    "journey_candidates": [
+      {
+        "title": "The move to Leeds",
+        "confidence": 0.55
+      }
+    ],
+    "safety_flags": []
+  },
+  "human_review": {
+    "reviewed_by": null,
+    "reviewed_at": null,
+    "verdict": null,
+    "notes": null
+  }
+}

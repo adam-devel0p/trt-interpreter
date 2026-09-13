@@ -1,0 +1,150 @@
+{
+  "name": "relocation-arc",
+  "description": "A move between cities with a friend and a parent along the way. Places resolve by exact alias; 'my mum' and 'Mum' are one person; a lookalike name is a tentative match, not an automatic one; a stranger with the same kind never links.",
+  "steps": [
+    {
+      "day": 0,
+      "mentions": [
+        {
+          "text": "Leeds",
+          "kind": "place",
+          "relation": null
+        },
+        {
+          "text": "Sam",
+          "kind": "person",
+          "relation": "friend"
+        }
+      ],
+      "expect": [
+        {
+          "text": "Leeds",
+          "decision": "new",
+          "entity": "Leeds"
+        },
+        {
+          "text": "Sam",
+          "decision": "new",
+          "entity": "Sam",
+          "roles": ["friend"]
+        }
+      ]
+    },
+    {
+      "day": 12,
+      "mentions": [
+        {
+          "text": "the flat in Leeds",
+          "kind": "place",
+          "relation": null
+        },
+        {
+          "text": "my mum",
+          "kind": "person",
+          "relation": "parent"
+        }
+      ],
+      "expect": [
+        {
+          "text": "the flat in Leeds",
+          "decision": "new",
+          "entity": "the flat in Leeds"
+        },
+        {
+          "text": "my mum",
+          "decision": "new",
+          "entity": "my mum",
+          "roles": ["parent"]
+        }
+      ]
+    },
+    {
+      "day": 30,
+      "mentions": [
+        {
+          "text": "Leeds",
+          "kind": "place",
+          "relation": null
+        },
+        {
+          "text": "Mum",
+          "kind": "person",
+          "relation": null
+        },
+        {
+          "text": "Sam",
+          "kind": "person",
+          "relation": null
+        }
+      ],
+      "expect": [
+        {
+          "text": "Leeds",
+          "decision": "auto",
+          "entity": "Leeds"
+        },
+        {
+          "text": "Mum",
+          "decision": "auto",
+          "entity": "my mum"
+        },
+        {
+          "text": "Sam",
+          "decision": "auto",
+          "entity": "Sam"
+        }
+      ]
+    },
+    {
+      "day": 40,
+      "mentions": [
+        {
+          "text": "Sami",
+          "kind": "person",
+          "relation": null
+        }
+      ],
+      "expect": [
+        {
+          "text": "Sami",
+          "decision": "tentative",
+          "entity": "Sam"
+        }
+      ]
+    },
+    {
+      "day": 45,
+      "mentions": [
+        {
+          "text": "Jordan",
+          "kind": "person",
+          "relation": null
+        }
+      ],
+      "expect": [
+        {
+          "text": "Jordan",
+          "decision": "new",
+          "entity": "Jordan"
+        }
+      ]
+    },
+    {
+      "day": 400,
+      "mentions": [
+        {
+          "text": "Leeds",
+          "kind": "place",
+          "relation": null
+        }
+      ],
+      "expect": [
+        {
+          "text": "Leeds",
+          "decision": "auto",
+          "entity": "Leeds"
+        }
+      ]
+    }
+  ]
+}

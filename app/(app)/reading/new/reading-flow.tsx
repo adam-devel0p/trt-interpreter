@@ -17,7 +17,7 @@ import { FocusHeading } from '@/ui/components/focus-heading';
 import { LocalTime } from '@/ui/components/local-time';
 import { ShuffleReveal } from '@/ui/components/shuffle-reveal';
 import { cn } from '@/ui/lib/cn';
-import { drawCardsAction, saveDraftAction, saveReadingAction } from '../actions';
+import { clearDraftAction, drawCardsAction, saveDraftAction, saveReadingAction } from '../actions';
 import { VoiceInput } from './voice-input';
 
 export interface FlowDeck {
@@ -131,6 +131,9 @@ export function ReadingFlow({
   const save = async () => {
     setSaving(true);
     setError(null);
+    // A debounced server-draft write landing mid-save would resurrect the draft after the
+    // save deleted it (and the next /reading/new would resume it): cancel it first.
+    if (serverTimer.current) clearTimeout(serverTimer.current);
     try {
       const input = D.toCreateInput(draft);
       const res = await saveReadingAction(input);
@@ -143,6 +146,8 @@ export function ReadingFlow({
       } catch {
         /* ignore */
       }
+      // A draft write already in flight when Save was pressed may still land: sweep it.
+      void clearDraftAction();
       router.push(`/reading/${res.value.id}?saved=1`);
     } catch {
       setError("That didn't save. Nothing you entered is lost — try again.");

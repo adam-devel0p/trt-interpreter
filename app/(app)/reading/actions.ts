@@ -52,9 +52,40 @@ import { errorClassOf, logger } from '@/observability/logger';
  * model-free by design (invariant: content saves before AI; opening a reading makes no AI
  * call). Every write goes through the RLS-respecting session client; every input is
  * re-validated here regardless of what the client sent. Log lines carry IDs and classes only.
+ *
+ * Phase 06: after a save or an edit the actions *enqueue* `extract_reading_metadata` — the
+ * cron batch runs it; nothing here waits for a model. A failed enqueue is logged and the
+ * reading is unaffected (the next edit, or a reprocess, catches it up).
  */
 
 export type ActionResult<T = undefined> = { ok: true; value: T } | { ok: false; message: string };
+
+/** Notes autosave on every pause: one queued extraction per reading, a minute after the last. */
+const NOTES_EXTRACTION_DELAY_MS = 60_000;
+
+async function queueExtraction(
+  userId: string,
+  readingId: string,
+  opts: { delayMs?: number } = {},
+): Promise<void> {
+  try {
+    await enqueue(
+      'extract_reading_metadata',
+      { readingId, force: false },
+      {
+        userId,
+        dedupe: true,
+        ...(opts.delayMs ? { runAfter: new Date(Date.now() + opts.delayMs) } : {}),
+      },
+    );
+  } catch (err) {
+    logger.warn('app.reading.extraction_enqueue_failed', {
+      userId,
+      objectId: readingId,
+      errorClass: errorClassOf(err),
+    });
+  }
+}
 
 const SAVE_FAILED =
   "That didn't save. Nothing you entered is lost — it's still on this screen. Try again.";
@@ -126,6 +157,7 @@ export async function saveReadingAction(raw: unknown): Promise<ActionResult<{ id
       count: parsed.data.cards.length,
     });
     revalidatePath(HOME_PATH);
+    await queueExtraction(user.id, id);
     return { ok: true, value: { id } };
   } catch (err) {
     logger.warn('app.reading.save_failed', { userId: user.id, errorClass: errorClassOf(err) });
@@ -187,7 +219,18 @@ async function readingWrite(
 export async function updateNotesAction(id: unknown, notes: unknown): Promise<ActionResult> {
   const text = z.string().max(NOTES_MAX).safeParse(notes);
   if (!text.success) return { ok: false, message: 'That note is too long to save.' };
-  return readingWrite(id, (c, rid) => updateReadingNotes(c, rid, text.data), 'notes_saved');
+  const result = await readingWrite(
+    id,
+    (c, rid) => updateReadingNotes(c, rid, text.data),
+    'notes_saved',
+  );
+  if (result.ok) {
+    const user = await requireUser();
+    await queueExtraction(user.id, z.string().uuid().parse(id), {
+      delayMs: NOTES_EXTRACTION_DELAY_MS,
+    });
+  }
+  return result;
 }
 
 export async function setFollowUpAction(id: unknown, status: unknown): Promise<ActionResult> {
@@ -229,7 +272,7 @@ export async function updateReadingAction(
   const c = z.array(placedCardSchema).min(1).max(CUSTOM_SPREAD_MAX_POSITIONS).safeParse(cards);
   const st = editStructureSchema.safeParse(structure ?? {});
   if (!m.success || !c.success || !st.success) return { ok: false, message: GENERIC_FAILED };
-  return readingWrite(
+  const result = await readingWrite(
     id,
     async (client, rid) => {
       await updateReading(client, rid, m.data as UpdateReadingInput);
@@ -241,6 +284,11 @@ export async function updateReadingAction(
     },
     'edited',
   );
+  if (result.ok) {
+    const user = await requireUser();
+    await queueExtraction(user.id, z.string().uuid().parse(id));
+  }
+  return result;
 }
 
 /**

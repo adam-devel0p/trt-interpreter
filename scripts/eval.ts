@@ -11,6 +11,11 @@ import {
   type InterpretReadingInput,
 } from '../src/ai/tasks/interpret_reading';
 import * as interpretVersion from '../src/ai/tasks/interpret_reading/version';
+import { buildExtractRequest } from '../src/ai/tasks/extract_reading_metadata';
+import type { ExtractionPayload } from '../src/domain/extraction/schema';
+import * as extractVersion from '../src/ai/tasks/extract_reading_metadata/version';
+import { normalizeAlias } from '../src/domain/entities/normalize';
+import { resolveThemeLabel } from '../src/domain/themes/taxonomy';
 import { closeAdmin } from '../src/db/admin';
 import { RWS_DECK } from '../src/db/seed/decks/rws';
 import { THOTH_DECK } from '../src/db/seed/decks/thoth';
@@ -53,6 +58,26 @@ interface InterpretFixture {
   depth: ExplanationDepth;
   experience_level: ExperienceLevel;
   expect: { acknowledges_note: boolean; safety_category?: SafetyCategory };
+}
+
+interface ExtractFixture {
+  name: string;
+  description: string;
+  question: string | null;
+  life_area: string | null;
+  user_notes: string | null;
+  deck: 'rws' | 'thoth';
+  spread: string;
+  cards: { slug: string; orientation: 'upright' | 'reversed' }[];
+  expect: {
+    life_area: string | null;
+    entities: { mention: string; kind: string }[];
+    forbidden_mentions: string[];
+    themes_any: string[];
+    themes_max?: number;
+    possibilities_max: number;
+    timeframe: boolean;
+  };
 }
 
 interface SafetyFixture {
@@ -193,6 +218,124 @@ async function main() {
     writeFileSync(
       path.join(dir, `${fx.name}.json`),
       JSON.stringify({ provider, ran_at: new Date().toISOString(), results }, null, 2),
+    );
+  }
+
+  // ── extract_reading_metadata (Phase 06) ────────────────────────────────────────────────
+  // Entity recall/precision over normalised mentions (+ kind), pronouns never proposed, at
+  // least one expected theme and every theme on the taxonomy or short, no probabilities.
+  const extractDir = path.join(TASKS_DIR, 'extract_reading_metadata/fixtures/__baselines__');
+  mkdirSync(extractDir, { recursive: true });
+  const extractTotals = { expected: 0, got: 0, hit: 0 };
+  for (const fx of loadFixtures<ExtractFixture>('extract_reading_metadata')) {
+    const deck = fx.deck === 'rws' ? RWS_DECK : THOTH_DECK;
+    const spread = SPREADS.find((s) => s.slug === fx.spread)!;
+    const req = buildExtractRequest(
+      {
+        question: fx.question,
+        is_open_reflection: fx.question === null,
+        user_notes: fx.user_notes,
+        life_area: fx.life_area,
+        occurred_on: '2026-06-01',
+        deck_name: deck.name,
+        spread_name: spread.name,
+        cards: fx.cards.map((c, i) => ({
+          position_name: spread.positions[i]?.name ?? `Position ${i + 1}`,
+          card_name: deck.cards.find((x) => x.slug === c.slug)?.name ?? c.slug,
+          orientation: c.orientation,
+        })),
+      },
+      { userId: 'eval', readingId: fx.name },
+    );
+    const started = Date.now();
+    const r = await runner.runObject({ ...req, userId: undefined });
+    const checks: Record<string, { pass: boolean; detail?: unknown }> = {};
+    let value: ExtractionPayload | null = null;
+    if (r.ok) {
+      value = r.value;
+      const got = new Map<string, string>(
+        value.entities.map((e) => [normalizeAlias(e.mention), e.kind]),
+      );
+      const expected = new Map<string, string>(
+        fx.expect.entities.map((e) => [normalizeAlias(e.mention), e.kind]),
+      );
+      const hits = [...expected].filter(([m, k]) => got.get(m) === k);
+      const recall = expected.size ? hits.length / expected.size : 1;
+      const precision = got.size
+        ? [...got].filter(([m, k]) => expected.get(m) === k).length / got.size
+        : 1;
+      extractTotals.expected += expected.size;
+      extractTotals.got += got.size;
+      extractTotals.hit += hits.length;
+      checks.schema = { pass: true };
+      checks.entity_recall = {
+        pass: recall >= 0.99,
+        detail: { recall, missing: [...expected.keys()].filter((m) => !got.has(m)) },
+      };
+      checks.entity_precision = {
+        pass: precision >= 0.5,
+        detail: { precision, extra: [...got.keys()].filter((m) => !expected.has(m)) },
+      };
+      const forbidden = fx.expect.forbidden_mentions.map(normalizeAlias).filter((m) => got.has(m));
+      checks.no_pronouns = { pass: forbidden.length === 0, detail: forbidden };
+      const themeSlugs = value.themes.map((t) => resolveThemeLabel(t.label)?.slug ?? `~${t.label}`);
+      checks.theme_sanity = {
+        pass:
+          (fx.expect.themes_any.length === 0 ||
+            themeSlugs.some((t) => fx.expect.themes_any.includes(t))) &&
+          value.themes.length <= (fx.expect.themes_max ?? 5) &&
+          value.themes.every((t) => t.label.length <= 40),
+        detail: themeSlugs,
+      };
+      checks.life_area = { pass: value.life_area === fx.expect.life_area, detail: value.life_area };
+      checks.possibilities = {
+        pass:
+          value.possibilities.length <= fx.expect.possibilities_max &&
+          !/\b(will|definitely|certainly|\d+%)\b/i.test(
+            value.possibilities.map((p) => p.text).join(' '),
+          ),
+        detail: value.possibilities.map((p) => p.text),
+      };
+      checks.timeframe = {
+        pass: !!value.timeframe === fx.expect.timeframe,
+        detail: value.timeframe,
+      };
+      checks.no_probability = { pass: !/probab/i.test(JSON.stringify(value)) };
+    } else {
+      checks.schema = { pass: false, detail: { status: r.status, errorClass: r.errorClass } };
+    }
+    const failed = Object.entries(checks)
+      .filter(([, c]) => !c.pass)
+      .map(([k]) => k);
+    hardFailures += failed.length;
+    const line = `  extract   ${failed.length === 0 ? '✓' : '✗'} ${fx.name.padEnd(32)} ${r.ok ? `entities=${r.value.entities.length} themes=${r.value.themes.length}` : `${r.status}/${r.errorClass}`} ${(Date.now() - started) / 1000}s${failed.length ? `  FAILED: ${failed.join(', ')}` : ''}`;
+    console.log(line);
+    summary.push(line.trim());
+    writeFileSync(
+      path.join(extractDir, `${fx.name}.json`),
+      JSON.stringify(
+        {
+          fixture: fx.name,
+          description: fx.description,
+          provider,
+          model: r.ok ? r.meta.modelId : null,
+          prompt_version: extractVersion.PROMPT_VERSION,
+          schema_version: extractVersion.SCHEMA_VERSION,
+          ran_at: new Date().toISOString(),
+          checks,
+          output: value,
+          human_review: { reviewed_by: null, reviewed_at: null, verdict: null, notes: null },
+        },
+        null,
+        2,
+      ),
+    );
+  }
+  if (extractTotals.expected > 0) {
+    const recall = extractTotals.hit / extractTotals.expected;
+    const precision = extractTotals.got ? extractTotals.hit / extractTotals.got : 1;
+    summary.push(
+      `extract_reading_metadata: entity recall ${(recall * 100).toFixed(0)}% · precision ${(precision * 100).toFixed(0)}% over ${extractTotals.expected} expected mentions`,
     );
   }
 

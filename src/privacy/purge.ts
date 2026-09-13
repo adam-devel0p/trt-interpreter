@@ -44,6 +44,25 @@ export const READING_DEPENDENT_COUNTERS: Record<string, Counter> = {
     countWhere(
       sql`select count(*)::int as n from public.reading_note_revisions where reading_id = ${id}`,
     ),
+  // Phase 06: structured memory keyed by (object_type, object_id) or by reading_id.
+  extractions: (id) =>
+    countWhere(
+      sql`select count(*)::int as n from public.extractions where object_type = 'reading' and object_id = ${id}`,
+    ),
+  metadata_overrides: (id) =>
+    countWhere(
+      sql`select count(*)::int as n from public.metadata_overrides where object_type = 'reading' and object_id = ${id}`,
+    ),
+  object_themes: (id) =>
+    countWhere(
+      sql`select count(*)::int as n from public.object_themes where object_type = 'reading' and object_id = ${id}`,
+    ),
+  entity_mentions: (id) =>
+    countWhere(
+      sql`select count(*)::int as n from public.entity_mentions where object_type = 'reading' and object_id = ${id}`,
+    ),
+  predictions: (id) =>
+    countWhere(sql`select count(*)::int as n from public.predictions where reading_id = ${id}`),
 };
 
 /** Explicit steps for registry targets that no FK reaches (`via: 'job'`). */
@@ -51,6 +70,26 @@ const READING_JOB_REMOVERS: Record<string, Remover> = {
   safety_flags: async (id) => {
     await platformDb().execute(
       sql`delete from public.safety_flags where object_type = 'reading' and object_id = ${id}`,
+    );
+  },
+  extractions: async (id) => {
+    await platformDb().execute(
+      sql`delete from public.extractions where object_type = 'reading' and object_id = ${id}`,
+    );
+  },
+  metadata_overrides: async (id) => {
+    await platformDb().execute(
+      sql`delete from public.metadata_overrides where object_type = 'reading' and object_id = ${id}`,
+    );
+  },
+  object_themes: async (id) => {
+    await platformDb().execute(
+      sql`delete from public.object_themes where object_type = 'reading' and object_id = ${id}`,
+    );
+  },
+  entity_mentions: async (id) => {
+    await platformDb().execute(
+      sql`delete from public.entity_mentions where object_type = 'reading' and object_id = ${id}`,
     );
   },
 };

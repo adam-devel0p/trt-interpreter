@@ -14,12 +14,20 @@ export function InferredChip({
   reasons = [],
   onCorrect,
   onDismiss,
+  onKeep,
+  label = 'suggested',
+  correctLabel = 'correct',
   className,
 }: {
   children: React.ReactNode;
   reasons?: readonly string[];
   onCorrect?: () => void;
   onDismiss?: () => void;
+  /** "Keep": the user confirms the suggestion; it becomes theirs. */
+  onKeep?: () => void;
+  /** The inference word: "suggested" (auto) or "possibly" (tentative). Always in text. */
+  label?: 'suggested' | 'possibly';
+  correctLabel?: string;
   className?: string;
 }) {
   return (
@@ -29,7 +37,7 @@ export function InferredChip({
         className,
       )}
     >
-      <span className="text-fg-muted">suggested</span>
+      <span className="text-fg-muted">{label}</span>
       <span className="truncate font-medium">{children}</span>
       {reasons.length > 0 ? (
         <Popover.Root>
@@ -57,13 +65,23 @@ export function InferredChip({
           </Popover.Portal>
         </Popover.Root>
       ) : null}
+      {onKeep ? (
+        <button
+          type="button"
+          onClick={onKeep}
+          aria-label="Keep this suggestion"
+          className="min-h-7 rounded-chip px-1.5 text-fg-muted hover:bg-surface-2 hover:text-fg"
+        >
+          keep
+        </button>
+      ) : null}
       {onCorrect ? (
         <button
           type="button"
           onClick={onCorrect}
           className="min-h-7 rounded-chip px-1.5 text-fg-muted hover:bg-surface-2 hover:text-fg"
         >
-          correct
+          {correctLabel}
         </button>
       ) : null}
       {onDismiss ? (

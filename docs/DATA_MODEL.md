@@ -232,30 +232,88 @@ content), `vector vector(1536)`, `model`, `nudge_shown_at`, `asked_at`. Indexes
 
 ## Derived metadata — Phase 06
 
-**`extractions`** — append-only. `id`, `user_id`, `object_type enum('reading','life_event')`,
-`object_id`, `schema_version`, `prompt_version`, `model_id`, `payload jsonb`, `status`,
-`superseded_by uuid null`, `created_at`. Raw text is never modified; this is the derived layer (§7.2).
+Built in `0007_structured_memory` (Drizzle: `src/db/schema/memory.ts`). Everything here is
+derived from the user's own words and can be regenerated, corrected or purged without touching
+them (invariant 4). Model-side rows are written by the extraction job (service role) through
+`modelBorn()`; user-side rows and corrections run as the user through RLS.
 
-`payload` shape (validated by Zod, versioned): `life_area`, `entities[] {mention, kind, confidence}`,
-`themes[] {label, category, weight}`, `event_mentions[]`, `goals[]`, `fears[]`, `decisions[]`,
-`timeframe {start,end,text}`, `possibilities[] {text, category, timeframe, kind}`, `emotional_tone`,
-`journey_candidates[] {title, confidence}`, `safety_flags[]`.
+**`extractions`** — append-only. `id`, `user_id`, `object_type` (`reading | life_event`, check),
+`object_id`, `status` (`pending | complete | failed`, check), `schema_version`, `prompt_version`,
+`model_id`, `metadata_version` (the reading's version the run read), `source_hash` (FNV-1a of
+question + notes — a notes edit does not bump the version but does change the hash),
+`payload jsonb`, `error_class`, `tokens_in/out`, `cost_micros`, `latency_ms`, `superseded_by`,
+`created_at`, `completed_at`. Partial unique index: one `complete` and non-superseded row per
+object. A `pending` row is written before the model call; the run materialises from it and only
+then marks it complete + supersedes the previous current row in one transaction, so a reader
+never sees a complete extraction without its rows. RLS: **select + delete only** (job-written).
 
-**`metadata_overrides`** — `user_id`, `object_type`, `object_id`, `field_path text`, `value jsonb`,
-`created_at`. User corrections are authoritative and survive re-extraction (FR-26). Read path always
-applies overrides on top of the newest extraction.
+`payload` shape (`src/domain/extraction/schema.ts`, `extraction/1.0.0`, Zod-validated):
+`life_area` (taxonomy key | null), `entities[] {mention, kind, confidence, relation, context}`,
+`themes[] {label, category, weight}`, `event_mentions[] {text, when}`, `goals[]`, `fears[]`,
+`decisions[]`, `timeframe {start, end, text} | null`, `possibilities[] {text, category,
+timeframe, kind}`, `emotional_tone`, `journey_candidates[] {title, confidence}` (stored unused
+until 07), `safety_flags[]`. Strict: unknown keys fail; there is no probability field anywhere.
 
-**`themes`** — `id`, `user_id null` (null = curated global), `slug`, `label`, `category`.
-**`object_themes`** — `object_type`, `object_id`, `theme_id`, `weight`, `source created_by`, `user_confirmed`.
+**`metadata_overrides`** — `id`, `user_id`, `object_type`, `object_id`, `field_path`, `value
+jsonb`, `created_at`, `updated_at`. Unique `(object_type, object_id, field_path)`. Keys are
+stable: `life_area`, `themes/<slug>`, `entities/<normalised mention>`, `possibilities/<text
+hash>`, `timeframe`; values are the typed union in `src/domain/extraction/overrides.ts`
+(`dismissed | confirmed | added | linked {entityId} | edited {text}`). User-authoritative:
+`applyOverrides()` layers them over the newest payload on every read and every materialisation,
+so a reprocess can never undo a correction (FR-26). Four policies, insert/update require the
+reading to be the caller's.
 
-**`entities`** — `id`, `user_id`, `kind entity_kind`, `canonical_label`, `status enum('active','merged','archived')`,
-`merged_into_id uuid null`, `first_seen_at`, `last_seen_at`, `user_confirmed boolean`, `notes`.
-**`entity_aliases`** — `id`, `entity_id`, `alias`, `alias_normalized` (lowercased, stripped), `context text`,
-`confidence numeric`, `source created_by`, `created_at`. Trigram index on `alias_normalized`.
-**`entity_roles`** — `id`, `entity_id`, `role text` (partner, employer, …), `valid_from date`,
-`valid_to date null`, `source created_by`. Roles are never overwritten (§7.1 temporal relationships).
-**`entity_mentions`** — `object_type`, `object_id`, `entity_id`, `mention_text`, `confidence`,
-`resolution enum('auto','tentative','user','rejected')`.
+**`themes`** — `id`, `user_id null` (null = curated), `slug`, `label`, `category`
+(`emotional | relational | situational | practical`). Unique `(user_id, slug) NULLS NOT
+DISTINCT`. Thirty curated rows are seeded by `pnpm db:seed` from `src/domain/themes/taxonomy.ts`
+(slug = stable key, label = display text, synonyms for mapping the model's free-text labels);
+a label that matches none becomes a user-scoped row. RLS: select curated or own; write own only.
+**`object_themes`** — `id`, `user_id`, `object_type`, `object_id`, `theme_id` (cascade),
+`weight numeric(4,3)`, `source created_by`, `user_confirmed` (default false), `extraction_id`
+(set null), `created_at`. Unique `(object_type, object_id, theme_id)`. Four policies.
+
+**`entities`** — `id`, `user_id`, `kind entity_kind`, `canonical_label`, `status` (`active |
+merged | archived`, check; `merged` ⇔ `merged_into_id` set), `merged_into_id` (self FK, set
+null), `first_seen_at`, `last_seen_at`, `user_confirmed` (default false; any user action pins the
+entity against automatic rename/merge), `notes` (the user's own words), `created_at`,
+`updated_at`. Trigram index on `canonical_label`. Four policies.
+**`entity_aliases`** — `id`, `user_id`, `entity_id` (cascade), `alias`, `alias_normalized`
+(`normalizeAlias()`: case, diacritics, punctuation, possessive framing stripped), `context`
+(the role the alias carried, e.g. `partner`), `confidence numeric(4,3)`, `source created_by`,
+`created_at`. Unique `(entity_id, alias_normalized)`; GIN trigram index on `alias_normalized`.
+Four policies, parent must be own.
+**`entity_roles`** — `id`, `user_id`, `entity_id` (cascade), `role` (stable key from
+`src/domain/entities/relations.ts`), `valid_from date` (not null: the evidence date),
+`valid_to date null`, `source created_by`, `evidence_object_type/id` (where the role was learned).
+Check `valid_to >= valid_from`. **Never rewritten:** the `entity_roles_immutable` trigger
+raises `23514` on any change to `role`, `valid_from`, `source`, or to a `valid_to` that is
+already set — a role change adds a row and closes the previous one; merges only re-point
+`entity_id`. Four policies, parent must be own.
+**`entity_mentions`** — `id`, `user_id`, `entity_id` (cascade), `object_type`, `object_id`,
+`mention_text`, `mention_normalized`, `confidence numeric(4,3)`, `resolution` (`auto |
+tentative | user | rejected`, check), `signals jsonb` (per-signal scores), `reasons text[]`
+(the "why?" sentences), `ask_candidates uuid[]` (an open disambiguation: at most one per
+object), `extraction_id` (set null), `created_at`. Unique `(object_type, object_id,
+mention_normalized)`. Four policies, both parents must be own. Only `auto` and `user` rows
+reach prompts (`src/memory/context.ts`).
+**`entity_merges`** — `id`, `user_id`, `source_entity_id`, `target_entity_id`, `snapshot jsonb`
+(the plan's ids, the full rows of dropped duplicates, rewritten override ids with their
+previous values, the target's prior flags), `merged_at`, `undone_at`. No FKs (ids only). Four
+policies. Written by `apply_entity_merge()`, consumed by `undo_entity_merge()`.
+
+**`predictions`** — `id`, `user_id`, `reading_id` (cascade), `text`, `text_hash` (`textKey()`),
+`category`, `timeframe_start/end date`, `timeframe_text`, `kind` (`possibility | prediction`),
+`fact_status` **fixed to `POSSIBILITY` by check**, `extracted_from` (extractions, set null),
+`user_edited` (default false), `dismissed_at`, `created_at`, `updated_at`. Unique `(reading_id,
+text_hash)` so a reprocess keeps ids stable for Phase 08's outcomes; a dismissal keeps the row
+with `dismissed_at`. **No probability column, ever** (§10). Four policies, reading must be own.
+
+**Functions** (all `SECURITY INVOKER`, granted to `authenticated, service_role`):
+`apply_entity_merge(p_source, p_target, p_plan jsonb) → uuid` executes a plan from
+`domain/entities/merge.ts` in one transaction and writes the receipt; `undo_entity_merge(p_merge)`
+restores the source from it; `apply_entity_split(p_source, p_label, p_kind, p_plan) → uuid`
+moves chosen mentions to a new user-confirmed entity. `search_readings(p)` gained `entity_id`
+(EXISTS on `entity_mentions`, resolution ≠ rejected).
 
 ---
 
@@ -379,7 +437,9 @@ create policy <t>_delete on <t> for delete using (user_id = auth.uid());
 Variants used so far: `profiles` is keyed on `id = auth.uid()` and has no delete policy;
 `user_flags` has a select policy only (service-role writes); `jobs` has RLS enabled with no
 policies; `reading_note_revisions` is select + delete (trigger-written); `deletion_receipts`
-is select only (job-written); `exports` is select + a constrained insert (the request). Column-level rules that RLS cannot express (old vs new row, e.g. `profiles.plan`) are
+is select only (job-written); `exports` is select + a constrained insert (the request);
+`extractions` is select + delete (job-written); `themes` reads curated (`user_id is null`) or
+own rows and writes own rows only. Column-level rules that RLS cannot express (old vs new row, e.g. `profiles.plan`) are
 `BEFORE UPDATE` triggers that check `auth.role()`.
 
 Child tables (e.g. `reading_cards`, `interpretations`) carry a denormalised `user_id` **and** an

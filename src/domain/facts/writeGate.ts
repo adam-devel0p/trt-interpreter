@@ -59,3 +59,24 @@ export function userWrite<T>(factStatus: FactStatus, payload: T): Gated<T> {
   if (!FACT_STATUSES.includes(factStatus)) throw new WriteGateError('user', factStatus);
   return { fact_status: factStatus, payload };
 }
+
+/**
+ * The same gate for derived tables that carry no `fact_status` column (Phase 06): an entity,
+ * theme link, alias or mention a model produced is born unconfirmed. `user_confirmed` may not
+ * be true, `source` may not be `'user'`, and a mention's `resolution` may only be `auto` or
+ * `tentative`. Only a user action (`userWrite` paths) promotes any of them.
+ */
+export const MODEL_RESOLUTIONS: readonly string[] = ['auto', 'tentative'];
+
+export function modelBorn<T extends Record<string, unknown>>(row: T): T {
+  if (row.user_confirmed === true || row.userConfirmed === true)
+    throw new WriteGateError('model', 'user_confirmed');
+  if (row.source === 'user') throw new WriteGateError('model', 'source=user');
+  if ('resolution' in row && !MODEL_RESOLUTIONS.includes(String(row.resolution)))
+    throw new WriteGateError('model', `resolution=${String(row.resolution)}`);
+  if ('fact_status' in row && !MODEL_ALLOWED.includes(row.fact_status as FactStatus))
+    throw new WriteGateError('model', String(row.fact_status));
+  if ('factStatus' in row && !MODEL_ALLOWED.includes(row.factStatus as FactStatus))
+    throw new WriteGateError('model', String(row.factStatus));
+  return row;
+}

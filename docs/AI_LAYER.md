@@ -80,9 +80,9 @@ Each task is a directory `src/ai/tasks/<task>/` containing `prompt.ts`, `schema.
 | `interpret_reading` | 04 ✅ | deep | layered interpretation | Deck-aware; streams; grounded in `cards` reference rows, not model memory. `interpret_reading/1.0.0` · `interpretation/1.0.0` |
 | `classify_safety` | 04 ✅ | fast | category + severity | Runs on the question before interpretation (§10). `classify_safety/1.0.0` · `safety_classification/1.0.0` |
 | `detect_repeat_question` | 04 ✅ | fast (embedding + rule) | similarity verdict | Mostly deterministic; no generation needed (FR-25). Embedding request only; the rule is `domain/interpretation/repeat.ts` |
-| `extract_reading_metadata` | 06 | standard | extraction payload | Themes, entities, possibilities, timeframe (§7.2) |
+| `extract_reading_metadata` | 06 ✅ | standard | extraction payload | Themes, entities (mentions + relations), possibilities, timeframe (§7.2). Runs as the `extract_reading_metadata` job after save, never in the request path. `extract_reading_metadata/1.0.0` · `extraction/1.0.0` |
 | `extract_event_metadata` | 08 | standard | extraction payload | Same schema family as above (§6.4) |
-| `propose_entity_candidates` | 06 | fast | candidate mentions + aliases | Proposes only; resolution decided in `domain/` |
+| `propose_entity_candidates` | 06 (folded) | fast | — | Folded into `extract_reading_metadata`'s `entities[]` (one call per save instead of two); resolution is decided in `domain/entities/resolve.ts`. The `TaskId` stays reserved. |
 | `propose_journey` | 07 | standard | title + confidence + rationale | Naming only; assignment decided in `domain/` |
 | `explain_correlation` | 08 | fast | 1–2 sentence reason | Explains a score the code computed; may not invent the link |
 | `parse_history_query` | 09 | fast | intent, time range, entities, journey hints | Step 1 of §8.1 |
@@ -154,6 +154,37 @@ current interpretation. Depth: `domain/interpretation/depth.ts` — `ai_explanat
 length and `max_tokens` (1 100 / 1 800 / 2 800); `experienced` shortens one step and folds the
 layers beneath the user's note.
 
+## extract_reading_metadata — the run (Phase 06)
+
+`src/memory/extract.ts` (`runExtraction`) is called by the `extract_reading_metadata` job;
+`src/ai/tasks/extract_reading_metadata/` owns the prompt, schema re-export, versions and the
+rule-based mock. Order of operations is the contract:
+
+1. the reading exists and is not soft-deleted — it is usable before, during and after;
+2. gates: `profiles.ai_consent_at` and the `ai_extraction` flag (env default off; per-user
+   `user_flags` override) — no consent, no call of any kind, no row;
+3. freshness: a current extraction at the same schema version, `metadata_version` and
+   `source_hash` means nothing to do unless forced (notes edits change the hash; card, deck,
+   spread and question edits bump the version);
+4. an `extractions` row is written `pending` **before** the model call;
+5. `runObject` with the Zod payload schema (`extraction/1.0.0`, strict, no probability field);
+6. the pending row's payload is **materialised first** (`src/memory/materialize.ts`: themes onto
+   the taxonomy, mentions through the resolver, entities/aliases/roles, predictions — with the
+   user's overrides layered on), then the row is marked `complete` and the previous current
+   row superseded in one transaction, so a reader never sees a complete extraction without its
+   rows; a failed model call leaves a `failed` row with its class; timeouts and provider errors
+   make the job retry, everything else is terminal.
+
+The prompt sends the question, note, date, deck/spread names and the drawn cards as context
+("never as evidence about the person's life"); the user's own `life_area` is passed as a hint.
+Corrections never call the model: `src/memory/corrections.ts` writes an override as the user
+and re-materialises. `reprocess_extractions {toSchema, userId?, limit}` walks readings whose
+current extraction is not at the target schema and re-runs them, bounded, re-enqueueing
+itself while work remains (`pnpm jobs:reprocess`).
+
+Prompt context for later tasks takes entities only from `src/memory/context.ts`
+(`auto` and `user` resolutions — never `tentative`, asserted by a test).
+
 ## Write gate
 
 The mechanism behind invariant 7 / §9.2.
@@ -171,6 +202,11 @@ const MODEL_ALLOWED: FactStatus[] = ['INFERRED_EVENT','TAROT_INTERPRETATION',
 - Backed by DB check constraints where the column is fixed (`interpretations.fact_status`,
   `predictions.fact_status`). Implemented in `src/domain/facts/writeGate.ts` (Phase 04); every
   interpretation write in `src/db/queries/interpretations.ts` goes through `modelWrite()`.
+- Tables without a `fact_status` column (Phase 06: `entities`, `entity_aliases`,
+  `entity_mentions`, `object_themes`, `entity_roles`) go through `modelBorn()`, which refuses
+  `user_confirmed = true`, `source = 'user'` and any `resolution` other than `auto` /
+  `tentative`. The materialiser routes every model-side insert through it (asserted
+  structurally by the invariant test).
 - Tests: attempt `CONFIRMED_FACT` through `modelWrite()` → rejected; promote an `INFERRED_EVENT` via
   user confirmation → allowed and audited; a model-authored link may never be born `confirmed`.
 - Related invariant (§10 no self-validating loops): a `links` row may not use an `interpretation` or

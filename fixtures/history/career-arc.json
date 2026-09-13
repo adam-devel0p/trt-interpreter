@@ -1,0 +1,190 @@
+{
+  "name": "career-arc",
+  "description": "An employer, a manager who gets a name, a move to a new company. Descriptors and names for the same people collapse; a same-name mention with a new role is tentative (people hold several roles); once the user has split off a second Alex a bare 'Alex' is a question, not a guess, while 'Alex, my friend' resolves to the friend.",
+  "steps": [
+    {
+      "day": 0,
+      "mentions": [
+        {
+          "text": "the agency",
+          "kind": "organization",
+          "relation": "employer"
+        },
+        {
+          "text": "my boss",
+          "kind": "person",
+          "relation": "manager"
+        }
+      ],
+      "expect": [
+        {
+          "text": "the agency",
+          "decision": "new",
+          "entity": "the agency",
+          "roles": ["employer"]
+        },
+        {
+          "text": "my boss",
+          "decision": "new",
+          "entity": "my boss",
+          "roles": ["manager"]
+        }
+      ]
+    },
+    {
+      "day": 14,
+      "mentions": [
+        {
+          "text": "Priya",
+          "kind": "person",
+          "relation": "my manager"
+        }
+      ],
+      "expect": [
+        {
+          "text": "Priya",
+          "decision": "auto",
+          "entity": "my boss",
+          "renamedTo": "Priya"
+        }
+      ]
+    },
+    {
+      "day": 30,
+      "mentions": [
+        {
+          "text": "Priya",
+          "kind": "person",
+          "relation": null
+        },
+        {
+          "text": "the agency",
+          "kind": "organization",
+          "relation": null
+        },
+        {
+          "text": "Alex",
+          "kind": "person",
+          "relation": "friend"
+        }
+      ],
+      "expect": [
+        {
+          "text": "Priya",
+          "decision": "auto",
+          "entity": "Priya"
+        },
+        {
+          "text": "the agency",
+          "decision": "auto",
+          "entity": "the agency"
+        },
+        {
+          "text": "Alex",
+          "decision": "new",
+          "entity": "Alex",
+          "roles": ["friend"]
+        }
+      ]
+    },
+    {
+      "day": 45,
+      "mentions": [
+        {
+          "text": "Alex",
+          "kind": "person",
+          "relation": "colleague"
+        }
+      ],
+      "expect": [
+        {
+          "text": "Alex",
+          "decision": "tentative",
+          "entity": "Alex"
+        }
+      ]
+    },
+    {
+      "day": 50,
+      "userCreates": [
+        {
+          "label": "Alex",
+          "kind": "person",
+          "roles": ["colleague"]
+        }
+      ],
+      "mentions": [],
+      "expect": []
+    },
+    {
+      "day": 60,
+      "mentions": [
+        {
+          "text": "Alex",
+          "kind": "person",
+          "relation": null
+        }
+      ],
+      "expect": [
+        {
+          "text": "Alex",
+          "decision": "ask",
+          "candidatesRoles": [["friend"], ["colleague"]]
+        }
+      ]
+    },
+    {
+      "day": 61,
+      "mentions": [
+        {
+          "text": "Alex",
+          "kind": "person",
+          "relation": "friend"
+        }
+      ],
+      "expect": [
+        {
+          "text": "Alex",
+          "decision": "auto",
+          "entity": "Alex",
+          "entityRoles": ["friend"]
+        }
+      ]
+    },
+    {
+      "day": 90,
+      "mentions": [
+        {
+          "text": "the new company",
+          "kind": "organization",
+          "relation": "employer"
+        }
+      ],
+      "expect": [
+        {
+          "text": "the new company",
+          "decision": "new",
+          "entity": "the new company",
+          "roles": ["employer"]
+        }
+      ]
+    },
+    {
+      "day": 100,
+      "mentions": [
+        {
+          "text": "the old agency",
+          "kind": "organization",
+          "relation": "former employer"
+        }
+      ],
+      "expect": [
+        {
+          "text": "the old agency",
+          "decision": "tentative",
+          "entity": "the agency"
+        }
+      ]
+    }
+  ]
+}

@@ -3,6 +3,7 @@ import { parseArgs } from 'node:util';
 import { authAdmin, closeAdmin, platformSql } from '../src/db/admin';
 import { seedBulkReadings, seedReadings } from './seed-demo-readings';
 import { seedInterpretations } from './seed-demo-interpretations';
+import { seedMemory } from './seed-demo-memory';
 
 /**
  * Demo journal generator (docs/IMPLEMENTATION_PLAN.md §3.10). Produces a coherent fictional
@@ -106,6 +107,7 @@ const SEEDERS: Seeder[] = [
   { name: 'readings', phase: '03', run: seedReadings },
   { name: 'interpretations', phase: '04', run: seedInterpretations },
   { name: 'bulk readings', phase: '05', run: seedBulk },
+  { name: 'structured memory', phase: '06', run: seedMemory },
 ];
 
 async function main() {

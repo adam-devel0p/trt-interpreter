@@ -1,0 +1,25 @@
+{
+  "name": "career-employer-manager",
+  "description": "An employer and a manager named by role, then the manager's name. Expect an organisation with an employer relation, a person with a manager relation, a decision theme, the user's own life area kept.",
+  "question": "Should I apply for the design lead role?",
+  "life_area": "work",
+  "user_notes": "Priya, my manager, says the agency will back me. The advice card felt like: stop waiting to be asked.",
+  "deck": "rws",
+  "spread": "situation-advice-outcome",
+  "cards": [
+    { "slug": "eight-of-pentacles", "orientation": "upright" },
+    { "slug": "the-magician", "orientation": "upright" },
+    { "slug": "six-of-wands", "orientation": "upright" }
+  ],
+  "expect": {
+    "life_area": "work",
+    "entities": [
+      { "mention": "priya", "kind": "person" },
+      { "mention": "agency", "kind": "organization" }
+    ],
+    "forbidden_mentions": ["me", "i"],
+    "themes_any": ["decision", "ambition", "confidence", "uncertainty"],
+    "possibilities_max": 4,
+    "timeframe": false
+  }
+}

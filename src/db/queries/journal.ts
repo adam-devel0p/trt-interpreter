@@ -161,6 +161,7 @@ export async function searchJournal(
     to: range.to,
     deck_id: deckId,
     spread_id: filters.spread,
+    entity_id: filters.entity,
     source: filters.source,
     follow_up: filters.followUp,
     has_notes: filters.hasNotes,

@@ -5,30 +5,79 @@ import { logger } from '@/observability/logger';
 
 /**
  * "Delete AI artifacts only" (§10 user control, docs/PRIVACY_AND_DELETION.md): removes every
- * interpretation, safety flag and question embedding the user has, keeps every word they
- * wrote. Runs as the user through RLS (each of these tables has an owner delete policy), so
- * the scope is the caller's rows and nothing else; the receipt is written by the service role.
+ * model-derived row the user has and keeps every word they wrote — and every correction they
+ * made. Runs as the user through RLS (each table has an owner delete policy), so the scope is
+ * the caller's rows and nothing else; the receipt is written by the service role.
+ *
+ * Phase 06 added the structured-memory tables. What goes: extractions, model-sourced theme
+ * links, auto/tentative mentions, un-edited predictions and entities the user never
+ * confirmed (their aliases and roles cascade). What stays: `metadata_overrides` (the user's
+ * corrections — they re-apply on the next extraction), confirmed themes, user-linked
+ * mentions, edited predictions, confirmed entities, merge receipts.
  */
+
+export interface AiArtifactTarget {
+  table: string;
+  /** Column filters narrowing the delete to model-derived rows; `[]` = every own row. */
+  where: readonly { column: string; op: 'eq' | 'in'; value: unknown }[];
+}
+
+export const AI_ARTIFACT_TARGETS: readonly AiArtifactTarget[] = [
+  { table: 'interpretations', where: [] },
+  { table: 'safety_flags', where: [] },
+  { table: 'question_embeddings', where: [] },
+  { table: 'extractions', where: [] },
+  { table: 'object_themes', where: [{ column: 'source', op: 'eq', value: 'model' }] },
+  {
+    table: 'entity_mentions',
+    where: [{ column: 'resolution', op: 'in', value: ['auto', 'tentative'] }],
+  },
+  { table: 'predictions', where: [{ column: 'user_edited', op: 'eq', value: false }] },
+  { table: 'entities', where: [{ column: 'user_confirmed', op: 'eq', value: false }] },
+];
 
 export const AI_ARTIFACT_TABLES = [
   'interpretations',
   'safety_flags',
   'question_embeddings',
+  'extractions',
+  'object_themes',
+  'entity_mentions',
+  'predictions',
+  'entities',
 ] as const;
 export type AiArtifactTable = (typeof AI_ARTIFACT_TABLES)[number];
+export type AiArtifactCounts = Record<AiArtifactTable, number>;
+
+/** PostgREST filter builder, typed loosely: the tables are named at runtime by the registry. */
+interface Filterable {
+  eq(column: string, value: unknown): Filterable;
+  in(column: string, value: unknown[]): Filterable;
+}
+
+function applyWhere(q: Filterable, target: AiArtifactTarget): Filterable {
+  let out = q;
+  for (const w of target.where)
+    out = w.op === 'eq' ? out.eq(w.column, w.value) : out.in(w.column, w.value as unknown[]);
+  return out;
+}
 
 export async function countAiArtifacts(
   client: UserClient,
   userId: string,
-): Promise<Record<AiArtifactTable, number>> {
-  const out = {} as Record<AiArtifactTable, number>;
-  for (const table of AI_ARTIFACT_TABLES) {
-    const { count, error } = await client
-      .from(table)
+): Promise<AiArtifactCounts> {
+  const out = {} as AiArtifactCounts;
+  for (const target of AI_ARTIFACT_TARGETS) {
+    const base = client
+      .from(target.table)
       .select('id', { count: 'exact', head: true })
-      .eq('user_id', userId);
-    if (error) throw new Error(`count ${table} failed: ${error.code}`);
-    out[table] = count ?? 0;
+      .eq('user_id', userId) as unknown as Filterable;
+    const { count, error } = (await (applyWhere(base, target) as unknown as Promise<{
+      count: number | null;
+      error: { code?: string } | null;
+    }>)) satisfies { count: number | null };
+    if (error) throw new Error(`count ${target.table} failed: ${error.code}`);
+    out[target.table as AiArtifactTable] = count ?? 0;
   }
   return out;
 }
@@ -36,12 +85,18 @@ export async function countAiArtifacts(
 export async function deleteAiArtifacts(
   client: UserClient,
   userId: string,
-): Promise<{ receiptId: string; counts: Record<AiArtifactTable, number> }> {
-  const counts = {} as Record<AiArtifactTable, number>;
-  for (const table of AI_ARTIFACT_TABLES) {
-    const { data, error } = await client.from(table).delete().eq('user_id', userId).select('id');
-    if (error) throw new Error(`delete ${table} failed: ${error.code}`);
-    counts[table] = data?.length ?? 0;
+): Promise<{ receiptId: string; counts: AiArtifactCounts }> {
+  const counts = {} as AiArtifactCounts;
+  for (const target of AI_ARTIFACT_TARGETS) {
+    const base = client.from(target.table).delete().eq('user_id', userId) as unknown as Filterable;
+    const scoped = applyWhere(base, target) as unknown as {
+      select(
+        c: string,
+      ): Promise<{ data: { id: string }[] | null; error: { code?: string } | null }>;
+    };
+    const { data, error } = await scoped.select('id');
+    if (error) throw new Error(`delete ${target.table} failed: ${error.code}`);
+    counts[target.table as AiArtifactTable] = data?.length ?? 0;
   }
   const receipt = await insertDeletionReceipt({ userId, scope: 'ai_artifacts', counts });
   logger.info('privacy.ai_artifacts_deleted', {

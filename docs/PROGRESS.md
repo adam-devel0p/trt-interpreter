@@ -2,22 +2,24 @@
 
 The first thing to read in any new session. Update it at the end of every phase.
 
-**Current state:** Phase 05 complete — the product is a shippable private tarot journal.
-`/journal` is a month-grouped, keyset-paginated timeline from stored rows (zero AI calls on the
-route); search is FTS + trigram fallback + card search through `card_aliases` (Thoth *Lust* found
-by "strength", shown under its own name); eight filters and three sorts live in the URL. Edit
-covers question, date, life area, spread, deck and cards in one transaction; every previous
-`user_notes` / `question` is kept in `reading_note_revisions` by trigger (invariant 4) and shown
-as *Earlier versions*. Delete = soft delete + registry-driven `purge_deleted` job (run at once,
-cron retries) + `deletion_receipts`; the confirmation names what goes. Export v1
-(`export_user_data`): zip of per-type JSON + `links.json` + `manifest.json` in a private bucket,
-10-minute signed URLs, 7-day archives, on every plan. Profile has real export history, "Delete AI
-artifacts" and receipts. `demo-cleo` carries 1000 generated readings; p95 13–81 ms per query,
-16.7 ms/frame scrolling. Invariants live: `deleting-reading-purges-derived`,
-`raw-text-never-overwritten`, `archive-readable-without-subscription`;
-`opening-reading-makes-no-ai-call` extended to the journal. Full gate green (110 e2e).
-Owner-side deferral from 04 (real-model eval) still open and unblocking.
-**Next phase:** [Phase 06 — Structured memory](phases/phase-06-structured-memory.md)
+**Current state:** Phase 06 complete — saved readings grow structured memory. The
+`extract_reading_metadata` job runs after save (cron, never the request), gated on consent and
+the `ai_extraction` flag (env default off; per-user `user_flags` rollout), writes append-only
+`extractions` (`extraction/1.0.0`, versioned, materialised before marked complete) and derives
+themes on a seeded taxonomy, `POSSIBILITY` predictions, and entities through the pure resolver
+(`domain/entities/resolve.ts`: exact / trigram / name↔descriptor / role channels, 0.85 · 0.60 ·
+0.08 thresholds, one question per reading, temporal roles never rewritten — trigger-enforced).
+The reading detail's *Connections* shows every inferred value as a labelled chip with "why?" and
+a one-tap correction; corrections are `metadata_overrides` that survive re-extraction and
+`reprocess_extractions`. *People & places* under Profile: rename, aliases, roles, merge with a
+receipt and undo (`apply_entity_merge` / `undo_entity_merge`), split, remove. Prompt context
+excludes tentative entities by construction. Purge, delete-AI-artifacts and export
+(`export/1.1.0`) cover all ten new tables; the journal filters by entity. Demo: Maya under four
+names with a partner → ex-partner change, an employer, a city, a live merge. Invariants live:
+`alias-merge-preserves-historical-roles`; `model-cannot-create-confirmed-fact` extended to
+memory rows. Full gate green (114 e2e). Owner-side deferrals: real-model eval for extraction
+(then flip the flag), as for 04.
+**Next phase:** [Phase 07 — Journeys](phases/phase-07-journeys.md)
 
 ## Phase status
 
@@ -29,7 +31,7 @@ Owner-side deferral from 04 (real-model eval) still open and unblocking.
 | 03 | [Reading loop (no AI)](phases/phase-03-reading-loop.md) | ✅ complete | [report](phases/completed/phase-03-report.md) | 2026-09-12 · Thoth reversals test done on RWS by design; PWA device check still open |
 | 04 | [AI boundary + interpretation](phases/phase-04-ai-interpretation.md) | ⚠️ complete with deferrals | [report](phases/completed/phase-04-report.md) | 2026-09-13 · real-model eval + human baseline review need provider keys (owner) |
 | 05 | [Journal, search, export](phases/phase-05-journal-search.md) | ✅ complete | [report](phases/completed/phase-05-report.md) | 2026-09-13 · ← shippable journal; `removeUserStorage()` ready for 12's account job |
-| 06 | [Structured memory](phases/phase-06-structured-memory.md) | ⬜ not started | — | |
+| 06 | [Structured memory](phases/phase-06-structured-memory.md) | ⚠️ complete with deferrals | [report](phases/completed/phase-06-report.md) | 2026-09-13 · real-model extraction eval + flag default need provider keys (owner) |
 | 07 | [Journeys](phases/phase-07-journeys.md) | ⬜ not started | — | |
 | 08 | [Events, outcomes, correlation](phases/phase-08-events-outcomes.md) | ⬜ not started | — | |
 | 09 | [Retrieval + Ask My History](phases/phase-09-retrieval-ask.md) | ⬜ not started | — | ← MVP complete; run §22 study |
@@ -53,7 +55,7 @@ Each must be unskipped by the phase shown and never weakened afterwards. See
 | `raw-text-never-overwritten` | 05 | ✅ |
 | `deleting-reading-purges-derived` | 05 | ✅ |
 | `archive-readable-without-subscription` | 05 | ✅ (Phase 11 must extend it to exhausted limits) |
-| `alias-merge-preserves-historical-roles` | 06 | ⬜ |
+| `alias-merge-preserves-historical-roles` | 06 | ✅ |
 | `card-overlap-alone-never-correlates` | 08 | ⬜ |
 | `rejected-link-not-resuggested` | 08 | ⬜ |
 | `summary-never-sole-evidence` | 08 | ⬜ |
@@ -85,7 +87,14 @@ Add anything a phase discovered but could not settle. Remove when resolved.
   hit the same skew in the job queue (a fresh job "due in the future"): jobs now let the DB stamp
   `run_after`, and a named job is claimed regardless. Never compare a JS `Date` to DB `now()`.
 - Every note autosave pause writes a `reading_note_revisions` row (invariant 4 taken
-  literally). Coalescing is a one-line trigger change if history gets noisy.
+  literally). Coalescing is a one-line trigger change if history gets noisy. Extraction after a
+  notes edit is deduped and delayed 60 s, so an editing session costs one model call.
+- **Two extractions of one reading can overlap** if a second enqueue lands while the first job
+  is already `running` (dedupe only sees `queued`). Both complete correctly; the model is called
+  twice. A per-reading advisory lock is a Phase 12 hardening item.
+- The mock extractor is English-only rule scaffolding; the real prompt has not been run. If
+  real-model precision is poor, raise `TENTATIVE` toward the auto band (§4.4) — the resolver
+  already leans tentative.
 - The two soft-deleted demo rows stay soft-deleted: nothing enqueues the `purge_deleted` sweep
   (`{readingId: null}`) yet — a cron entry or `pnpm jobs:sweep` is a Phase 12 ops item.
 
@@ -112,8 +121,14 @@ Phases append here when they defer something, so nothing is lost between session
 | Region-aware safety resources | 04 | 11/12 | No region known (`profiles.locale = 'en'`); international + US/UK lines shown |
 | ~~Purge `safety_flags` with the reading~~ | 04 | 05 ✅ | explicit remover in `src/privacy/purge.ts`, receipt counts it |
 | ~~Interpretations in journal list / export~~ | 04 | 05 ✅ | list preview = current `synthesis`; export carries every generation |
-| Entity / journey filters in the journal | 05 | 06 / 07 | a key in `journalFiltersSchema`, an `EXISTS` in `search_readings`, a select in `filters.tsx` |
-| Extractions + summaries in "Delete AI artifacts" and in the export | 05 | 06 / 10 | `AI_ARTIFACT_TABLES`, `EXPORT_FILES` |
+| ~~Entity~~ / journey filters in the journal | 05 | 06 ✅ / 07 | entity landed in 06 (`entity=` + `EXISTS` on `entity_mentions`); journey follows the same three edits |
+| ~~Extractions~~ + summaries in "Delete AI artifacts" and in the export | 05 | 06 ✅ / 10 | extractions, themes, mentions, predictions, entities in both (export/1.1.0); summaries in 10 |
+| Real-model `pnpm eval` for `extract_reading_metadata`, human read of the four baselines, then `FLAG_AI_EXTRACTION=true` | 06 | owner (any time) | no provider key; mock baseline recorded (recall 100 %, precision 88 %) |
+| Embedding channel for entity candidates (`embeddingSimilarity`) | 06 | 09 | needs entity context vectors; hook + threshold exist |
+| Journey overlap signal in resolution | 06 | 07 | renormalised out until journeys exist |
+| Re-score `links` on merge / split; prediction retraction on reprocess | 06 | 08 | no links / outcomes yet; ids kept stable |
+| Per-reading lock against overlapping extraction jobs | 06 | 12 | dedupe covers `queued` only |
+| `MemoryPanel` / entity controls in `/dev/ui` | 06 | 12 | islands bound to actions; `InferredChip` is in the gallery |
 | Confirmed links in `links.json` | 05 | 08 | `LINK_KINDS` |
 | Markdown / PDF export | 05 | 12 | v2 by design |
 | Account-deletion storage sweep (`removeUserStorage()` exists, tested) | 05 | 12 | called by the test harness now; the account job must call it |

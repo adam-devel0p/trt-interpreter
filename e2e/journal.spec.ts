@@ -211,7 +211,7 @@ test.describe('journal', () => {
       schema_version: string;
       counts: Record<string, number>;
     };
-    expect(manifest.schema_version).toBe('export/1.0.0');
+    expect(manifest.schema_version).toBe('export/1.1.0');
     expect(manifest.counts['readings.json']).toBe(3);
     const readings = JSON.parse(strFromU8(files['readings.json']!)) as { id: string }[];
     expect(readings.map((r) => r.id).sort()).toEqual([...ids].sort());
@@ -260,6 +260,9 @@ test.describe('journal', () => {
   });
 
   test('scrolls a 1000-entry journal at 60fps (demo-cleo)', async ({ page }, testInfo) => {
+    // Loading 34 pages plus the ~8 s measured scroll pass 30 s under 8 workers; the assertion
+    // is the frame timing, not the wall clock.
+    test.setTimeout(90_000);
     await signInAsDemo(page, 'demo-cleo@tarot.local');
     await page.goto('/journal');
     const status = page.locator('#journal-summary');

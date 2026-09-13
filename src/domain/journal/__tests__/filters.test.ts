@@ -19,6 +19,7 @@ describe('journal filters ↔ URL', () => {
       to: '2026-03-31',
       deck: 'thoth',
       spread: '11111111-1111-4111-8111-111111111111',
+      entity: '22222222-2222-4222-8222-222222222222',
       source: 'physical',
       status: 'resolved',
       notes: '1',
@@ -31,6 +32,7 @@ describe('journal filters ↔ URL', () => {
       to: '2026-03-31',
       deck: 'thoth',
       spread: '11111111-1111-4111-8111-111111111111',
+      entity: '22222222-2222-4222-8222-222222222222',
       source: 'physical',
       followUp: 'resolved',
       hasNotes: true,
@@ -42,7 +44,12 @@ describe('journal filters ↔ URL', () => {
   });
 
   it('a malformed value drops only itself; the bare URL means everything', () => {
-    const f = parseJournalParams({ spread: 'not-a-uuid', sort: 'sideways', source: 'psychic' });
+    const f = parseJournalParams({
+      spread: 'not-a-uuid',
+      entity: 'nobody',
+      sort: 'sideways',
+      source: 'psychic',
+    });
     expect(f).toEqual(EMPTY_FILTERS);
     expect(hasActiveFilters(f)).toBe(false);
     expect(journalHref(f)).toBe('/journal');

@@ -1,0 +1,71 @@
+{
+  "fixture": "open-reflection-thin",
+  "description": "An open reflection with almost no text. Expect nothing invented: no entities, at most one theme, no possibilities, no timeframe — empty is the right answer.",
+  "provider": "mock",
+  "model": "mock/claude-sonnet-5",
+  "prompt_version": "extract_reading_metadata/1.0.0",
+  "schema_version": "extraction/1.0.0",
+  "ran_at": "2026-09-13T06:59:40.141Z",
+  "checks": {
+    "schema": {
+      "pass": true
+    },
+    "entity_recall": {
+      "pass": true,
+      "detail": {
+        "recall": 1,
+        "missing": []
+      }
+    },
+    "entity_precision": {
+      "pass": true,
+      "detail": {
+        "precision": 1,
+        "extra": []
+      }
+    },
+    "no_pronouns": {
+      "pass": true,
+      "detail": []
+    },
+    "theme_sanity": {
+      "pass": true,
+      "detail": []
+    },
+    "life_area": {
+      "pass": true,
+      "detail": null
+    },
+    "possibilities": {
+      "pass": true,
+      "detail": []
+    },
+    "timeframe": {
+      "pass": true,
+      "detail": null
+    },
+    "no_probability": {
+      "pass": true
+    }
+  },
+  "output": {
+    "life_area": null,
+    "entities": [],
+    "themes": [],
+    "event_mentions": [],
+    "goals": [],
+    "fears": [],
+    "decisions": [],
+    "timeframe": null,
+    "possibilities": [],
+    "emotional_tone": "calm",
+    "journey_candidates": [],
+    "safety_flags": []
+  },
+  "human_review": {
+    "reviewed_by": null,
+    "reviewed_at": null,
+    "verdict": null,
+    "notes": null
+  }
+}

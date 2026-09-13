@@ -1,0 +1,26 @@
+{
+  "name": "relocation-place-family",
+  "description": "A move, a city, a parent, a friend, a horizon. Expect a place, two people, a home/change theme, a timeframe.",
+  "question": "What is the move to Leeds asking of me?",
+  "life_area": "home",
+  "user_notes": "My mum thinks it is too far. Sam says give it a month and see. Viewing the flat on Friday.",
+  "deck": "thoth",
+  "spread": "three-card",
+  "cards": [
+    { "slug": "the-chariot", "orientation": "upright" },
+    { "slug": "change", "orientation": "upright" },
+    { "slug": "the-universe", "orientation": "upright" }
+  ],
+  "expect": {
+    "life_area": "home",
+    "entities": [
+      { "mention": "leeds", "kind": "place" },
+      { "mention": "mum", "kind": "person" },
+      { "mention": "sam", "kind": "person" }
+    ],
+    "forbidden_mentions": ["it", "me"],
+    "themes_any": ["change", "home", "family", "decision", "patience"],
+    "possibilities_max": 4,
+    "timeframe": true
+  }
+}

@@ -47,7 +47,12 @@ the above plus `jobs`, `profiles`, `user_flags`, `reminder_settings`, `readings`
 `reading_drafts`, `spreads` (custom rows), `ai_calls` and `deletion_receipts` (`user_id` set
 null — no content), and `exports` (`via: 'job'`: rows cascade, the archives under
 `exports/<user_id>/` are storage objects listed in `STORAGE_PREFIXES` for the Phase 12 account
-job). `life_event`, `journey`, `entity` roots are still empty. The purge job
+job). **Phase 06:** the `reading` root gained `predictions` (cascade) and `extractions`,
+`metadata_overrides`, `object_themes`, `entity_mentions` (`via: 'job'`, keyed by
+`(object_type, object_id)`, removed by explicit steps); the `entity` root holds
+`entity_aliases`, `entity_roles`, `entity_mentions` (cascade) and `entity_merges` (`via: 'job'`,
+removed by `deleteEntity()` for either side); the `user` root lists all ten new tables
+(`themes` user rows only). `life_event` and `journey` roots are still empty. The purge job
 (`src/privacy/purge.ts`) is *driven by* the `reading` root: it counts every registered table
 before the delete, runs the `job` steps, deletes the reading (cascades do the rest), verifies
 every count is zero afterwards and writes the counts into a receipt — a registry table with no
@@ -64,7 +69,7 @@ remaining trace of deleted content.
 | Flow | Behaviour | Phase |
 |---|---|---|
 | Delete one entry | **Built (05).** `softDeleteReading()` sets `deleted_at` as the user (every read path and the search function filter it, so the reading is out of all views at once); the action enqueues `purge_deleted {readingId}` and runs it immediately (`runBatch({ jobId })`); the cron batch retries a failed purge and the payload-less sweep mode purges anything left. The confirmation names exactly what goes (cards, notes, earlier versions, interpretations). Receipt on Profile. | 05 |
-| Delete AI artifacts only | **Built (05)** for what exists: `deleteAiArtifacts()` removes the user's `interpretations`, `safety_flags` and `question_embeddings` as the user (RLS-scoped), keeps every word, writes an `ai_artifacts` receipt; the confirmation quotes the counts. Phase 06 extends it to extractions and summaries. | 05 → 06 |
+| Delete AI artifacts only | **Built (05, extended 06):** `deleteAiArtifacts()` removes, as the user (RLS-scoped), `interpretations`, `safety_flags`, `question_embeddings`, `extractions`, model-sourced `object_themes`, `auto`/`tentative` `entity_mentions`, un-edited `predictions` and unconfirmed `entities` (aliases and roles cascade); keeps every word **and every correction** (`metadata_overrides`, confirmed themes, user-linked mentions, edited predictions, confirmed entities, merge receipts); writes an `ai_artifacts` receipt; the confirmation quotes the counts. Phase 10 adds summaries. | 05 → 06 → 10 |
 | Delete all history | Everything user-owned except the account | 12 |
 | Delete account | Full purge + storage + auth identity; irreversible, double-confirmed, receipt emailed | 12 |
 
@@ -73,15 +78,20 @@ retention and provider processing are described in plain language on the privacy
 
 ## Export (FR-22)
 
-- **v1 (Phase 05, built):** JSON — stable IDs and relationships preserved, so a user can leave
-  without losing the graph (§13 data portability). `manifest.json` (`export/1.0.0`, timestamp,
+- **v1 (Phase 05, built; 1.1.0 in Phase 06):** JSON — stable IDs and relationships preserved, so a user can leave
+  without losing the graph (§13 data portability). `manifest.json` (`export/1.1.0`, timestamp,
   per-file counts) + `profile.json`, `readings.json` (cards nested), `note_revisions.json`,
   `interpretations.json` (every generation, versions, `superseded_by`, the user's feedback words),
   `safety_flags.json` (categories), `question_asks.json` (hashes, never vectors or text),
   `spreads.json`, `decks.json`, `cards.json` (deck-native identity of every card referenced),
   `deletion_receipts.json`, `links.json` (`reading_uses_spread/deck`, `reading_card_is`,
   `revision_of`, `interpretation_of`, `supersedes`, `safety_flag_on`, `ask_for`; confirmed links
-  join in Phase 08). Never `ai_calls`. Contract in `src/domain/export/schema.ts`
+  join in Phase 08), and since Phase 06 `extractions.json` (every run, superseded included, with
+  versions and payloads), `metadata_overrides.json` (the user's corrections), `themes.json`
+  (curated rows referenced + the user's own), `object_themes.json`, `entities.json` (aliases and
+  roles nested, merged rows kept), `entity_mentions.json`, `predictions.json` (always
+  `POSSIBILITY`, no probability) with links `extraction_of`, `override_on`, `theme_on`,
+  `theme_is`, `mention_in`, `mention_of`, `prediction_of`, `merged_into`. Never `ai_calls`. Contract in `src/domain/export/schema.ts`
   (`validateExport()`); builder in `src/export/build.ts`; the `export_user_data` job reads the
   user id from the `exports` row, uploads to the private `exports` bucket, sets a 7-day
   `expires_at` and sweeps that user's expired archives. Delivered by

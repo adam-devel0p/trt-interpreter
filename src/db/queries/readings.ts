@@ -230,10 +230,12 @@ export async function listRecentCardIds(
 ): Promise<string[]> {
   const { data, error } = await client
     .from('reading_cards')
-    .select('card_id, created_at, cards!inner(deck_id), readings!inner(deleted_at)')
+    .select('card_id, created_at, position_index, cards!inner(deck_id), readings!inner(deleted_at)')
     .eq('cards.deck_id', deckId)
     .is('readings.deleted_at', null)
+    // Cards of one reading share a created_at (one transaction): position breaks the tie.
     .order('created_at', { ascending: false })
+    .order('position_index', { ascending: true })
     .limit(limit * 5);
   if (error) throw new ReadingQueryError('recent cards read failed', error.code);
   const seen = new Set<string>();

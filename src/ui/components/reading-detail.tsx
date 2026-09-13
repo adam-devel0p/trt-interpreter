@@ -23,6 +23,12 @@ export interface ReadingDetailSlots {
    * When absent the section shows an honest "Not generated." — the reading is complete without it.
    */
   interpretation?: React.ReactNode;
+  /**
+   * Connections (Phase 06): the structured memory this reading grew — themes, people and
+   * places, possibilities — every one labelled as inferred and correctable. When absent the
+   * section explains what will appear here.
+   */
+  connections?: React.ReactNode;
 }
 
 export interface ReadingDetailProps {
@@ -153,10 +159,13 @@ export function ReadingDetail({ reading, justSaved = false, slots, cardHref }: R
         <h2 id="connections-h" className="mb-2 font-serif text-xl">
           Connections
         </h2>
-        <p className="rounded-card border border-dashed border-hairline-strong px-4 py-3 text-sm text-fg-muted">
-          Later, life events, journeys and other readings that relate to this one will appear here,
-          each with the entries they came from.
-        </p>
+        {slots.connections ?? (
+          <p className="rounded-card border border-dashed border-hairline-strong px-4 py-3 text-sm text-fg-muted">
+            The people, places and themes in this reading — and later, life events, journeys and
+            other readings that relate to it — will appear here, each with the entries they came
+            from.
+          </p>
+        )}
       </section>
 
       <section aria-labelledby="follow-up-h" className="mt-8">

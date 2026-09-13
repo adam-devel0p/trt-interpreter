@@ -168,3 +168,33 @@ stored interpretation is *stale*, never silently kept), the delete confirmation 
 exactly what goes, and the Profile's `ExportControls` (button, history with status, size,
 expiry and *Download*), `DeleteAiArtifactsControl` (counts quoted before the destructive verb)
 and `DeletionReceipts`.
+
+Phase 06 built the reading detail's **Connections** panel (`MemoryPanel`, `app/(app)/reading/[id]/`):
+the AI container contract again — UI sans in `surface-ai` with a hairline left edge and the
+eyebrow "Suggested by AI · one way to sort this reading" — holding the structured memory a
+reading grew as groups of chips: *Life area*, *Themes*, *People and places*, *Possibilities*,
+*Timeframe*. Every model-derived value is an `InferredChip` (now with a `label` of
+"suggested" or "possibly" for tentative matches, a "keep" action and a configurable correct
+label); "why?" opens the actual reasons ("You have called them “Alex” before", "Alex is your
+partner", "Last mentioned 12 days apart"); a value the user set, kept or linked becomes a solid
+`UserChip` labelled "you" with an undo. Corrections are inline — a life-area `<select>`, an
+add-theme field, an entity picker `<select>` ("This is right — keep it", the user's other
+entries, "Someone new"), an edit field for a possibility or timeframe — never a modal. An open
+disambiguation renders as a small `role="group"` question ("Which Alex is this?") with one button
+per candidate (with their roles), *Someone else* and *not a person*. States: *not sorted* (AI
+off — plain copy and a link to Profile), *looking* (a polite status while the queued job runs;
+the panel polls the memory route every 3 s for up to two minutes), *ready*, *stale* (an earlier
+version of the reading was read; refreshes after the next pass), *failed* ("Couldn’t sort this
+reading. Your words are unchanged" + *Try again*, which only queues). "Why am I seeing this?"
+names the model, prompt and schema versions. Every outcome is announced in a polite live region.
+
+Also built: the **People & places** pages (`/profile/entities`, `/profile/entities/[id]`): a
+list grouped by kind with "suggested" / "confirmed by you", active roles, name and reading counts,
+first/last seen; a detail page with rename (confirms), the user's own note (serif — theirs),
+aliases as chips (dashed = suggested, solid = yours, removable), roles over time with start/end
+dates and *ended today*, an add-role form, every mention linked to its reading with a "Why this
+was matched" disclosure, and the corrections — merge into another entry (the one destructive
+confirmation names what moves and that it can be undone; the target page shows an undo notice),
+split off mentions (checkboxes + a name), remove. The journal's filter panel gained *Mentions*
+(an entity select, only when the user has entities).
+

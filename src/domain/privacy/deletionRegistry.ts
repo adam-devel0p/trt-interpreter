@@ -17,6 +17,11 @@
  * Phase 05: `reading_note_revisions` (cascade from the reading and the user),
  * `deletion_receipts` (user_id set null — a receipt outlives the account and holds only
  * counts), `exports` (cascade; the archive in the `exports` bucket is removed by the job).
+ * Phase 06: the structured-memory tables. Under the `reading` root, `predictions` cascade by
+ * FK while `extractions`, `metadata_overrides`, `object_themes` and `entity_mentions` are keyed
+ * by `(object_type, object_id)` and removed by the purge job. The `entity` root is populated:
+ * aliases, roles and mentions cascade from `entities`; `entity_merges` hold ids only and are
+ * removed by the entity delete path. `themes` (user rows) cascade from the user.
  * The `purge_deleted` job (`src/privacy/purge.ts`) is driven by the `reading` root of this
  * registry and a test asserts its receipt names every table listed here.
  */
@@ -45,10 +50,24 @@ export const DELETION_REGISTRY: Record<RootType, readonly CascadeTarget[]> = {
       via: 'cascade',
       note: 'FK readings.id on delete cascade; every previous value of the user text',
     },
+    { table: 'extractions', via: 'job', note: 'keyed by (object_type, object_id)' },
+    { table: 'metadata_overrides', via: 'job', note: 'keyed by (object_type, object_id)' },
+    { table: 'object_themes', via: 'job', note: 'keyed by (object_type, object_id)' },
+    { table: 'entity_mentions', via: 'job', note: 'keyed by (object_type, object_id)' },
+    { table: 'predictions', via: 'cascade', note: 'FK readings.id on delete cascade' },
   ],
   life_event: [],
   journey: [],
-  entity: [],
+  entity: [
+    { table: 'entity_aliases', via: 'cascade', note: 'FK entities.id on delete cascade' },
+    { table: 'entity_roles', via: 'cascade', note: 'FK entities.id on delete cascade' },
+    { table: 'entity_mentions', via: 'cascade', note: 'FK entities.id on delete cascade' },
+    {
+      table: 'entity_merges',
+      via: 'job',
+      note: 'ids only, no FK; removed by deleteEntity() for either side of the merge',
+    },
+  ],
   user: [
     { table: 'jobs', via: 'cascade', note: 'auth.users FK; payloads carry only IDs' },
     {
@@ -89,6 +108,20 @@ export const DELETION_REGISTRY: Record<RootType, readonly CascadeTarget[]> = {
       via: 'job',
       note: 'rows cascade from auth.users; the archives under exports/<user_id>/ are storage objects the account-deletion job (Phase 12) must remove',
     },
+    { table: 'extractions', via: 'cascade', note: 'derived payloads, versioned' },
+    { table: 'metadata_overrides', via: 'cascade', note: "the user's corrections" },
+    {
+      table: 'themes',
+      via: 'cascade',
+      note: 'user-scoped rows only; curated rows have user_id null',
+    },
+    { table: 'object_themes', via: 'cascade' },
+    { table: 'entities', via: 'cascade' },
+    { table: 'entity_aliases', via: 'cascade' },
+    { table: 'entity_roles', via: 'cascade' },
+    { table: 'entity_mentions', via: 'cascade' },
+    { table: 'entity_merges', via: 'cascade', note: 'ids only' },
+    { table: 'predictions', via: 'cascade', note: 'POSSIBILITY rows; no probability ever' },
   ],
 };
 

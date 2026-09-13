@@ -26,10 +26,13 @@ export function JournalFilters({
   filters,
   decks,
   spreads,
+  entities,
 }: {
   filters: Filters;
   decks: { slug: string; name: string }[];
   spreads: { id: string; name: string }[];
+  /** Phase 06: the user's active entities; the select is omitted when there are none. */
+  entities?: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const formRef = React.useRef<HTMLFormElement>(null);
@@ -40,6 +43,7 @@ export function JournalFilters({
         filters.to !== null ||
         filters.deck !== null ||
         filters.spread !== null ||
+        filters.entity !== null ||
         filters.source !== null ||
         filters.followUp !== null ||
         filters.hasNotes !== null ||
@@ -166,6 +170,24 @@ export function JournalFilters({
             ))}
           </select>
         </Labelled>
+        {entities && entities.length > 0 ? (
+          <Labelled id="journal-entity" label="Mentions">
+            <select
+              id="journal-entity"
+              name="entity"
+              defaultValue={filters.entity ?? ''}
+              onChange={submit}
+              className={selectClass}
+            >
+              <option value="">Anyone, anywhere</option>
+              {entities.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.name}
+                </option>
+              ))}
+            </select>
+          </Labelled>
+        ) : null}
         <Labelled id="journal-source" label="Source">
           <select
             id="journal-source"

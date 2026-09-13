@@ -38,6 +38,8 @@ describe('raw-text-never-overwritten', () => {
       'src/jobs',
       'src/privacy',
       'src/export',
+      // Phase 06: extraction reads the words and writes only derived tables.
+      'src/memory',
     ].flatMap(files);
     expect(derived.length).toBeGreaterThan(20);
     const offenders: string[] = [];
@@ -57,6 +59,11 @@ describe('raw-text-never-overwritten', () => {
     expect(offenders).toEqual([]);
     // The purge deletes a reading the user already deleted — a delete, never a rewrite.
     expect(read('src/privacy/purge.ts')).not.toMatch(/user_notes|user_meaning/);
+    // Extraction reads question and notes into the prompt and never rewrites either; every
+    // model-born memory row goes through modelBorn() (Phase 06).
+    const materialize = read('src/memory/materialize.ts');
+    expect(materialize).not.toMatch(/userNotes|user_notes|question/);
+    expect((materialize.match(/modelBorn\(/g) ?? []).length).toBeGreaterThanOrEqual(5);
   });
 
   it('2 · model-derived writes carry no user-text column and every one is gated', () => {

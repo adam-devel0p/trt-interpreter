@@ -10,7 +10,7 @@ async function main() {
   const s = await seedReferenceData();
   console.log(
     `reference data seeded: ${s.decks} decks · ${s.cards} cards · ${s.archetypes} archetypes · ` +
-      `${s.members} members · ${s.aliases} aliases · ${s.spreads} spreads`,
+      `${s.members} members · ${s.aliases} aliases · ${s.spreads} spreads · ${s.themes} themes`,
   );
 }
 

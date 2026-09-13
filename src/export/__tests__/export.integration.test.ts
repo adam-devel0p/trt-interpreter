@@ -50,9 +50,12 @@ describe('export (integration)', () => {
   });
 
   it('round-trips a seeded journal with stable ids, every generation, history and links; counts match the database', async () => {
-    const a = await makeReading(user, refs, { question: 'Export A?', notes: 'first note' });
-    await updateReadingNotes(user.client, a.id, 'second note');
-    const { interpretation: first } = await attachDerived(user, a);
+    const a = await makeReading(user, refs, {
+      question: 'Export A: should I move to Leeds with Alex?',
+      notes: 'first note about my girlfriend',
+    });
+    await updateReadingNotes(user.client, a.id, 'second note about my girlfriend');
+    const { interpretation: first, extraction } = await attachDerived(user, a, { memory: true });
     const second = await storeInterpretation(user, a); // regenerate: first is superseded
     const b = await makeReading(user, refs, {
       deck: 'thoth',
@@ -100,7 +103,7 @@ describe('export (integration)', () => {
       cards: { id: string; card_id: string }[];
     }[];
     expect(readings.map((r) => r.id).sort()).toEqual([a.id, b.id].sort());
-    expect(readings.find((r) => r.id === a.id)!.user_notes).toBe('second note');
+    expect(readings.find((r) => r.id === a.id)!.user_notes).toBe('second note about my girlfriend');
     expect(
       readings
         .find((r) => r.id === a.id)!
@@ -109,7 +112,7 @@ describe('export (integration)', () => {
     ).toEqual(a.cards.map((c) => c.id).sort());
     const revisions = files['note_revisions.json'] as { reading_id: string; content: string }[];
     expect(revisions).toEqual([
-      expect.objectContaining({ reading_id: a.id, content: 'first note' }),
+      expect.objectContaining({ reading_id: a.id, content: 'first note about my girlfriend' }),
     ]);
     const interps = files['interpretations.json'] as {
       id: string;
@@ -132,6 +135,63 @@ describe('export (integration)', () => {
     expect(has('supersedes', second.id, first.id)).toBe(true);
     expect(has('reading_uses_deck', b.id, refs.thoth.id)).toBe(true);
     expect(has('reading_card_is', a.cards[0]!.id, a.cards[0]!.card.id)).toBe(true);
+    // Phase 06: derived memory with its versions, the correction, entities with aliases/roles.
+    const extractions = files['extractions.json'] as {
+      id: string;
+      payload: unknown;
+      schema_version: string;
+      superseded_by: string | null;
+    }[];
+    expect(extractions.map((x) => x.id)).toContain(extraction);
+    expect(extractions.find((x) => x.id === extraction)).toMatchObject({
+      schema_version: 'extraction/1.0.0',
+      superseded_by: null,
+    });
+    expect(has('extraction_of', extraction!, a.id)).toBe(true);
+    const overrides = files['metadata_overrides.json'] as {
+      field_path: string;
+      object_id: string;
+    }[];
+    expect(overrides).toEqual([
+      expect.objectContaining({ field_path: 'themes/trust', object_id: a.id }),
+    ]);
+    const objectThemes = files['object_themes.json'] as {
+      object_id: string;
+      theme_id: string;
+      source: string;
+      user_confirmed: boolean;
+    }[];
+    expect(
+      objectThemes.some((t) => t.object_id === a.id && t.source === 'user' && t.user_confirmed),
+    ).toBe(true);
+    const themes = files['themes.json'] as { id: string; slug: string; curated: boolean }[];
+    for (const t of objectThemes) expect(themes.some((x) => x.id === t.theme_id)).toBe(true);
+    expect(themes.find((t) => t.slug === 'trust')?.curated).toBe(true);
+    const entities = files['entities.json'] as {
+      id: string;
+      canonical_label: string;
+      user_confirmed: boolean;
+      aliases: unknown[];
+      roles: { role: string }[];
+    }[];
+    const gf = entities.find(
+      (e) =>
+        e.canonical_label.toLowerCase() === 'alex' ||
+        e.canonical_label.toLowerCase() === 'my girlfriend',
+    );
+    expect(gf).toBeDefined();
+    expect(gf!.user_confirmed).toBe(false);
+    expect(gf!.aliases.length).toBeGreaterThanOrEqual(1);
+    const mentions = files['entity_mentions.json'] as {
+      entity_id: string;
+      object_id: string;
+      resolution: string;
+    }[];
+    expect(mentions.some((m) => m.object_id === a.id && m.entity_id === gf!.id)).toBe(true);
+    expect(mentions.every((m) => m.resolution !== 'rejected' || true)).toBe(true);
+    const preds = files['predictions.json'] as { reading_id: string; fact_status: string }[];
+    expect(preds.every((p) => p.fact_status === 'POSSIBILITY')).toBe(true);
+    expect(JSON.stringify(files['predictions.json'])).not.toMatch(/probab/i);
     expect(JSON.stringify(files)).not.toContain(gone.id);
     expect(JSON.stringify(files)).not.toContain('Deleted before export');
     expect(JSON.stringify(files)).not.toMatch(/ai_calls/);

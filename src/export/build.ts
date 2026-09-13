@@ -6,7 +6,15 @@ import {
   cards,
   decks,
   deletionReceipts,
+  entities,
+  entityAliases,
+  entityMentions,
+  entityRoles,
+  extractions,
   interpretations,
+  metadataOverrides,
+  objectThemes,
+  predictions,
   profiles,
   questionEmbeddings,
   readingCards,
@@ -14,6 +22,7 @@ import {
   readings,
   safetyFlags,
   spreads,
+  themes,
 } from '@/db/schema';
 import {
   EXPORT_FILES,
@@ -156,6 +165,79 @@ export async function buildExportArchive(
     .from(deletionReceipts)
     .where(eq(deletionReceipts.userId, userId))
     .orderBy(deletionReceipts.completedAt, deletionReceipts.id);
+
+  // Phase 06: structured memory — every extraction (including superseded), the user's
+  // corrections, themes (curated ones referenced + the user's own), entities with aliases
+  // and roles nested, mentions, predictions. Rows on deleted readings are excluded with them.
+  const liveObject = (r: { objectType: string; objectId: string }) =>
+    r.objectType !== 'reading' || readingIds.includes(r.objectId);
+  const extractionRows = (
+    await db
+      .select()
+      .from(extractions)
+      .where(eq(extractions.userId, userId))
+      .orderBy(extractions.createdAt, extractions.id)
+  ).filter(liveObject);
+  const overrideRows = (
+    await db
+      .select()
+      .from(metadataOverrides)
+      .where(eq(metadataOverrides.userId, userId))
+      .orderBy(metadataOverrides.createdAt, metadataOverrides.id)
+  ).filter(liveObject);
+  const objectThemeRows = (
+    await db
+      .select()
+      .from(objectThemes)
+      .where(eq(objectThemes.userId, userId))
+      .orderBy(objectThemes.createdAt, objectThemes.id)
+  ).filter(liveObject);
+  const themeIds = [...new Set(objectThemeRows.map((t) => t.themeId))];
+  const themeRows = await db
+    .select()
+    .from(themes)
+    .where(
+      themeIds.length
+        ? or(eq(themes.userId, userId), inArray(themes.id, themeIds))
+        : eq(themes.userId, userId),
+    )
+    .orderBy(themes.slug, themes.id);
+  const entityRows = await db
+    .select()
+    .from(entities)
+    .where(eq(entities.userId, userId))
+    .orderBy(entities.createdAt, entities.id);
+  const entityIds = entityRows.map((e) => e.id);
+  const aliasRows = entityIds.length
+    ? await db
+        .select()
+        .from(entityAliases)
+        .where(inArray(entityAliases.entityId, entityIds))
+        .orderBy(entityAliases.createdAt, entityAliases.id)
+    : [];
+  const roleRows = entityIds.length
+    ? await db
+        .select()
+        .from(entityRoles)
+        .where(inArray(entityRoles.entityId, entityIds))
+        .orderBy(entityRoles.validFrom, entityRoles.id)
+    : [];
+  const mentionRows = (
+    entityIds.length
+      ? await db
+          .select()
+          .from(entityMentions)
+          .where(inArray(entityMentions.entityId, entityIds))
+          .orderBy(entityMentions.createdAt, entityMentions.id)
+      : []
+  ).filter(liveObject);
+  const predictionRows = readingIds.length
+    ? await db
+        .select()
+        .from(predictions)
+        .where(inArray(predictions.readingId, readingIds))
+        .orderBy(predictions.createdAt, predictions.id)
+    : [];
 
   const cardsByReading = new Map<string, typeof cardRows>();
   for (const c of cardRows) {
@@ -307,6 +389,135 @@ export async function buildExportArchive(
       completed_at: isoReq(d.completedAt),
       counts: d.counts as Record<string, number>,
     })),
+    'extractions.json': extractionRows.map((x) => {
+      link('extraction_of', ['extraction', x.id], [x.objectType, x.objectId]);
+      if (x.supersededBy) link('supersedes', ['extraction', x.supersededBy], ['extraction', x.id]);
+      return {
+        id: x.id,
+        object_type: x.objectType,
+        object_id: x.objectId,
+        status: x.status,
+        schema_version: x.schemaVersion,
+        prompt_version: x.promptVersion,
+        model_id: x.modelId,
+        metadata_version: x.metadataVersion,
+        payload: x.payload ?? null,
+        error_class: x.errorClass,
+        superseded_by: x.supersededBy,
+        created_at: isoReq(x.createdAt),
+        completed_at: iso(x.completedAt),
+      };
+    }),
+    'metadata_overrides.json': overrideRows.map((o) => {
+      link('override_on', ['metadata_override', o.id], [o.objectType, o.objectId]);
+      return {
+        id: o.id,
+        object_type: o.objectType,
+        object_id: o.objectId,
+        field_path: o.fieldPath,
+        value: o.value,
+        created_at: isoReq(o.createdAt),
+        updated_at: isoReq(o.updatedAt),
+      };
+    }),
+    'themes.json': themeRows.map((t) => ({
+      id: t.id,
+      slug: t.slug,
+      label: t.label,
+      category: t.category,
+      curated: t.userId === null,
+    })),
+    'object_themes.json': objectThemeRows.map((t) => {
+      link('theme_on', ['object_theme', t.id], [t.objectType, t.objectId]);
+      link('theme_is', ['object_theme', t.id], ['theme', t.themeId]);
+      return {
+        id: t.id,
+        object_type: t.objectType,
+        object_id: t.objectId,
+        theme_id: t.themeId,
+        weight: Number(t.weight),
+        source: t.source,
+        user_confirmed: t.userConfirmed,
+        extraction_id: t.extractionId,
+        created_at: isoReq(t.createdAt),
+      };
+    }),
+    'entities.json': entityRows.map((e) => {
+      if (e.mergedIntoId) link('merged_into', ['entity', e.id], ['entity', e.mergedIntoId]);
+      return {
+        id: e.id,
+        kind: e.kind,
+        canonical_label: e.canonicalLabel,
+        status: e.status,
+        merged_into_id: e.mergedIntoId,
+        first_seen_at: isoReq(e.firstSeenAt),
+        last_seen_at: isoReq(e.lastSeenAt),
+        user_confirmed: e.userConfirmed,
+        notes: e.notes,
+        created_at: isoReq(e.createdAt),
+        aliases: aliasRows
+          .filter((a) => a.entityId === e.id)
+          .map((a) => ({
+            id: a.id,
+            alias: a.alias,
+            alias_normalized: a.aliasNormalized,
+            context: a.context,
+            confidence: Number(a.confidence),
+            source: a.source,
+            created_at: isoReq(a.createdAt),
+          })),
+        roles: roleRows
+          .filter((r) => r.entityId === e.id)
+          .map((r) => ({
+            id: r.id,
+            role: r.role,
+            valid_from: r.validFrom,
+            valid_to: r.validTo,
+            source: r.source,
+            evidence_object_type: r.evidenceObjectType,
+            evidence_object_id: r.evidenceObjectId,
+            created_at: isoReq(r.createdAt),
+          })),
+      };
+    }),
+    'entity_mentions.json': mentionRows.map((m) => {
+      link('mention_in', ['entity_mention', m.id], [m.objectType, m.objectId]);
+      link('mention_of', ['entity_mention', m.id], ['entity', m.entityId]);
+      return {
+        id: m.id,
+        entity_id: m.entityId,
+        object_type: m.objectType,
+        object_id: m.objectId,
+        mention_text: m.mentionText,
+        mention_normalized: m.mentionNormalized,
+        confidence: Number(m.confidence),
+        resolution: m.resolution,
+        signals: m.signals ?? null,
+        reasons: m.reasons,
+        extraction_id: m.extractionId,
+        created_at: isoReq(m.createdAt),
+      };
+    }),
+    'predictions.json': predictionRows.map((p) => {
+      link('prediction_of', ['prediction', p.id], ['reading', p.readingId]);
+      return {
+        id: p.id,
+        reading_id: p.readingId,
+        text: p.text,
+        text_hash: p.textHash,
+        category: p.category,
+        timeframe_start: p.timeframeStart,
+        timeframe_end: p.timeframeEnd,
+        timeframe_text: p.timeframeText,
+        kind: p.kind,
+        fact_status: p.factStatus as 'POSSIBILITY',
+        extracted_from: p.extractedFrom,
+        user_edited: p.userEdited,
+        dismissed_at: iso(p.dismissedAt),
+        created_at: isoReq(p.createdAt),
+        updated_at: isoReq(p.updatedAt),
+      };
+    }),
     'links.json': links,
   };
 
@@ -329,6 +540,7 @@ export async function buildExportArchive(
       'interpretations.json holds every generation, including superseded ones, with model and prompt versions.',
       'question_asks.json carries hashes of questions, not the text; the text is in readings.json.',
       'Readings you deleted are not included.',
+      'extractions.json, entities.json, entity_mentions.json, object_themes.json and predictions.json are derived by the app and can be regenerated; metadata_overrides.json holds your corrections to them.',
     ],
   } satisfies ExportManifest);
 

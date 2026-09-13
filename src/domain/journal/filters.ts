@@ -32,6 +32,8 @@ export const journalFiltersSchema = z
     deck: z.string().max(64).nullable().default(null),
     /** Spread id. */
     spread: z.string().uuid().nullable().default(null),
+    /** Entity id (Phase 06): readings that mention this person, place or organisation. */
+    entity: z.string().uuid().nullable().default(null),
     source: z.enum(READING_SOURCES).nullable().default(null),
     followUp: z.enum(FOLLOW_UP_STATUSES).nullable().default(null),
     hasNotes: z.boolean().nullable().default(null),
@@ -50,6 +52,7 @@ const URL_KEYS = {
   to: 'to',
   deck: 'deck',
   spread: 'spread',
+  entity: 'entity',
   source: 'source',
   followUp: 'status',
   hasNotes: 'notes',
@@ -78,6 +81,7 @@ export function parseJournalParams(raw: RawParams): JournalFilters {
     to: first(raw, URL_KEYS.to) ?? null,
     deck: first(raw, URL_KEYS.deck) ?? null,
     spread: first(raw, URL_KEYS.spread) ?? null,
+    entity: first(raw, URL_KEYS.entity) ?? null,
     source: first(raw, URL_KEYS.source) ?? null,
     followUp: first(raw, URL_KEYS.followUp) ?? null,
     hasNotes: bool(first(raw, URL_KEYS.hasNotes)),
@@ -106,6 +110,7 @@ export function toSearchParams(filters: Partial<JournalFilters>): URLSearchParam
   if (f.to) p.set(URL_KEYS.to, f.to);
   if (f.deck) p.set(URL_KEYS.deck, f.deck);
   if (f.spread) p.set(URL_KEYS.spread, f.spread);
+  if (f.entity) p.set(URL_KEYS.entity, f.entity);
   if (f.source) p.set(URL_KEYS.source, f.source);
   if (f.followUp) p.set(URL_KEYS.followUp, f.followUp);
   if (f.hasNotes !== null) p.set(URL_KEYS.hasNotes, f.hasNotes ? '1' : '0');
@@ -128,6 +133,7 @@ export function hasActiveFilters(f: JournalFilters): boolean {
     f.to !== null ||
     f.deck !== null ||
     f.spread !== null ||
+    f.entity !== null ||
     f.source !== null ||
     f.followUp !== null ||
     f.hasNotes !== null ||

@@ -7,6 +7,7 @@ import { Button } from '@/ui/components/button';
 import { ConfirmDestructive } from '@/ui/components/confirm-destructive';
 import { FormMessage } from '@/ui/components/field';
 import { LocalTime } from '@/ui/components/local-time';
+import type { AiArtifactCounts } from '@/privacy/aiArtifacts';
 import { deleteAiArtifactsAction, requestExportAction } from './actions';
 
 const STATUS_LABEL: Record<ExportRequestRow['status'], string> = {
@@ -111,23 +112,24 @@ export function ExportControls({ exports: rows }: { exports: ExportRequestRow[] 
 }
 
 /** §10: remove every AI artifact, keep every word. Names exactly what goes before it goes. */
-export function DeleteAiArtifactsControl({
-  counts,
-}: {
-  counts: { interpretations: number; safety_flags: number; question_embeddings: number };
-}) {
+export function DeleteAiArtifactsControl({ counts }: { counts: AiArtifactCounts }) {
   const router = useRouter();
   const [message, setMessage] = React.useState<{ tone: 'error' | 'info'; text: string } | null>(
     null,
   );
-  const total = counts.interpretations + counts.safety_flags + counts.question_embeddings;
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+  const memory =
+    counts.extractions + counts.object_themes + counts.entity_mentions + counts.predictions;
   const description =
     total === 0
       ? 'There is nothing generated to remove right now.'
-      : `${counts.interpretations} AI interpretation${counts.interpretations === 1 ? '' : 's'}, ` +
-        `${counts.safety_flags} topic flag${counts.safety_flags === 1 ? '' : 's'} and ` +
-        `${counts.question_embeddings} question fingerprint${counts.question_embeddings === 1 ? '' : 's'} ` +
-        'will be removed. Every reading, card and note you wrote stays exactly as it is. This cannot be undone.';
+      : `${plural(counts.interpretations, 'AI interpretation')}, ` +
+        `${plural(counts.safety_flags, 'topic flag')}, ` +
+        `${plural(counts.question_embeddings, 'question fingerprint')}, ` +
+        `${plural(memory, 'suggested theme, mention or possibility', 'suggested themes, mentions and possibilities')} and ` +
+        `${plural(counts.entities, 'unconfirmed person or place', 'unconfirmed people and places')} ` +
+        'will be removed. Every reading, card and note you wrote stays exactly as it is, and so do your own corrections. This cannot be undone.';
   return (
     <div className="flex flex-col items-end gap-2">
       <ConfirmDestructive

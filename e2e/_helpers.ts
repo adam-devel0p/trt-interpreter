@@ -62,7 +62,10 @@ export async function latestEmailLink(to: string): Promise<string> {
  * A user who has already finished onboarding, created through the admin API (service role,
  * test-only). Returns credentials; sign in through the UI with `signInViaUi`.
  */
-export async function createReadyUser(tag: string, opts: { aiConsent?: boolean } = {}) {
+export async function createReadyUser(
+  tag: string,
+  opts: { aiConsent?: boolean; extraction?: boolean } = {},
+) {
   const { createClient } = await import('@supabase/supabase-js');
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -88,7 +91,33 @@ export async function createReadyUser(tag: string, opts: { aiConsent?: boolean }
     })
     .eq('id', data.user.id);
   if (upd.error) throw new Error(`profile update failed: ${upd.error.message}`);
+  // Phase 06: extraction is flag-gated (env default off); opt the test user in like a rollout.
+  if (opts.extraction) {
+    const flag = await admin
+      .from('user_flags')
+      .upsert(
+        { user_id: data.user.id, flag: 'ai_extraction', enabled: true, set_by: 'rollout' },
+        { onConflict: 'user_id,flag' },
+      );
+    if (flag.error) throw new Error(`flag upsert failed: ${flag.error.message}`);
+  }
   return { id: data.user.id, email, password: PASSWORD };
+}
+
+/**
+ * Run one cron batch (the queued extraction after a save). Same route Vercel cron calls;
+ * the secret comes from .env.local.
+ */
+export async function runJobs(): Promise<{ claimed: number; succeeded: number }> {
+  const base = process.env.PW_BASE_URL ?? 'http://127.0.0.1:3100';
+  const secret = process.env.JOBS_RUN_SECRET;
+  if (!secret) throw new Error('e2e needs JOBS_RUN_SECRET');
+  const res = await fetch(`${base}/api/jobs/run`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${secret}` },
+  });
+  if (!res.ok) throw new Error(`jobs run failed: ${res.status}`);
+  return (await res.json()) as { claimed: number; succeeded: number };
 }
 
 export async function signInViaUi(page: Page, email: string, password = PASSWORD) {

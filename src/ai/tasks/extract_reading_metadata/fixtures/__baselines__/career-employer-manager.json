@@ -1,0 +1,121 @@
+{
+  "fixture": "career-employer-manager",
+  "description": "An employer and a manager named by role, then the manager's name. Expect an organisation with an employer relation, a person with a manager relation, a decision theme, the user's own life area kept.",
+  "provider": "mock",
+  "model": "mock/claude-sonnet-5",
+  "prompt_version": "extract_reading_metadata/1.0.0",
+  "schema_version": "extraction/1.0.0",
+  "ran_at": "2026-09-13T06:59:40.124Z",
+  "checks": {
+    "schema": {
+      "pass": true
+    },
+    "entity_recall": {
+      "pass": true,
+      "detail": {
+        "recall": 1,
+        "missing": []
+      }
+    },
+    "entity_precision": {
+      "pass": true,
+      "detail": {
+        "precision": 0.6666666666666666,
+        "extra": ["manager"]
+      }
+    },
+    "no_pronouns": {
+      "pass": true,
+      "detail": []
+    },
+    "theme_sanity": {
+      "pass": true,
+      "detail": ["ambition", "decision", "confidence"]
+    },
+    "life_area": {
+      "pass": true,
+      "detail": "work"
+    },
+    "possibilities": {
+      "pass": true,
+      "detail": ["Choosing to apply for the design lead role may open something."]
+    },
+    "timeframe": {
+      "pass": true,
+      "detail": null
+    },
+    "no_probability": {
+      "pass": true
+    }
+  },
+  "output": {
+    "life_area": "work",
+    "entities": [
+      {
+        "mention": "my manager",
+        "kind": "person",
+        "confidence": 0.85,
+        "relation": "manager",
+        "context": "Priya, my manager, says the agency will back me."
+      },
+      {
+        "mention": "the agency",
+        "kind": "organization",
+        "confidence": 0.7,
+        "relation": "employer",
+        "context": "Priya, my manager, says the agency will back me."
+      },
+      {
+        "mention": "Priya",
+        "kind": "person",
+        "confidence": 0.6,
+        "relation": "manager",
+        "context": "Priya, my manager, says the agency will back me."
+      }
+    ],
+    "themes": [
+      {
+        "label": "Ambition",
+        "category": "practical",
+        "weight": 0.95
+      },
+      {
+        "label": "Decision",
+        "category": "situational",
+        "weight": 0.65
+      },
+      {
+        "label": "Confidence",
+        "category": "emotional",
+        "weight": 0.65
+      }
+    ],
+    "event_mentions": [],
+    "goals": [],
+    "fears": [],
+    "decisions": ["Should I apply for the design lead role?"],
+    "timeframe": null,
+    "possibilities": [
+      {
+        "text": "Choosing to apply for the design lead role may open something.",
+        "category": null,
+        "timeframe": null,
+        "kind": "possibility"
+      }
+    ],
+    "emotional_tone": null,
+    "journey_candidates": [
+      {
+        "title": "Work at the agency",
+        "confidence": 0.5
+      }
+    ],
+    "safety_flags": []
+  },
+  "human_review": {
+    "reviewed_by": null,
+    "reviewed_at": null,
+    "verdict": null,
+    "notes": null
+  }
+}

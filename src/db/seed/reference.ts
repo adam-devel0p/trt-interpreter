@@ -7,8 +7,10 @@ import {
   cards,
   decks,
   spreads,
+  themes,
 } from '@/db/schema';
 import type { DeckSeed, DeckSystem } from '@/domain/decks/types';
+import { CURATED_THEMES } from '@/domain/themes/taxonomy';
 import { ALIASES } from './decks/aliases';
 import { ARCHETYPES, archetypeKeyFor, mappingNoteFor } from './decks/archetypes';
 import { RWS_DECK } from './decks/rws';
@@ -24,6 +26,7 @@ export interface SeedSummary {
   members: number;
   aliases: number;
   spreads: number;
+  themes: number;
 }
 
 /**
@@ -40,6 +43,7 @@ export async function seedReferenceData(): Promise<SeedSummary> {
     members: 0,
     aliases: 0,
     spreads: 0,
+    themes: 0,
   };
 
   // Archetypes first: they do not depend on decks.
@@ -249,6 +253,19 @@ export async function seedReferenceData(): Promise<SeedSummary> {
         },
       });
     summary.spreads += 1;
+  }
+
+  // Phase 06: the curated theme taxonomy (global rows, user_id null). Labels may change;
+  // slugs are the stable keys the model's proposals resolve onto.
+  for (const t of CURATED_THEMES) {
+    await db
+      .insert(themes)
+      .values({ userId: null, slug: t.slug, label: t.label, category: t.category })
+      .onConflictDoUpdate({
+        target: [themes.userId, themes.slug],
+        set: { label: sql`excluded.label`, category: sql`excluded.category` },
+      });
+    summary.themes += 1;
   }
 
   return summary;

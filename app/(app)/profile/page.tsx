@@ -104,6 +104,18 @@ export default async function ProfilePage() {
           control={<DepthSelect labelId="depth-label" value={profile.ai_explanation_depth} />}
         />
         <SettingsRow
+          label="People & places"
+          description="Who and what your readings mention, as the app has sorted them. Correct, merge or split any entry."
+          control={
+            <Link
+              href="/profile/entities"
+              className="text-sm text-accent underline underline-offset-4"
+            >
+              Open
+            </Link>
+          }
+        />
+        <SettingsRow
           label="Delete AI artifacts"
           description="Remove every interpretation and suggestion, keep your own words."
           control={<DeleteAiArtifactsControl counts={artifactCounts} />}

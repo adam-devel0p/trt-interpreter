@@ -1,0 +1,105 @@
+{
+  "fixture": "relationship-descriptor-then-name",
+  "description": "A partner named by role and by name in one entry; a worry; a horizon. Expect both surface forms as person mentions with a partner relation, no pronoun mentions, an emotional theme.",
+  "provider": "mock",
+  "model": "mock/claude-sonnet-5",
+  "prompt_version": "extract_reading_metadata/1.0.0",
+  "schema_version": "extraction/1.0.0",
+  "ran_at": "2026-09-13T06:59:40.157Z",
+  "checks": {
+    "schema": {
+      "pass": true
+    },
+    "entity_recall": {
+      "pass": true,
+      "detail": {
+        "recall": 1,
+        "missing": []
+      }
+    },
+    "entity_precision": {
+      "pass": true,
+      "detail": {
+        "precision": 1,
+        "extra": []
+      }
+    },
+    "no_pronouns": {
+      "pass": true,
+      "detail": []
+    },
+    "theme_sanity": {
+      "pass": true,
+      "detail": ["conflict"]
+    },
+    "life_area": {
+      "pass": true,
+      "detail": "relationships"
+    },
+    "possibilities": {
+      "pass": true,
+      "detail": []
+    },
+    "timeframe": {
+      "pass": true,
+      "detail": {
+        "start": null,
+        "end": null,
+        "text": "this week"
+      }
+    },
+    "no_probability": {
+      "pass": true
+    }
+  },
+  "output": {
+    "life_area": "relationships",
+    "entities": [
+      {
+        "mention": "my girlfriend",
+        "kind": "person",
+        "confidence": 0.85,
+        "relation": "partner",
+        "context": "What is unresolved between my girlfriend and me?"
+      },
+      {
+        "mention": "Alex",
+        "kind": "person",
+        "confidence": 0.6,
+        "relation": "partner",
+        "context": "Alex, my girlfriend, said she needs space this week."
+      }
+    ],
+    "themes": [
+      {
+        "label": "Conflict",
+        "category": "relational",
+        "weight": 0.8
+      }
+    ],
+    "event_mentions": [],
+    "goals": [],
+    "fears": [],
+    "decisions": [],
+    "timeframe": {
+      "start": null,
+      "end": null,
+      "text": "this week"
+    },
+    "possibilities": [],
+    "emotional_tone": "unsettled",
+    "journey_candidates": [
+      {
+        "title": "Things with my girlfriend",
+        "confidence": 0.45
+      }
+    ],
+    "safety_flags": []
+  },
+  "human_review": {
+    "reviewed_by": null,
+    "reviewed_at": null,
+    "verdict": null,
+    "notes": null
+  }
+}

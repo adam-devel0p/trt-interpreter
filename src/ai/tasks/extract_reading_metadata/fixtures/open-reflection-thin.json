@@ -1,0 +1,19 @@
+{
+  "name": "open-reflection-thin",
+  "description": "An open reflection with almost no text. Expect nothing invented: no entities, at most one theme, no possibilities, no timeframe — empty is the right answer.",
+  "question": null,
+  "life_area": null,
+  "user_notes": "Quiet morning.",
+  "deck": "rws",
+  "spread": "one-card",
+  "cards": [{ "slug": "the-hermit", "orientation": "upright" }],
+  "expect": {
+    "life_area": null,
+    "entities": [],
+    "forbidden_mentions": ["hermit", "morning"],
+    "themes_any": [],
+    "themes_max": 1,
+    "possibilities_max": 0,
+    "timeframe": false
+  }
+}

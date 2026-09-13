@@ -42,7 +42,18 @@ const ENTRY_POINTS = [
   'src/export/build.ts',
   'src/privacy/purge.ts',
   'src/privacy/aiArtifacts.ts',
-  'src/jobs/handlers',
+  // The registry and the handlers the reading/journal/export paths run; the AI-backed
+  // handlers are reached only through the registry's lazy import (asserted below).
+  'src/jobs/handlers/index.ts',
+  'src/jobs/handlers/purge-deleted.ts',
+  'src/jobs/handlers/export-user-data.ts',
+  'src/jobs/handlers/noop-echo.ts',
+  'src/jobs/handlers/payloads.ts',
+  // Phase 06: the memory read path, corrections and the entities pages.
+  'app/api/readings/[id]/memory',
+  'src/db/queries/memory.ts',
+  'src/memory/corrections.ts',
+  'src/memory/materialize.ts',
   'src/db/queries/readings.ts',
   'src/db/queries/spreads.ts',
   'src/ui/components/reading-detail.tsx',
@@ -85,6 +96,14 @@ function resolveImport(from: string, spec: string): string | null {
   return null;
 }
 
+/**
+ * The one sanctioned lazy edge: the job registry loads the AI-backed handlers (extraction,
+ * reprocessing) with a dynamic `import()` only when the worker claims a job of that kind.
+ * Nothing on a reading, journal or export path executes them. Every other dynamic import is
+ * followed like a static one.
+ */
+const LAZY_REGISTRY = path.resolve(ROOT, 'src/jobs/handlers/index.ts');
+
 /** Every file transitively imported from the entry points (source-level, first-party only). */
 function moduleGraph(): Set<string> {
   const seen = new Set<string>();
@@ -94,8 +113,10 @@ function moduleGraph(): Set<string> {
     if (seen.has(f)) continue;
     seen.add(f);
     const src = readFileSync(f, 'utf8');
-    for (const m of src.matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)) {
-      const dep = resolveImport(f, m[1]!);
+    for (const m of src.matchAll(/(from|import)\s*(\(?)\s*['"]([^'"]+)['"]/g)) {
+      const dynamic = m[1] === 'import' && m[2] === '(';
+      if (dynamic && f === LAZY_REGISTRY) continue;
+      const dep = resolveImport(f, m[3]!);
       if (dep && !seen.has(dep)) queue.push(dep);
     }
   }
@@ -164,6 +185,14 @@ describe('opening-reading-makes-no-ai-call', () => {
     expect(graph.has(path.resolve(ROOT, 'src/ui/components/card.tsx'))).toBe(true);
     expect(graph.has(path.resolve(ROOT, 'src/db/queries/journal.ts'))).toBe(true);
     expect(graph.has(path.resolve(ROOT, 'src/export/build.ts'))).toBe(true);
+    // Phase 06: the memory read path and corrections are on the graph and AI-free; the
+    // extraction run is not (only the lazy registry edge reaches it).
+    expect(graph.has(path.resolve(ROOT, 'src/db/queries/memory.ts'))).toBe(true);
+    expect(graph.has(path.resolve(ROOT, 'src/memory/materialize.ts'))).toBe(true);
+    expect(graph.has(path.resolve(ROOT, 'src/memory/extract.ts'))).toBe(false);
+    expect(graph.has(path.resolve(ROOT, 'src/jobs/handlers/extract-reading.ts'))).toBe(false);
+    const registry = readFileSync(LAZY_REGISTRY, 'utf8');
+    expect(registry).not.toMatch(/^import .*(extract-reading|reprocess-extractions)/m);
   });
 
   it('1b · the journal search is one RPC + embed, no model; the timeline renders from stored rows', async () => {
@@ -227,6 +256,7 @@ describe('opening-reading-makes-no-ai-call', () => {
       to: null,
       deck: null,
       spread: null,
+      entity: null,
       source: null,
       followUp: null,
       hasNotes: null,

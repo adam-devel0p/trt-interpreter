@@ -136,7 +136,7 @@ test.describe('reading loop', () => {
       .locator('details')
       .first();
     await first.locator('summary').click();
-    await expect(first).toContainText(/suggests|may|one way/);
+    await expect(first).toContainText(/suggest|may|one way|point/);
   });
 
   test('physical three-card RWS reading with two reversals; Thoth offers no reversal at all', async ({

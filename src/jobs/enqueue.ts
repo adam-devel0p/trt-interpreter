@@ -1,4 +1,5 @@
 import 'server-only';
+import { and, eq, sql } from 'drizzle-orm';
 import { platformDb } from '@/db/admin';
 import { jobs } from '@/db/schema';
 import { logger } from '@/observability/logger';
@@ -8,6 +9,11 @@ export interface EnqueueOptions {
   userId?: string | null;
   runAfter?: Date;
   maxAttempts?: number;
+  /**
+   * Skip the insert when a queued job of the same kind and payload already exists (notes
+   * autosave enqueues an extraction on every pause; one is enough). Returns that job's id.
+   */
+  dedupe?: boolean;
 }
 
 /**
@@ -22,6 +28,20 @@ export async function enqueue(
   const handler = JOB_HANDLERS.get(kind);
   if (!handler) throw new Error(`Unknown job kind: ${kind}`);
   const parsed = handler.schema.parse(payload);
+  if (opts.dedupe) {
+    const [existing] = await platformDb()
+      .select({ id: jobs.id })
+      .from(jobs)
+      .where(
+        and(
+          eq(jobs.kind, kind),
+          eq(jobs.status, 'queued'),
+          sql`${jobs.payload} = ${JSON.stringify(parsed)}::jsonb`,
+        ),
+      )
+      .limit(1);
+    if (existing) return existing;
+  }
   const [row] = await platformDb()
     .insert(jobs)
     .values({

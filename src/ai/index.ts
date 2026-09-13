@@ -13,6 +13,8 @@ import { routingFromEnv, validateRouting } from './registry';
 import { createAiRunner, type AiRunner } from './run';
 import * as classifySafety from './tasks/classify_safety';
 import { mockSafety } from './tasks/classify_safety/mock';
+import * as extractReading from './tasks/extract_reading_metadata';
+import { mockExtraction } from './tasks/extract_reading_metadata/mock';
 import * as interpretReading from './tasks/interpret_reading';
 import { mockInterpretation } from './tasks/interpret_reading/mock';
 import { DbTelemetry, MemoryTelemetry, MultiTelemetry } from './telemetry';
@@ -31,6 +33,10 @@ const VERSIONS: Record<string, { promptVersion: string; schemaVersion: string }>
     promptVersion: classifySafety.PROMPT_VERSION,
     schemaVersion: classifySafety.SCHEMA_VERSION,
   },
+  extract_reading_metadata: {
+    promptVersion: extractReading.PROMPT_VERSION,
+    schemaVersion: extractReading.SCHEMA_VERSION,
+  },
 };
 
 export function taskVersions(task: string): { promptVersion: string; schemaVersion: string } {
@@ -42,6 +48,7 @@ export function mockFixtures() {
   return {
     interpret_reading: { default: mockInterpretation },
     classify_safety: { default: mockSafety },
+    extract_reading_metadata: { default: mockExtraction },
   };
 }
 

@@ -1,0 +1,25 @@
+{
+  "name": "relationship-descriptor-then-name",
+  "description": "A partner named by role and by name in one entry; a worry; a horizon. Expect both surface forms as person mentions with a partner relation, no pronoun mentions, an emotional theme.",
+  "question": "What is unresolved between my girlfriend and me?",
+  "life_area": null,
+  "user_notes": "Alex, my girlfriend, said she needs space this week. I keep circling the same argument.",
+  "deck": "rws",
+  "spread": "three-card",
+  "cards": [
+    { "slug": "two-of-cups", "orientation": "upright" },
+    { "slug": "five-of-wands", "orientation": "upright" },
+    { "slug": "the-star", "orientation": "upright" }
+  ],
+  "expect": {
+    "life_area": "relationships",
+    "entities": [
+      { "mention": "girlfriend", "kind": "person" },
+      { "mention": "alex", "kind": "person" }
+    ],
+    "forbidden_mentions": ["she", "i", "me"],
+    "themes_any": ["conflict", "communication", "distance", "uncertainty", "anxiety"],
+    "possibilities_max": 4,
+    "timeframe": true
+  }
+}

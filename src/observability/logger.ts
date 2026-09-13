@@ -14,7 +14,17 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 /** Dot-namespaced event name, e.g. `jobs.claimed`, `ai.run.failed`. Never free prose. */
 export type LogNamespace =
-  'http' | 'auth' | 'db' | 'jobs' | 'ai' | 'flags' | 'health' | 'privacy' | 'billing' | 'app';
+  | 'http'
+  | 'auth'
+  | 'db'
+  | 'jobs'
+  | 'ai'
+  | 'flags'
+  | 'health'
+  | 'privacy'
+  | 'billing'
+  | 'app'
+  | 'memory';
 export type LogEvent = `${LogNamespace}.${string}`;
 
 /** The complete set of props a log line may carry. Extend deliberately; never add prose fields. */

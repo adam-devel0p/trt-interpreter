@@ -1,12 +1,12 @@
 import 'server-only';
 import { cookies } from 'next/headers';
 import { serverEnv } from '@/config/env.server';
-import { platformSql } from '@/db/admin';
-import { logger } from '@/observability/logger';
 import { envKeyFor, FLAGS, type FlagName } from './flags';
 import { DEV_FLAGS_COOKIE, parseSessionOverrides, resolveFlag } from './resolve';
+import { readUserOverride } from './server';
 
 export { FLAGS, type FlagName } from './flags';
+export { flagForUser } from './server';
 
 /**
  * Server-side flag lookup. Resolution: env default → `user_flags` override (table lands in
@@ -31,19 +31,6 @@ export async function flag(name: FlagName, ctx: { userId?: string } = {}): Promi
 export async function allFlags(ctx: { userId?: string } = {}): Promise<Record<FlagName, boolean>> {
   const entries = await Promise.all(FLAGS.map(async (f) => [f, await flag(f, ctx)] as const));
   return Object.fromEntries(entries) as Record<FlagName, boolean>;
-}
-
-async function readUserOverride(userId: string, name: FlagName): Promise<boolean | undefined> {
-  try {
-    const rows = await platformSql()<{ enabled: boolean }[]>`
-      select enabled from public.user_flags where user_id = ${userId} and flag = ${name} limit 1`;
-    return rows[0]?.enabled;
-  } catch (err) {
-    // 42P01 = undefined_table: expected until Phase 01 creates user_flags.
-    const code = (err as { code?: string }).code;
-    if (code !== '42P01') logger.warn('flags.user_override_failed', { flag: name });
-    return undefined;
-  }
 }
 
 async function readSessionOverride(name: FlagName): Promise<boolean | undefined> {

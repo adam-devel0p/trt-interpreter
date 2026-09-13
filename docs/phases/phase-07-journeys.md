@@ -17,6 +17,33 @@ Scoped Journey Q&A (09).
 
 ## Tasks
 
+From Phase 06 (see [completed/phase-06-report.md](completed/phase-06-report.md) §13):
+- **Entities for prompts** come only from `entityContextForObjects(userId, objects)`
+  (`src/memory/context.server.ts`): `auto` + `user` mentions, active entities, `mentionedAs[]`.
+  Never read `entity_mentions` directly for a prompt — tentative links must not become claims.
+- **Journey signals are wired, not fed:** `resolveMention(m, candidates, { journeysExist,
+  journeyIds })` and `CandidateEntity.journeyIds`; `loadCandidates()` in `memory/candidates.ts`
+  must fill `journeyIds`, and `changesHistory()` already compares them. Turning `journeysExist`
+  on restores the 0.15 weight — re-run the `fixtures/history/` arcs with journeys present.
+- **Inputs for affinity:** `effective.journeyCandidates` (every payload carries
+  `journey_candidates[] {title, confidence}`), resolved mentions per reading (Jaccard over
+  `auto` + `user` only), `object_themes` ⋈ `themes` by slug.
+- **Materialise is the hook:** `materializeReading(readingId)` runs after extraction, reprocess
+  and every correction; a journey-assignment step belongs after `materializeEntities`, idempotent
+  and model-free (`propose_journey` naming is a separate gated job through the lazy registry:
+  schema in `handlers/payloads.ts`, `load` in `handlers/index.ts`; the import-graph invariant
+  lists only non-AI handlers).
+- **Journal filter pattern** (as `entity` in 06): a key in `journalFiltersSchema` + `URL_KEYS`,
+  the parameter in `searchJournal`'s `p`, an `EXISTS` in `search_readings` (a new migration
+  replacing the function — keep `WHERE r.deleted_at IS NULL`; add the migration to
+  `deleting-reading-purges-derived`'s scan), a select in `filters.tsx` gated on data existing.
+- **Deletion registry:** the `journey` root is empty; `journey_members` keyed by
+  `(object_type, object_id)` needs `via: 'job'` + a counter + a remover in `src/privacy/purge.ts`
+  (pattern: the four polymorphic tables from 06). Export is at `export/1.1.0` — journey files
+  bump it to 1.2.0.
+- **Demo seed:** `seedMemory` runs last and wipes the demo users' memory rows; a journey seeder
+  runs after it and derives from its entities (`Maya`, `the agency`, `Leeds`).
+
 ### 1. Schema
 Tables per [../DATA_MODEL.md](../DATA_MODEL.md#journeys--phase-07), RLS on all three.
 `journey_members` unique on `(journey_id, object_type, object_id)`.

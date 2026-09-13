@@ -1,0 +1,68 @@
+{
+  "name": "relationship-arc",
+  "description": "A partner first named by role, then by name, then an ex. 'my girlfriend' and 'Alex' resolve to one entity; a bare pronoun never resolves; the role change from partner to ex-partner keeps the historical range.",
+  "steps": [
+    {
+      "day": 0,
+      "mentions": [{ "text": "my girlfriend", "kind": "person", "relation": "partner" }],
+      "expect": [
+        {
+          "text": "my girlfriend",
+          "decision": "new",
+          "entity": "my girlfriend",
+          "roles": ["partner"]
+        }
+      ]
+    },
+    {
+      "day": 9,
+      "mentions": [{ "text": "my girlfriend", "kind": "person", "relation": null }],
+      "expect": [{ "text": "my girlfriend", "decision": "auto", "entity": "my girlfriend" }]
+    },
+    {
+      "day": 20,
+      "mentions": [{ "text": "Alex", "kind": "person", "relation": "partner" }],
+      "expect": [
+        { "text": "Alex", "decision": "auto", "entity": "my girlfriend", "renamedTo": "Alex" }
+      ]
+    },
+    {
+      "day": 35,
+      "mentions": [
+        { "text": "Alex", "kind": "person", "relation": null },
+        { "text": "she", "kind": "person", "relation": null }
+      ],
+      "expect": [
+        { "text": "Alex", "decision": "auto", "entity": "Alex" },
+        { "text": "she", "decision": "drop" }
+      ]
+    },
+    {
+      "day": 50,
+      "mentions": [{ "text": "my girlfriend", "kind": "person", "relation": null }],
+      "expect": [{ "text": "my girlfriend", "decision": "auto", "entity": "Alex" }]
+    },
+    {
+      "day": 130,
+      "mentions": [{ "text": "my ex", "kind": "person", "relation": "ex-partner" }],
+      "expect": [{ "text": "my ex", "decision": "tentative", "entity": "Alex" }]
+    },
+    {
+      "day": 140,
+      "userLinks": [{ "text": "my ex", "entity": "Alex" }],
+      "mentions": [],
+      "expect": [],
+      "expectRoles": {
+        "Alex": [
+          { "role": "partner", "validFrom": "day 0", "validTo": "day 139" },
+          { "role": "ex_partner", "validFrom": "day 140", "validTo": null }
+        ]
+      }
+    },
+    {
+      "day": 150,
+      "mentions": [{ "text": "Alex", "kind": "person", "relation": null }],
+      "expect": [{ "text": "Alex", "decision": "auto", "entity": "Alex" }]
+    }
+  ]
+}

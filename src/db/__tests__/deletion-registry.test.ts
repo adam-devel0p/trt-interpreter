@@ -26,6 +26,16 @@ describe('deletion registry', () => {
         'reading_note_revisions',
         'deletion_receipts',
         'exports',
+        'extractions',
+        'metadata_overrides',
+        'themes',
+        'object_themes',
+        'entities',
+        'entity_aliases',
+        'entity_roles',
+        'entity_mentions',
+        'entity_merges',
+        'predictions',
       ]),
     );
     // Simulate a new user-owned table that nobody registered.

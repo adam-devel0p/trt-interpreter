@@ -132,8 +132,16 @@ export async function storeInterpretation(user: TestUser, reading: ReadingView) 
   });
 }
 
-/** Every kind of derived artifact a reading can have today. */
-export async function attachDerived(user: TestUser, reading: ReadingView) {
+/**
+ * Every kind of derived artifact a reading can have today. Phase 06: also a real extraction
+ * (mock provider) with its materialised themes, mentions, entities and predictions, plus one
+ * user override — when the user is consented and on the extraction flag.
+ */
+export async function attachDerived(
+  user: TestUser,
+  reading: ReadingView,
+  opts: { memory?: boolean } = {},
+) {
   const interpretation = await storeInterpretation(user, reading);
   const flag = await recordSafetyFlag(user.client, {
     userId: user.id,
@@ -151,5 +159,18 @@ export async function attachDerived(user: TestUser, reading: ReadingView) {
     nudgeShown: false,
   });
   await linkQuestionAsk(user.client, user.id, reading.question ?? 'open', reading.id);
-  return { interpretation, flag };
+  let extraction: string | null = null;
+  if (opts.memory) {
+    const { enableExtraction } = await import('./memory-db');
+    const { setAiConsent } = await import('@/db/queries/profile');
+    const { runExtraction } = await import('@/memory/extract');
+    const { applyCorrection } = await import('@/memory/corrections');
+    await setAiConsent(user.client, user.id, true);
+    await enableExtraction(user.id);
+    const out = await runExtraction(reading.id, { force: true });
+    if (out.status !== 'complete') throw new Error(`extraction ${out.status}`);
+    extraction = out.extractionId;
+    await applyCorrection(user.client, user.id, reading.id, { type: 'add_theme', label: 'Trust' });
+  }
+  return { interpretation, flag, extraction };
 }

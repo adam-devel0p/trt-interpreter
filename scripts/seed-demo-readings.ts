@@ -81,7 +81,8 @@ const ANA: Story[] = [
     spread: 'three-card',
     deck: 'rws-classic',
     source: 'digital',
-    notes: null,
+    notes:
+      'Three of Cups in the present. We are fine, I think — my girlfriend says I go quiet when it matters.',
     followUp: 'partly_resolved',
     revisitInDays: null,
   },
@@ -114,7 +115,8 @@ const ANA: Story[] = [
     spread: 'situation-advice-outcome',
     deck: 'rws-classic',
     source: 'digital',
-    notes: null,
+    notes:
+      'Maya, my girlfriend, thinks Leeds is too far from everyone. The Eight of Wands says go anyway.',
     followUp: 'partly_resolved',
     revisitInDays: null,
   },
@@ -202,7 +204,8 @@ const ANA: Story[] = [
     spread: 'three-card',
     deck: 'rws-classic',
     source: 'digital',
-    notes: 'Same present card as in March. Noted.',
+    notes:
+      'Same present card as in March. Noted. Maya and I are not together any more — my ex now, I suppose. Sam says give it a month.',
     followUp: 'unresolved',
     revisitInDays: null,
   },

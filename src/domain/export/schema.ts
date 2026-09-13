@@ -6,7 +6,8 @@
  */
 import { z } from 'zod';
 
-export const EXPORT_SCHEMA_VERSION = 'export/1.0.0';
+/** 1.1.0 (Phase 06): extractions, overrides, themes, entities, mentions, predictions joined. */
+export const EXPORT_SCHEMA_VERSION = 'export/1.1.0';
 
 export const EXPORT_FILES = [
   'profile.json',
@@ -19,6 +20,13 @@ export const EXPORT_FILES = [
   'decks.json',
   'cards.json',
   'deletion_receipts.json',
+  'extractions.json',
+  'metadata_overrides.json',
+  'themes.json',
+  'object_themes.json',
+  'entities.json',
+  'entity_mentions.json',
+  'predictions.json',
   'links.json',
 ] as const;
 export type ExportFile = (typeof EXPORT_FILES)[number];
@@ -193,6 +201,142 @@ export const exportProfileSchema = z
   })
   .strict();
 
+/** Derived memory (Phase 06). Every row is the user's — versioned, correctable, never a fact. */
+export const exportExtractionSchema = z
+  .object({
+    id: uuid,
+    object_type: z.string(),
+    object_id: uuid,
+    status: z.string(),
+    schema_version: z.string(),
+    prompt_version: z.string(),
+    model_id: z.string().nullable(),
+    metadata_version: z.number().int(),
+    payload: z.unknown().nullable(),
+    error_class: z.string().nullable(),
+    superseded_by: uuid.nullable(),
+    created_at: iso,
+    completed_at: iso.nullable(),
+  })
+  .strict();
+
+export const exportOverrideSchema = z
+  .object({
+    id: uuid,
+    object_type: z.string(),
+    object_id: uuid,
+    field_path: z.string(),
+    value: z.unknown(),
+    created_at: iso,
+    updated_at: iso,
+  })
+  .strict();
+
+export const exportThemeSchema = z
+  .object({
+    id: uuid,
+    slug: z.string(),
+    label: z.string(),
+    category: z.string(),
+    /** true for the curated taxonomy, false for the user's own. */
+    curated: z.boolean(),
+  })
+  .strict();
+
+export const exportObjectThemeSchema = z
+  .object({
+    id: uuid,
+    object_type: z.string(),
+    object_id: uuid,
+    theme_id: uuid,
+    weight: z.number(),
+    source: z.string(),
+    user_confirmed: z.boolean(),
+    extraction_id: uuid.nullable(),
+    created_at: iso,
+  })
+  .strict();
+
+export const exportEntitySchema = z
+  .object({
+    id: uuid,
+    kind: z.string(),
+    canonical_label: z.string(),
+    status: z.string(),
+    merged_into_id: uuid.nullable(),
+    first_seen_at: iso,
+    last_seen_at: iso,
+    user_confirmed: z.boolean(),
+    notes: z.string().nullable(),
+    created_at: iso,
+    aliases: z.array(
+      z
+        .object({
+          id: uuid,
+          alias: z.string(),
+          alias_normalized: z.string(),
+          context: z.string().nullable(),
+          confidence: z.number(),
+          source: z.string(),
+          created_at: iso,
+        })
+        .strict(),
+    ),
+    roles: z.array(
+      z
+        .object({
+          id: uuid,
+          role: z.string(),
+          valid_from: z.string(),
+          valid_to: z.string().nullable(),
+          source: z.string(),
+          evidence_object_type: z.string().nullable(),
+          evidence_object_id: uuid.nullable(),
+          created_at: iso,
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+
+export const exportEntityMentionSchema = z
+  .object({
+    id: uuid,
+    entity_id: uuid,
+    object_type: z.string(),
+    object_id: uuid,
+    mention_text: z.string(),
+    mention_normalized: z.string(),
+    confidence: z.number(),
+    resolution: z.string(),
+    signals: z.unknown().nullable(),
+    reasons: z.array(z.string()).nullable(),
+    extraction_id: uuid.nullable(),
+    created_at: iso,
+  })
+  .strict();
+
+/** A possibility. `fact_status` is always POSSIBILITY and there is no probability field. */
+export const exportPredictionSchema = z
+  .object({
+    id: uuid,
+    reading_id: uuid,
+    text: z.string(),
+    text_hash: z.string(),
+    category: z.string().nullable(),
+    timeframe_start: z.string().nullable(),
+    timeframe_end: z.string().nullable(),
+    timeframe_text: z.string().nullable(),
+    kind: z.string(),
+    fact_status: z.literal('POSSIBILITY'),
+    extracted_from: uuid.nullable(),
+    user_edited: z.boolean(),
+    dismissed_at: iso.nullable(),
+    created_at: iso,
+    updated_at: iso,
+  })
+  .strict();
+
 export const LINK_KINDS = [
   'reading_uses_spread',
   'reading_uses_deck',
@@ -202,6 +346,15 @@ export const LINK_KINDS = [
   'supersedes',
   'safety_flag_on',
   'ask_for',
+  // Phase 06
+  'extraction_of',
+  'override_on',
+  'theme_on',
+  'theme_is',
+  'mention_in',
+  'mention_of',
+  'prediction_of',
+  'merged_into',
 ] as const;
 
 export const exportLinkSchema = z
@@ -224,6 +377,13 @@ export const EXPORT_FILE_SCHEMAS = {
   'decks.json': z.array(exportDeckSchema),
   'cards.json': z.array(exportCardSchema),
   'deletion_receipts.json': z.array(exportReceiptSchema),
+  'extractions.json': z.array(exportExtractionSchema),
+  'metadata_overrides.json': z.array(exportOverrideSchema),
+  'themes.json': z.array(exportThemeSchema),
+  'object_themes.json': z.array(exportObjectThemeSchema),
+  'entities.json': z.array(exportEntitySchema),
+  'entity_mentions.json': z.array(exportEntityMentionSchema),
+  'predictions.json': z.array(exportPredictionSchema),
   'links.json': z.array(exportLinkSchema),
 } as const satisfies Record<ExportFile, z.ZodType>;
 

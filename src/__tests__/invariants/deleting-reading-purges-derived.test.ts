@@ -25,13 +25,24 @@ describe('deleting-reading-purges-derived', () => {
       expect(READING_DEPENDENT_COUNTERS, `counter for ${t}`).toHaveProperty(t);
     // A `via: 'job'` target has an explicit remover (asserted by the purge throwing otherwise).
     const jobTargets = DELETION_REGISTRY.reading.filter((t) => t.via === 'job').map((t) => t.table);
-    expect(jobTargets).toEqual(['safety_flags']);
+    expect(jobTargets).toEqual([
+      'safety_flags',
+      'extractions',
+      'metadata_overrides',
+      'object_themes',
+      'entity_mentions',
+    ]);
     const purgeSrc = read('src/privacy/purge.ts');
     for (const t of jobTargets) expect(purgeSrc).toMatch(new RegExp(`delete from public\\.${t}`));
   });
 
   it('2 · every table that references readings.id is a registered dependent', () => {
-    const migrations = ['0004_readings', '0005_ai_interpretation', '0006_journal']
+    const migrations = [
+      '0004_readings',
+      '0005_ai_interpretation',
+      '0006_journal',
+      '0007_structured_memory',
+    ]
       .map((m) => read(`src/db/migrations/${m}.sql`))
       .join('\n');
     const referencing = new Set<string>();
@@ -41,7 +52,13 @@ describe('deleting-reading-purges-derived', () => {
       referencing.add(m[1]!);
     }
     expect([...referencing].sort()).toEqual(
-      ['interpretations', 'question_embeddings', 'reading_cards', 'reading_note_revisions'].sort(),
+      [
+        'interpretations',
+        'question_embeddings',
+        'reading_cards',
+        'reading_note_revisions',
+        'predictions',
+      ].sort(),
     );
     const registered = new Set(readingRegistryTables());
     for (const t of referencing) expect(registered.has(t), `${t} registered`).toBe(true);
@@ -64,6 +81,10 @@ describe('deleting-reading-purges-derived', () => {
 
     const journalSql = read('src/db/migrations/0006_journal.sql');
     expect(journalSql).toMatch(/search_readings[\s\S]*WHERE r\.deleted_at IS NULL/);
+    // Phase 06 replaced the function (entity filter); the live definition must keep the filter.
+    expect(read('src/db/migrations/0007_structured_memory.sql')).toMatch(
+      /search_readings[\s\S]*WHERE r\.deleted_at IS NULL/,
+    );
     expect(journalSql).toMatch(/replace_reading_cards[\s\S]*deleted_at IS NULL/);
     expect(read('src/export/build.ts')).toContain('isNull(readings.deletedAt)');
   });

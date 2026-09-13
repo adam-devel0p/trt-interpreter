@@ -70,8 +70,8 @@ export async function runBatch(
       attempt: job.attempts,
       userId: job.userId ?? undefined,
     });
-    const handler = JOB_HANDLERS.get(job.kind);
-    if (!handler) {
+    const entry = JOB_HANDLERS.get(job.kind);
+    if (!entry) {
       await markDead(job.id, 'UnknownJobKind');
       result.dead += 1;
       log.error('jobs.unknown_kind');
@@ -79,6 +79,7 @@ export async function runBatch(
     }
     const started = Date.now();
     try {
+      const handler = await entry.load();
       const payload = handler.schema.parse(job.payload);
       await handler.run(payload, {
         jobId: job.id,
