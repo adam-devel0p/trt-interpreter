@@ -37,12 +37,22 @@ logs or analytics.
 - Penetration-style checks: cross-user ID substitution on every mutating endpoint; IDOR on media and
   export URLs; JWT expiry/replay; attempting to write `plan`, `fact_status='CONFIRMED_FACT'`, or another
   user's `user_id` directly.
+- **From Phase 11:** `/api/billing/webhook` is unauthenticated by design — the Stripe signature is
+  the auth (`handleWebhookBody`, 300 s tolerance, ledger by event id); `/api/notifications/
+  unsubscribe` and `/open` are authorised by HMAC tokens (`src/notifications/links.ts`) —
+  set `NOTIFICATION_SIGNING_SECRET` in production rather than the `JOBS_RUN_SECRET` fallback;
+  the fake billing pages (`/billing/checkout`, `/billing/portal`) are `notFound()` unless
+  `BILLING_PROVIDER=fake` and `getBilling()` refuses the fake in production — verify both;
+  push subscriptions are stored as the browser gives them (endpoint URL + keys).
 
 ### 3. Privacy completion
 - Finish the deletion flows from [../PRIVACY_AND_DELETION.md](../PRIVACY_AND_DELETION.md): delete-all-
   history and delete-account, both with double confirmation, full purge including storage and auth
   identity, and a receipt.
 - Re-run the deletion-registry completeness test against the final schema.
+- **From Phase 11:** the account job must cancel a live Stripe subscription through the provider
+  before deleting the user (add `cancelSubscription` to the `BillingProvider` seam); the six
+  Phase 11 tables cascade (`billing_events` keeps rows with `user_id` null, like `ai_calls`).
 - Export v2: human-readable Markdown + PDF (FR-22) alongside the JSON.
 - Consent revocation path: stops processing, offers derived-artifact deletion, keeps raw entries.
 - Write the user-facing privacy page in plain language: what is sent to which model provider, what is
@@ -76,7 +86,14 @@ for changing them.
 - Migration safety: expand/contract discipline documented; a rollback rehearsal performed and recorded.
 - Feature-flag rollout plan for the risky memory behaviours (`journey_autocreate`,
   `correlation_suggestions`, `ask_my_history`): percentage rollout, what to watch, kill criteria.
-- Internal dashboards for the §16 metric set, built on `analytics_events` + `ai_calls`.
+- Internal dashboards for the §16 metric set, built on `analytics_events` + `ai_calls`
+  (**Phase 11 writes the events**: activation, early value, longitudinal, AI quality,
+  monetization funnel incl. `paywall_viewed` / `limit_reached`, trust, reminders, shares —
+  see `src/domain/analytics/events.ts`).
+- **From Phase 11:** hosted cron entries for `deliver_reminders` (hourly; `pnpm jobs:reminders`
+  locally) and `schedule_summaries`; pruning for `usage_counters` (> 1 year) and
+  `retention_prompts`; the owner's Stripe test-mode run and live push / email need
+  `STRIPE_*`, VAPID (`pnpm notifications:keys`) and Resend keys.
 
 ### 8. UX polish pass (§4, [../DESIGN_SYSTEM.md](../DESIGN_SYSTEM.md))
 Walk every screen against the design system as a checklist, not a vibe:

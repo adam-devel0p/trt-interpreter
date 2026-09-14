@@ -1,5 +1,6 @@
 'use server';
 
+import { track } from '@/analytics/track';
 import { revalidatePath } from 'next/cache';
 import { getSessionClient, requireUser } from '@/auth/session';
 import {
@@ -38,6 +39,7 @@ export async function requestExportAction(): Promise<ProfileActionResult<{ id: s
     }
     const id = await requestExport(client, user.id);
     logger.info('app.export.requested', { userId: user.id, objectType: 'export', objectId: id });
+    track(user.id, 'export_requested', {});
     try {
       const job = await enqueue('export_user_data', { exportId: id }, { userId: user.id });
       await runBatch({ jobId: job.id });
@@ -64,6 +66,7 @@ export async function deleteAiArtifactsAction(): Promise<
   const client = await getSessionClient();
   try {
     const { counts } = await deleteAiArtifacts(client, user.id);
+    track(user.id, 'deletion_requested', { scope: 'ai_artifacts' });
     revalidatePath('/profile');
     revalidatePath('/journal');
     return { ok: true, value: { counts } };

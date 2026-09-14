@@ -1,5 +1,6 @@
 'use server';
 
+import { track } from '@/analytics/track';
 import { randomBytes } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -163,6 +164,22 @@ export async function saveReadingAction(raw: unknown): Promise<ActionResult<{ id
     });
     revalidatePath(HOME_PATH);
     await queueExtraction(user.id, id);
+    // §16 activation: source, deck system and whether this is the first saved reading. No content.
+    void (async () => {
+      const [deck, count] = await Promise.all([
+        client.from('decks').select('system').eq('id', parsed.data.deck_id).maybeSingle(),
+        client.from('readings').select('id', { count: 'exact', head: true }).is('deleted_at', null),
+      ]);
+      const system = (deck.data as { system?: 'rws' | 'thoth' } | null)?.system;
+      if (system)
+        track(user.id, 'reading_completed', {
+          source: parsed.data.source,
+          deck: system,
+          cards: parsed.data.cards.length,
+          has_question: !parsed.data.is_open_reflection && !!parsed.data.question,
+          first: (count.count ?? 0) <= 1,
+        });
+    })().catch(() => undefined);
     return { ok: true, value: { id } };
   } catch (err) {
     logger.warn('app.reading.save_failed', { userId: user.id, errorClass: errorClassOf(err) });
@@ -313,6 +330,7 @@ export async function deleteReadingAction(id: unknown): Promise<ActionResult> {
   );
   if (!result.ok) return result;
   const readingId = z.string().uuid().parse(id);
+  track(user.id, 'deletion_requested', { scope: 'reading' });
   try {
     const job = await enqueue('purge_deleted', { readingId }, { userId: user.id });
     await runBatch({ jobId: job.id });
@@ -354,6 +372,10 @@ export async function setInterpretationFeedbackAction(
       userId: user.id,
       objectType: 'interpretation',
       objectId: parsed.data.id,
+    });
+    track(user.id, 'feedback_given', {
+      target: 'interpretation',
+      thumbs: parsed.data.feedback === 1 ? 'up' : parsed.data.feedback === -1 ? 'down' : 'cleared',
     });
     return { ok: true, value: undefined };
   } catch (err) {

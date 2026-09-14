@@ -71,6 +71,10 @@ export async function createReadyUser(
     correlation?: boolean;
     /** Phase 09: Ask My History. */
     ask?: boolean;
+    /** Phase 11: an active yearly subscription (Ask, explanations and summaries are premium). */
+    premium?: boolean;
+    /** Phase 11: share cards (flag rollout). */
+    share?: boolean;
   } = {},
 ) {
   const { createClient } = await import('@supabase/supabase-js');
@@ -127,6 +131,37 @@ export async function createReadyUser(
       .from('user_flags')
       .upsert(
         { user_id: data.user.id, flag: 'ask_my_history', enabled: true, set_by: 'rollout' },
+        { onConflict: 'user_id,flag' },
+      );
+    if (flag.error) throw new Error(`flag upsert failed: ${flag.error.message}`);
+  }
+  // Phase 11: the row the billing webhook would have written for a paying user.
+  if (opts.premium) {
+    const short = data.user.id.replace(/-/g, '').slice(0, 14);
+    const sub = await admin.from('subscriptions').upsert(
+      {
+        user_id: data.user.id,
+        provider: 'stripe',
+        provider_customer_id: `cus_e2e_${short}`,
+        provider_subscription_id: `sub_e2e_${short}`,
+        status: 'active',
+        plan: 'premium',
+        interval: 'year',
+        trial_used_at: now,
+        current_period_end: new Date(Date.now() + 30 * 86_400_000).toISOString(),
+        last_event_at: now,
+      },
+      { onConflict: 'user_id' },
+    );
+    if (sub.error) throw new Error(`subscription upsert failed: ${sub.error.message}`);
+    const plan = await admin.from('profiles').update({ plan: 'premium' }).eq('id', data.user.id);
+    if (plan.error) throw new Error(`plan update failed: ${plan.error.message}`);
+  }
+  if (opts.share) {
+    const flag = await admin
+      .from('user_flags')
+      .upsert(
+        { user_id: data.user.id, flag: 'share_cards', enabled: true, set_by: 'rollout' },
         { onConflict: 'user_id,flag' },
       );
     if (flag.error) throw new Error(`flag upsert failed: ${flag.error.message}`);

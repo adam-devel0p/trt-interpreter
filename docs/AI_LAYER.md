@@ -318,8 +318,22 @@ Every branch is covered by a test using the mock provider's fault injection
 
 ## Cost controls (§13)
 
-- Per-user budgets: free tier daily/monthly caps, premium higher; enforced in `telemetry.ts` before
-  the provider call, recorded in `usage_counters`.
+- Per-user budgets (**as built, Phase 11**): `DbBudgetPolicy` in `telemetry.ts` runs before
+  every provider call in `runObject` / `runStream` / `runStreamObject`. It loads the user's
+  subscription and this month's `usage_counters` through the one gate (`src/billing/gate.ts`
+  → `domain/billing/entitlements.ts`) and denies with `budget_denied` and a reason (`plan`,
+  `monthly`, `daily`) — the provider is never reached, the mock's call log proves it. Every
+  task is metered under a feature (`TASK_FEATURE`): `interpret_reading` → the interpretation
+  allowance (free 10 / premium 300 a month); `classify_safety` and `detect_repeat_question`
+  → `support` (day cap only, so an interpretation costs one unit, not three); extraction,
+  entity and journey proposals and retrieval documents → `memory` (free, cost-capped at
+  300 / 1500); `explain_correlation`, `parse_history_query`, `answer_from_evidence`,
+  `summarize_period`, `journey_narrative` → the premium analysis bucket (300 a month, 0 on
+  free). A day cap (120 / 500 successful runs) sits under everything. Premium interpretations
+  run on the `deep` tier (`modelHint`). Counters are written by `DbTelemetry` after every run
+  that reached the provider: `calls` only on `ok`, tokens and cost regardless; a run with no
+  `userId` is not metered. Embeddings do not go through the runner and are not metered. A
+  failure to *read* the budget lets the call through and logs `ai.budget.check_failed`.
 - Interpretations are immutable and cached — regeneration is explicit and metered.
 - Retrieval context is hard-capped (max objects and max tokens); overflow drops lowest-ranked
   evidence rather than truncating mid-object.

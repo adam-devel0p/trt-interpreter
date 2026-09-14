@@ -46,6 +46,10 @@
  * explicit step (which verifies zero references). A summary's own retrieval document dies
  * with it by trigger. `retention_prompts` (ids only) referencing the object are deleted.
  * Journey-scoped summaries and narratives cascade from the journey. All cascade from the user.
+ * Phase 11: billing, analytics and reminders. `usage_counters`, `subscriptions`,
+ * `analytics_events`, `push_subscriptions` and `notifications` cascade from the user;
+ * `billing_events` (the webhook ledger: provider event ids and outcomes, no content) keeps
+ * its rows with `user_id` set null, like `ai_calls`. None of them hold journal content.
  * The `purge_deleted` job (`src/privacy/purge.ts`) is driven by the `reading` and
  * `life_event` roots of this registry and a test asserts its receipt names every table listed.
  */
@@ -248,6 +252,20 @@ export const DELETION_REGISTRY: Record<RootType, readonly CascadeTarget[]> = {
     { table: 'period_summaries', via: 'cascade', note: 'generated summaries with source ids' },
     { table: 'journey_narratives', via: 'cascade', note: 'generated header sentences' },
     { table: 'retention_prompts', via: 'cascade', note: 'ids and days only' },
+    { table: 'usage_counters', via: 'cascade', note: 'counts per day and task' },
+    { table: 'subscriptions', via: 'cascade', note: 'provider ids and status' },
+    {
+      table: 'billing_events',
+      via: 'cascade',
+      note: 'user_id set null on delete; provider event ids and outcomes only',
+    },
+    { table: 'analytics_events', via: 'cascade', note: 'allowlisted props; no free text' },
+    { table: 'push_subscriptions', via: 'cascade', note: 'endpoints and keys' },
+    {
+      table: 'notifications',
+      via: 'cascade',
+      note: 'app-authored copy built from dates and counts; deep links by id',
+    },
   ],
 };
 

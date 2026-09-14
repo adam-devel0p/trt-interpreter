@@ -102,7 +102,11 @@ export function AskComposer({
           message:
             body.kind === 'consent'
               ? 'Ask my history needs AI processing switched on in your profile.'
-              : 'Ask my history is not switched on for this account yet.',
+              : body.kind === 'plan'
+                ? 'Ask my history is part of Premium. Your journal, journeys and connections work exactly as before.'
+                : body.kind === 'limit'
+                  ? 'You have reached this month’s analysis allowance. Everything you wrote is here; the count starts again on the first of the month.'
+                  : 'Ask my history is not switched on for this account yet.',
         });
         return;
       }

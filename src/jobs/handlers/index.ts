@@ -5,6 +5,7 @@ import { noopEcho } from './noop-echo';
 import {
   backfillEmbeddingsPayload,
   correlateObjectPayload,
+  deliverRemindersPayload,
   embedObjectPayload,
   explainCorrelationPayload,
   extractEventPayload,
@@ -22,7 +23,8 @@ import { purgeDeleted } from './purge-deleted';
  * `extract_reading_metadata` and `reprocess_extractions`; Phase 07 `propose_journey`; Phase 08
  * `extract_event_metadata`, `correlate_object` (model-free, but it enqueues) and
  * `explain_correlation`; Phase 09 `embed_object` and `backfill_embeddings`; Phase 10
- * `summarize_period`, `journey_narrative` and the `schedule_summaries` sweep. The AI-backed handlers are loaded lazily: their payload schemas live in `./payloads` so `enqueue()` can validate without the
+ * `summarize_period`, `journey_narrative` and the `schedule_summaries` sweep; Phase 11 the
+ * `deliver_reminders` sweep. The AI-backed handlers are loaded lazily: their payload schemas live in `./payloads` so `enqueue()` can validate without the
  * model layer on the import graph, and the worker only loads the module when it claims a job
  * of that kind. A job whose kind is not registered is marked dead immediately.
  */
@@ -93,6 +95,11 @@ const entries: HandlerEntry[] = [
     kind: 'schedule_summaries',
     schema: scheduleSummariesPayload,
     load: async () => (await import('./schedule-summaries')).scheduleSummariesJob as JobHandler,
+  },
+  {
+    kind: 'deliver_reminders',
+    schema: deliverRemindersPayload,
+    load: async () => (await import('./deliver-reminders')).deliverRemindersJob as JobHandler,
   },
   {
     kind: 'reprocess_extractions',

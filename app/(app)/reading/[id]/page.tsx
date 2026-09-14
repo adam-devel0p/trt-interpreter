@@ -1,4 +1,6 @@
 import { notFound } from 'next/navigation';
+import { ageBucketOf } from '@/domain/analytics/events';
+import { track } from '@/analytics/track';
 import { z } from 'zod';
 import { getSessionClient, requireUser } from '@/auth/session';
 import Link from 'next/link';
@@ -56,6 +58,7 @@ export default async function ReadingPage({
     dependents,
     memory,
     extractionFlag,
+    shareFlag,
     journeys,
     outcomes,
     links,
@@ -68,6 +71,7 @@ export default async function ReadingPage({
     countReadingDependents(client, id),
     getReadingMemory(client, reading),
     flag('ai_extraction', { userId: user.id }),
+    flag('share_cards', { userId: user.id }),
     getReadingJourneys(client, id),
     listReadingOutcomes(client, id),
     listLinksForObject(client, { type: 'reading', id }),
@@ -90,6 +94,8 @@ export default async function ReadingPage({
       })
     : null;
   const justSaved = saved === '1';
+  // §16 early value: a saved reading opened again (an age class, never a date or a word).
+  if (!justSaved) track(user.id, 'reading_reopened', { age: ageBucketOf(reading.occurred_at) });
   const offerRevisit =
     justSaved &&
     reading.revisit_at === null &&
@@ -112,15 +118,22 @@ export default async function ReadingPage({
         ),
         revisit: offerRevisit ? <RevisitChips readingId={reading.id} /> : null,
         controls: (
-          <ReadingControls
-            readingId={reading.id}
-            summary={{
-              cards: dependents.cards,
-              hasNotes: !!reading.user_notes,
-              interpretations: dependents.interpretations,
-              revisions: dependents.revisions,
-            }}
-          />
+          <div className="flex flex-col gap-4">
+            {shareFlag ? (
+              <Button asChild variant="secondary" className="self-start">
+                <Link href={`/reading/${reading.id}/share`}>Share as an image</Link>
+              </Button>
+            ) : null}
+            <ReadingControls
+              readingId={reading.id}
+              summary={{
+                cards: dependents.cards,
+                hasNotes: !!reading.user_notes,
+                interpretations: dependents.interpretations,
+                revisions: dependents.revisions,
+              }}
+            />
+          </div>
         ),
         interpretation: (
           <InterpretationPanel

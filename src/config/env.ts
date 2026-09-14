@@ -18,6 +18,8 @@ const clientSchema = z.object({
   NEXT_PUBLIC_SENTRY_DSN: z.string().url().optional().or(z.literal('')),
   /** Canonical origin for public reference pages (metadata, JSON-LD). Defaults to localhost. */
   NEXT_PUBLIC_SITE_URL: z.string().url(),
+  /** Web Push application server key (Phase 11). Empty = push cannot be enabled on this deployment. */
+  NEXT_PUBLIC_VAPID_PUBLIC_KEY: z.string().optional().or(z.literal('')),
 });
 
 export type ClientEnv = z.infer<typeof clientSchema>;
@@ -42,6 +44,7 @@ export function clientEnv(): ClientEnv {
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
     NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000',
+    NEXT_PUBLIC_VAPID_PUBLIC_KEY: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
   });
   return cached;
 }

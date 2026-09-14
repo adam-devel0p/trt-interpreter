@@ -40,6 +40,8 @@ export interface RunInterpretationArgs {
   partialFlushMs?: number;
   /** Per-attempt timeout override (tests); the tier default otherwise. */
   timeoutMs?: number;
+  /** Phase 11: the plan's tier for interpretations (§14 "deeper model"); the task default otherwise. */
+  modelTier?: 'standard' | 'deep';
   now?: () => number;
 }
 
@@ -140,6 +142,7 @@ export async function* runInterpretation(args: RunInterpretationArgs): AsyncIter
       bannedTerms: bannedTermsFor(reading.deck.system),
     }),
     ...(args.timeoutMs !== undefined ? { timeoutMs: args.timeoutMs } : {}),
+    ...(args.modelTier ? { modelHint: args.modelTier } : {}),
   };
   const flushMs = args.partialFlushMs ?? PARTIAL_FLUSH_MS;
   let text = '';

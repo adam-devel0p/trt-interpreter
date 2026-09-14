@@ -1,5 +1,6 @@
 import 'server-only';
 import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
+import { checkFeatureFor } from '@/billing/gate';
 import { platformDb } from '@/db/admin';
 import { journeys, periodSummaries, profiles } from '@/db/schema';
 import { meetsSummaryFloor } from '@/domain/summaries/floors';
@@ -10,7 +11,7 @@ import { logger } from '@/observability/logger';
 import { listPeriodObjectIds } from './evidence';
 
 /**
- * Which summaries are due (FR-20): for each consenting user on the `period_summaries` flag,
+ * Which summaries are due (FR-20): for each consenting, entitled user on the `period_summaries` flag,
  * every recent complete week and month that is above its data floor and has no stored
  * summary yet gets a `summarize_period` job; every open journey gets a `journey_narrative`
  * (the runner's fingerprint decides whether anything happens) and, above the journey floor,
@@ -33,7 +34,12 @@ async function eligibleUsers(userId: string | null): Promise<string[]> {
     )
     .orderBy(profiles.id);
   const out: string[] = [];
-  for (const r of rows) if (await flagForUser('period_summaries', r.id)) out.push(r.id);
+  for (const r of rows) {
+    if (!(await flagForUser('period_summaries', r.id))) continue;
+    // Generation is premium (§14): the sweep never queues a job the budget would refuse.
+    if (!(await checkFeatureFor(r.id, 'summaries')).allowed) continue;
+    out.push(r.id);
+  }
   return out;
 }
 

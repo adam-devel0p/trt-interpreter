@@ -62,11 +62,13 @@ raises `42501` when the `authenticated` role changes it; service role and direct
 `(user_id, flag)`. RLS: **select own only** — writes are service-role only, so a rollout control
 cannot be flipped by the person it gates. Read by `src/flags/index.ts` after the env default.
 
-**`reminder_settings`** — created in Phase 01 (UI in Phase 11). `id`, `user_id unique`,
+**`reminder_settings`** — created in Phase 01, real since Phase 11. `id`, `user_id unique`,
 `revisit_reminders bool default true`, `weekly_reflection bool default false`,
 `monthly_retrospective bool default false`, `quiet_hours_start/end time null`,
-`channel enum('push','email','none') default 'none'`, `created_at`, `updated_at`. Standard
-four-policy RLS.
+`channel enum('push','email','none') default 'none'` (`push` means push with email as the
+fallback when no device can be reached; nothing is ever sent while `none`), plus the four
+Phase 10 in-app switches, `created_at`, `updated_at`. Standard four-policy RLS; the one-tap
+unsubscribe route flips a single switch through the service role after verifying its token.
 
 All three tables have a `BEFORE UPDATE` trigger on the shared `public.set_updated_at()` function;
 later phases attach the same function to any table with `updated_at`.
@@ -527,13 +529,45 @@ Indexes on `created_at`, `(task, created_at)`, `(user_id, created_at)`. RLS enab
 policies** (service-role only, like `jobs`); written by `src/ai/telemetry.ts`, read by
 `/dev/ai-usage`. **No prompt or completion text. Ever** — asserted by an integration test that
 checks every string value of a stored row is an identifier, version or timestamp.
-**`usage_counters`** — Phase 11. `user_id`, `period_start date`, `task`, `calls`, `tokens`,
-`cost_micros`. Unique `(user_id, period_start, task)`.
-**`subscriptions`** — Phase 11. `user_id`, `provider`, `provider_customer_id`,
-`provider_subscription_id`, `status`, `plan`, `trial_end`, `current_period_end`, `cancel_at`.
-**`analytics_events`** — Phase 11/12. `id`, `user_id`, `name text`, `props jsonb`, `created_at`.
-Props are validated against a per-event allowlist schema; free text is rejected at the type level
-(FR-28, §19: no raw journal content in analytics).
+**`usage_counters`** — Phase 11 (`0012_billing_notifications`). `user_id`, `period_start date`
+(**the UTC day**; a month's allowance is the sum of its days, so "reset per period" is
+arithmetic), `task`, `calls` (runs that reached the provider and came back `ok` — a failed run
+consumes nothing), `tokens`, `cost_micros bigint`, `created_at`, `updated_at`. Unique
+`(user_id, period_start, task)`; `calls`/`tokens` non-negative by check. Written by
+`src/ai/telemetry.ts` (`DbTelemetry` → `src/billing/usage.ts`) through the service role; RLS
+**select own only** so Profile can show the allowance. Read by the budget hook before every
+provider call.
+**`subscriptions`** — Phase 11. One row per user (`user_id unique`): `provider` (`stripe`; the
+fake provider emits Stripe-shaped events under the same key), `provider_customer_id` (unique
+per provider), `provider_subscription_id`, `status` (check: `trialing | active | past_due |
+canceled | unpaid | incomplete | incomplete_expired | paused`), `plan` (`premium`), `interval`
+(`month | year | null`), `trial_end`, `trial_used_at` (set once a trial was granted, so a
+second checkout never gets a second trial), `current_period_end`, `cancel_at`, `canceled_at`,
+`last_event_at` (the provider's event timestamp of the last applied event — an older event is
+ignored), `created_at`, `updated_at`. Written only by `applyBillingEvent()`
+(`src/billing/subscriptions.ts`), which also mirrors the effective plan onto `profiles.plan`.
+RLS **select own only**; the plan itself is still protected by `profiles_protect_plan`.
+**`billing_events`** — Phase 11. The webhook idempotency ledger: `id text` = the provider's
+event id (**primary key**, so a replay inserts nothing), `provider`, `type`, `event_at`,
+`user_id null` (FK `on delete set null`), `outcome` (`applied | duplicate-free by construction |
+ignored_stale | ignored_unknown | no_user`), `received_at`. RLS enabled with **no policies**.
+**`analytics_events`** — Phase 11. `id`, `user_id null` (cascade), `name text` (check
+`^[a-z][a-z0-9_]{2,63}$`), `props jsonb`, `created_at`; indexes `(name, created_at)`,
+`(user_id, created_at)`. Props are validated against the per-event Zod allowlist in
+`src/domain/analytics/events.ts` before the insert; **no schema has a string field**, so a
+question, a note or a name is not representable (FR-28, §19). Written only by
+`src/analytics/track.ts`; RLS enabled with **no policies**.
+**`push_subscriptions`** — Phase 11. `user_id`, `endpoint text unique`, `p256dh`, `auth`,
+`created_at`, `last_success_at`, `disabled_at` (set by the dispatcher on a 404/410 from the
+push service). Standard four policies: the user registers and removes their own devices.
+**`notifications`** — Phase 11. The reminder delivery log and once-only memory: `user_id`,
+`kind` (check: `revisit_due | weekly_reflection | monthly_retrospective`), `channel`
+(`push | email`), `fingerprint` (unique per `(user_id, kind, fingerprint)`), `object_type` /
+`object_id`, `path` (the in-app deep link), `title`, `body` (app-authored copy built from dates
+and counts — never an entry's words, by rule and by test), `status` (`sent | failed`),
+`error_class`, `sent_on` (the user's local calendar day, for the one-per-day rule), `sent_at`,
+`opened_at` (set by the signed open link). RLS **select own only**; written by the
+dispatcher.
 **`smoke_notes`** — Phase 00 throwaway; **dropped in Phase 01** (`0002_auth_profiles`). The RLS
 harness now runs on `profiles`.
 

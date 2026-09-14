@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import * as React from 'react';
 import { Button } from '@/ui/components/button';
 import { FormMessage } from '@/ui/components/field';
+import { PaywallSheet, type PremiumOfferProps } from '@/ui/components/premium-offer';
 import {
   dismissSummaryAction,
   regenerateNarrativeAction,
@@ -14,6 +15,9 @@ type Target =
   | { kind: 'weekly' | 'monthly' | 'yearly'; periodKey: string }
   | { kind: 'journey'; journeyId: string };
 
+/** When set, generation is a premium action for this user: the button opens the sheet instead. */
+export type PremiumGate = Omit<PremiumOfferProps, 'as' | 'onDismiss'>;
+
 /**
  * Dismiss / regenerate for a summary (FR-20 "dismissible; regeneration explicit"). Regenerate
  * is the only control on these screens that calls a model, and it says so.
@@ -23,12 +27,14 @@ export function SummaryControls({
   dismissed,
   target,
   canGenerate,
+  premium = null,
 }: {
   summaryId: string | null;
   dismissed: boolean;
   target: Target;
   /** Consent + flag; without them the control explains instead of calling. */
   canGenerate: boolean;
+  premium?: PremiumGate | null;
 }) {
   const router = useRouter();
   const [pending, start] = React.useTransition();
@@ -59,7 +65,16 @@ export function SummaryControls({
           {dismissed ? 'Show the summary again' : 'Dismiss this summary'}
         </Button>
       ) : null}
-      {canGenerate ? (
+      {canGenerate && premium ? (
+        <PaywallSheet
+          {...premium}
+          trigger={
+            <Button variant="secondary" size="sm">
+              {summaryId ? 'Regenerate (Premium)' : 'Write a summary (Premium)'}
+            </Button>
+          }
+        />
+      ) : canGenerate ? (
         <Button variant="secondary" size="sm" onClick={regenerate} disabled={pending}>
           {pending
             ? 'Writing…'
@@ -76,14 +91,27 @@ export function SummaryControls({
 export function NarrativeControls({
   journeyId,
   canGenerate,
+  premium = null,
 }: {
   journeyId: string;
   canGenerate: boolean;
+  premium?: PremiumGate | null;
 }) {
   const router = useRouter();
   const [pending, start] = React.useTransition();
   const [message, setMessage] = React.useState<string | null>(null);
   if (!canGenerate) return null;
+  if (premium)
+    return (
+      <PaywallSheet
+        {...premium}
+        trigger={
+          <Button variant="ghost" size="sm">
+            Rewrite the header (Premium)
+          </Button>
+        }
+      />
+    );
   return (
     <div className="flex items-center gap-2">
       <Button

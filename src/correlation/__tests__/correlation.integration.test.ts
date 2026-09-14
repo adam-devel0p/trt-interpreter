@@ -21,7 +21,7 @@ import { runBatch } from '@/jobs/worker';
 import { applyCorrection } from '@/memory/corrections';
 import { runExtraction } from '@/memory/extract';
 import { loadJournalRefs, makeReading, type JournalRefs } from '@/__tests__/fixtures/journal-db';
-import { enableCorrelation, enableExtraction } from '@/__tests__/fixtures/memory-db';
+import { enableCorrelation, enableExtraction, grantPremium } from '@/__tests__/fixtures/memory-db';
 import { createTestUser, deleteTestUser, type TestUser } from '@/__tests__/rls/harness';
 
 /**
@@ -50,6 +50,7 @@ describe('correlation (integration)', () => {
     await setAiConsent(user.client, user.id, true);
     await enableExtraction(user.id);
     await enableCorrelation(user.id);
+    await grantPremium(user.id); // explanations are premium (Phase 11)
     refs = await loadJournalRefs(user);
   });
   afterAll(async () => {

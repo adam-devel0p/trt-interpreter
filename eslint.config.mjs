@@ -29,6 +29,14 @@ const NO_DB_FROM_AI = [
     message: 'ai/ touches the database only through telemetry.ts.',
   },
 ];
+/** Phase 11: the single feature check. Only the gate module and the AI budget hook read it. */
+const NO_ENTITLEMENTS_OUTSIDE_BILLING = [
+  {
+    group: ['@/domain/billing/entitlements', '**/domain/billing/entitlements'],
+    message:
+      'Feature checks go through src/billing/gate.ts (loadEntitlements / checkFeatureFor); nothing else decides what a plan allows.',
+  },
+];
 const DOMAIN_PURITY = [
   { group: ['@/db', '@/db/*', '**/db/**'], message: 'domain/ may not import db/.' },
   { group: ['@/ai', '@/ai/*', '**/ai/**'], message: 'domain/ may not import ai/.' },
@@ -78,6 +86,23 @@ export default tseslint.config(
     rules: {
       'no-restricted-imports': [
         'error',
+        {
+          patterns: [
+            ...NO_PROVIDER_SDKS,
+            ...NO_ADMIN_CLIENT,
+            ...NO_RAW_DB,
+            ...NO_ENTITLEMENTS_OUTSIDE_BILLING,
+          ],
+        },
+      ],
+    },
+  },
+  // The gate and its neighbours are the one place a plan becomes a verdict.
+  {
+    files: ['src/billing/**', 'src/ai/telemetry.ts', 'src/domain/billing/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
         { patterns: [...NO_PROVIDER_SDKS, ...NO_ADMIN_CLIENT, ...NO_RAW_DB] },
       ],
     },
@@ -101,7 +126,12 @@ export default tseslint.config(
   },
   {
     files: ['src/db/admin/**'],
-    rules: { 'no-restricted-imports': ['error', { patterns: [...NO_PROVIDER_SDKS] }] },
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        { patterns: [...NO_PROVIDER_SDKS, ...NO_ENTITLEMENTS_OUTSIDE_BILLING] },
+      ],
+    },
   },
   // src/ai/: provider SDKs allowed (only here); the database only through telemetry.ts.
   {
@@ -110,13 +140,38 @@ export default tseslint.config(
     rules: {
       'no-restricted-imports': [
         'error',
-        { patterns: [...NO_ADMIN_CLIENT, ...NO_RAW_DB, ...NO_DB_FROM_AI] },
+        {
+          patterns: [
+            ...NO_ADMIN_CLIENT,
+            ...NO_RAW_DB,
+            ...NO_DB_FROM_AI,
+            ...NO_ENTITLEMENTS_OUTSIDE_BILLING,
+          ],
+        },
       ],
     },
   },
   // src/domain/: pure TS. No db, ai, jobs, flags, framework, I/O or provider imports.
   {
     files: ['src/domain/**/*.ts'],
+    ignores: ['src/domain/billing/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            ...NO_PROVIDER_SDKS,
+            ...NO_ADMIN_CLIENT,
+            ...NO_RAW_DB,
+            ...DOMAIN_PURITY,
+            ...NO_ENTITLEMENTS_OUTSIDE_BILLING,
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['src/domain/billing/**'],
     rules: {
       'no-restricted-imports': [
         'error',

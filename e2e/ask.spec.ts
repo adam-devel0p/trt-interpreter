@@ -36,7 +36,12 @@ test.describe('ask my history', () => {
     page,
   }) => {
     test.setTimeout(240_000);
-    const user = await createReadyUser('ask', { aiConsent: true, extraction: true, ask: true });
+    const user = await createReadyUser('ask', {
+      aiConsent: true,
+      extraction: true,
+      ask: true,
+      premium: true,
+    });
     const ids = await seedReadings(user.id, [
       {
         deck: 'rws-classic',

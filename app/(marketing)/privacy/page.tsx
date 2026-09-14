@@ -1,10 +1,16 @@
 import Link from 'next/link';
+import { track } from '@/analytics/track';
+import { getUser } from '@/auth/session';
 import { PageHeader } from '@/ui/components/page-header';
 
 export const metadata = { title: 'Privacy' };
+export const dynamic = 'force-dynamic';
 
 /** The full policy, written to be read (§11). Each promise here is backed by a test or a rule. */
-export default function PrivacyPage() {
+export default async function PrivacyPage() {
+  // §16 trust metric: a count of visits, attributed only when signed in.
+  const user = await getUser().catch(() => null);
+  track(user?.id ?? null, 'privacy_page_viewed', {});
   return (
     <div className="mx-auto w-full max-w-[720px] px-4 pb-16">
       <header className="py-5">

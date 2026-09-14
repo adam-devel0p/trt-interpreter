@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { z } from 'zod';
+import { track } from '@/analytics/track';
 import { getSessionClient, requireUser } from '@/auth/session';
+import { paywallOffer } from '@/billing/offer';
 import { listAsks } from '@/db/queries/asks';
 import { listJourneys } from '@/db/queries/journeys';
 import { listEntities } from '@/db/queries/memory';
@@ -10,7 +12,9 @@ import { flag } from '@/flags';
 import { EmptyState } from '@/ui/components/empty-state';
 import { LocalTime } from '@/ui/components/local-time';
 import { PageHeader } from '@/ui/components/page-header';
+import { PaywallCard } from '@/ui/components/premium-offer';
 import { AskComposer } from './ask-composer';
+import { notePaywallViewedAction, startCheckoutAction } from '../billing/checkout-actions';
 
 export const metadata = { title: 'Ask my history' };
 export const dynamic = 'force-dynamic';
@@ -61,11 +65,20 @@ export default async function Page({
     );
   }
 
-  const [journeys, entities, recent] = await Promise.all([
+  const [journeys, entities, recent, offer, readingCount] = await Promise.all([
     listJourneys(client),
     listEntities(client),
     listAsks(client, 20),
+    paywallOffer(user.id, 'ask_my_history'),
+    client
+      .from('readings')
+      .select('id', { count: 'exact', head: true })
+      .is('deleted_at', null)
+      .then((r) => r.count ?? 0),
   ]);
+  if (!offer.allowed && offer.reason) {
+    track(user.id, 'limit_reached', { feature: 'ask_my_history', reason: offer.reason });
+  }
   const journeyOptions = journeys
     .filter((j) => !j.dismissed_at && !j.merged_into_id)
     .map((j) => ({ id: j.id, label: j.title }));
@@ -96,14 +109,30 @@ export default async function Page({
             : 'Questions about your own readings, answered from your own entries — every claim with its source.'
         }
       />
-      <AskComposer
-        examples={EXAMPLE_QUESTIONS}
-        journeys={journeyOptions}
-        entities={entityOptions}
-        initialScope={initialScope}
-        initialQuestion={params.q?.slice(0, ASK_QUESTION_MAX)}
-        lockScope={Boolean(lockedJourney)}
-      />
+      {offer.allowed ? (
+        <AskComposer
+          examples={EXAMPLE_QUESTIONS}
+          journeys={journeyOptions}
+          entities={entityOptions}
+          initialScope={initialScope}
+          initialQuestion={params.q?.slice(0, ASK_QUESTION_MAX)}
+          lockScope={Boolean(lockedJourney)}
+        />
+      ) : (
+        // The paywall stands where the composer would (§4.8): at the action, in its context.
+        <PaywallCard
+          offer={offer}
+          context={
+            readingCount > 0
+              ? `Ask my history searches all ${readingCount} of your ${readingCount === 1 ? 'reading' : 'readings'} and answers with sources.`
+              : 'Ask my history answers questions from your own entries, with sources.'
+          }
+          stillWorks="Your journal, search, journeys and connections work exactly as before, and every earlier answer below stays open."
+          returnTo="/ask"
+          action={startCheckoutAction}
+          onViewed={notePaywallViewedAction}
+        />
+      )}
       {recent.length ? (
         <section aria-labelledby="asks-h" className="mt-10">
           <h2 id="asks-h" className="mb-3 font-serif text-xl">

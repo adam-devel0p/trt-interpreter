@@ -1,5 +1,6 @@
 'use server';
 
+import { track } from '@/analytics/track';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { getSessionClient, requireUser } from '@/auth/session';
@@ -74,8 +75,9 @@ const title = z.string().trim().min(1).max(JOURNEY_TITLE_MAX);
 export async function acceptJourneyAction(journeyId: unknown): Promise<ActionResult> {
   const id = uuid.safeParse(journeyId);
   if (!id.success) return { ok: false, message: FAILED };
-  return run('accepted', async (c) => {
+  return run('accepted', async (c, userId) => {
     await acceptJourney(c, id.data);
+    track(userId, 'journey_accepted', { suggested: true });
     return { journeyIds: [id.data] };
   });
 }
@@ -139,6 +141,7 @@ export async function createJourneyAction(
   if (!ids.success || !eids.success) return { ok: false, message: FAILED };
   return run<{ id: string }>('created', async (c, userId) => {
     const id = await createJourney(c, userId, t.data, ids.data, eids.data);
+    track(userId, 'journey_accepted', { suggested: false });
     return { value: { id }, journeyIds: [id], readingId: ids.data[0], eventId: eids.data[0] };
   });
 }

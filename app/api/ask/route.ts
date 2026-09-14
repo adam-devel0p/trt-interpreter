@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
+import { track } from '@/analytics/track';
 import { z } from 'zod';
 import { getAiRunner, getEmbedder } from '@/ai';
 import { getSessionClient, getUser } from '@/auth/session';
+import { checkFeatureFor } from '@/billing/gate';
 import { getProfile, hasAiConsent } from '@/db/queries/profile';
 import { askQuestionSchema, askScopeSchema } from '@/domain/retrieval/query';
 import { flag } from '@/flags';
@@ -22,7 +24,11 @@ const bodySchema = z
   .object({ question: askQuestionSchema, scope: askScopeSchema.default({ kind: 'all' }) })
   .strict();
 
-function sse(events: AsyncGenerator<AskEvent>, abort: AbortController): Response {
+function sse(
+  events: AsyncGenerator<AskEvent>,
+  abort: AbortController,
+  onComplete?: (e: Extract<AskEvent, { type: 'complete' }>) => void,
+): Response {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -30,6 +36,7 @@ function sse(events: AsyncGenerator<AskEvent>, abort: AbortController): Response
         for await (const e of events) {
           if (abort.signal.aborted) break;
           controller.enqueue(encoder.encode(`event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`));
+          if (e.type === 'complete') onComplete?.(e);
           if (e.type === 'complete' || e.type === 'failed') break;
         }
       } finally {
@@ -63,6 +70,13 @@ export async function POST(req: Request) {
   if (!(await flag('ask_my_history', { userId: user.id })))
     return NextResponse.json({ kind: 'off' }, { status: 403 });
   if (!hasAiConsent(profile)) return NextResponse.json({ kind: 'consent' }, { status: 403 });
+  // Premium (§14): the verdict comes from the one gate; a denial here means no model call.
+  const verdict = await checkFeatureFor(user.id, 'ask_my_history');
+  if (!verdict.allowed)
+    return NextResponse.json(
+      { kind: verdict.reason === 'plan' ? 'plan' : 'limit', reason: verdict.reason },
+      { status: 403 },
+    );
   const parsed = bodySchema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ kind: 'invalid' }, { status: 400 });
 
@@ -78,5 +92,10 @@ export async function POST(req: Request) {
     embedder: getEmbedder(),
     signal: abort.signal,
   });
-  return sse(events, abort);
+  return sse(events, abort, (e) =>
+    track(user.id, 'ask_asked', {
+      scope: parsed.data.scope.kind,
+      sufficient: e.result.answer.evidence_sufficient,
+    }),
+  );
 }

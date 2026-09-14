@@ -1,6 +1,8 @@
 import Link from 'next/link';
+import { track } from '@/analytics/track';
 import { notFound } from 'next/navigation';
 import { getSessionClient, requireUser } from '@/auth/session';
+import { paywallOffer } from '@/billing/offer';
 import { getProfile, hasAiConsent } from '@/db/queries/profile';
 import { loadRetrospective } from '@/db/queries/retrospective';
 import { getSummaryForPeriod } from '@/db/queries/summaries';
@@ -14,6 +16,7 @@ import { LocalTime } from '@/ui/components/local-time';
 import { PageHeader } from '@/ui/components/page-header';
 import { RecurringSymbols } from '@/ui/components/recurring-symbols';
 import { SummaryView } from '@/ui/components/summary-view';
+import { notePaywallViewedAction, startCheckoutAction } from '../../billing/checkout-actions';
 import { SummaryControls } from '../controls';
 
 export const dynamic = 'force-dynamic';
@@ -36,15 +39,31 @@ export default async function RetrospectivePage({
   if (!period) notFound();
   const user = await requireUser();
   const client = await getSessionClient();
-  const [data, summary, profile, flagOn] = await Promise.all([
+  const [data, summary, profile, flagOn, shareOn] = await Promise.all([
     loadRetrospective(client, period),
     getSummaryForPeriod(client, period.kind, period.start),
     getProfile(client, user.id),
     flag('period_summaries', { userId: user.id }),
+    flag('share_cards', { userId: user.id }),
   ]);
   const total = data.readings.length + data.events.length;
   if (total < summaryFloor(period.kind)) notFound();
   const canGenerate = !!profile && hasAiConsent(profile) && flagOn;
+  track(user.id, 'retrospective_viewed', { kind: period.kind });
+  // Generation is premium (§14); the stored summary and everything below it are not.
+  const offer = canGenerate ? await paywallOffer(user.id, 'summaries') : null;
+  const premium =
+    offer && !offer.allowed
+      ? {
+          offer,
+          context: `A written summary of ${periodLabel(period)}, every claim traced to the entries below.`,
+          stillWorks:
+            'Everything on this page comes from what you recorded and stays here on any plan.',
+          returnTo: `/retrospective/${period.key}`,
+          action: startCheckoutAction,
+          onViewed: notePaywallViewedAction,
+        }
+      : null;
 
   const titleOf = (r: { question: string | null; is_open_reflection: boolean }) =>
     r.is_open_reflection ? 'Open reflection' : (r.question ?? 'Reading');
@@ -116,9 +135,22 @@ export default async function RetrospectivePage({
         title={label}
         description={`${data.readings.length} ${data.readings.length === 1 ? 'reading' : 'readings'}${data.events.length ? `, ${data.events.length} ${data.events.length === 1 ? 'life event' : 'life events'}` : ''}${data.outcomes.length ? `, ${data.outcomes.length} ${data.outcomes.length === 1 ? 'outcome' : 'outcomes'} recorded` : ''}.`}
         action={
-          <Link href="/retrospective" className="text-sm text-accent underline underline-offset-4">
-            All
-          </Link>
+          <span className="flex gap-3">
+            {shareOn && period.kind === 'monthly' ? (
+              <Link
+                href={`/retrospective/${period.key}/share`}
+                className="text-sm text-accent underline underline-offset-4"
+              >
+                Share
+              </Link>
+            ) : null}
+            <Link
+              href="/retrospective"
+              className="text-sm text-accent underline underline-offset-4"
+            >
+              All
+            </Link>
+          </span>
         }
       />
 
@@ -156,6 +188,7 @@ export default async function RetrospectivePage({
             dismissed={!!summary?.dismissed_at}
             target={{ kind: period.kind, periodKey: period.key }}
             canGenerate={canGenerate}
+            premium={premium}
           />
         </div>
       </Section>

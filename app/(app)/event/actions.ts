@@ -1,5 +1,6 @@
 'use server';
 
+import { track } from '@/analytics/track';
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
@@ -143,6 +144,10 @@ export async function createEventAction(
   }
   await queue('extract_event_metadata', { eventId: id, force: false }, user.id);
   await enqueueEmbedSafely('life_event', id, user.id, { delayMs: EMBED_AFTER_SAVE_DELAY_MS });
+  track(user.id, 'life_event_logged', {
+    about_reading: !!parsed.data.reading_id,
+    with_photo: photo === 'saved',
+  });
   revalidate(id, parsed.data.reading_id);
   return { ok: true, value: { id, photo } };
 }
@@ -220,6 +225,7 @@ export async function linkAction(
     const client = await getSessionClient();
     const link = await actOnLink(client, id.data, a.data);
     logger.info('app.link.acted', { userId: user.id, linkId: id.data, state: a.data });
+    track(user.id, 'link_decided', { decision: a.data });
     await embedBothSides(link, user.id);
     revalidate(link.to_type === 'life_event' ? link.to_id : undefined, link.from_id);
     return { ok: true, value: { state: a.data } };
@@ -320,6 +326,7 @@ export async function recordOutcomeAction(
       objectId: input.readingId,
       state: input.status,
     });
+    track(user.id, 'outcome_recorded', { status: input.status });
     revalidate(eventId ?? undefined, input.readingId);
     return { ok: true, value: { outcomeId: id, eventId } };
   } catch (err) {

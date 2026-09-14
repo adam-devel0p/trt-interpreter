@@ -520,3 +520,29 @@ When the bound left entries out, up to **2** stored user-scope summaries
 (`ASK_COVERING_SUMMARIES_MAX`; months before weeks, never dismissed or stale) whose periods
 hold the dropped dates join the package after the objects, labelled in sequence and rendered
 as generated text. `verifyAnswer` drops any claim that cites only summaries (§19).
+
+## 9. Metering, reminders and share cards (Phase 11)
+
+**Entitlements** (`domain/billing/entitlements.ts`) is one pure function `entitlements(plan,
+counters)`: `plan` is `effectivePlan(subscription)` (`trialing | active` → premium; every
+other provider state, including `past_due`, → free), `counters` are this UTC month's
+successful runs by feature and today's total. Each feature has a plan floor (`FEATURE_PLAN`)
+and a monthly bucket (interpretations · memory · analysis, the last shared by Ask,
+explanations and summaries); the verdict is `plan` (not in the plan, or a zero bucket),
+`monthly` (bucket exhausted), `daily` (day cap), in that order, or allowed. Numbers live in
+`PLAN_LIMITS` and are placeholders (§14). Nothing that reads stored content has a row here.
+
+**Reminders** (`domain/notifications/rules.ts`): candidates are a revisit whose date passed
+with the outcome still open (`revisit|<id>|<at>`), the month just finished during its first
+seven local days when it meets the monthly summary floor (`retro|YYYY-MM`), and the ISO
+week just finished on its first two local days when it holds ≥ 3 entries (`weekly|YYYY-Www`).
+`pickReminder()` drops candidates whose switch is off, whose fingerprint was sent or whose
+in-app twin (`retention_prompts`) was dismissed, sorts by priority (revisit > month > week),
+then holds — never drops — for the one-per-local-day cap and for quiet hours
+(`[start, end)`, wrapping midnight). The hourly sweep re-evaluates, so a held reminder goes
+out in the next eligible hour.
+
+**Share cards** (`domain/share/payload.ts`): the payload builders take stored data and four
+booleans and return exactly what is drawn; defaults exclude the question, the note and every
+name. Recurring cards on the month card are counted per deck system and name (≥ 2), themes by
+summed weight.

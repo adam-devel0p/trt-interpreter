@@ -3,6 +3,7 @@ import { parseArgs } from 'node:util';
 import { authAdmin, closeAdmin, platformSql } from '../src/db/admin';
 import { seedBulkReadings, seedReadings } from './seed-demo-readings';
 import { seedEvents } from './seed-demo-events';
+import { seedBilling } from './seed-demo-billing';
 import { seedInterpretations } from './seed-demo-interpretations';
 import { seedJourneys } from './seed-demo-journeys';
 import { seedMemory } from './seed-demo-memory';
@@ -109,6 +110,7 @@ async function seedBulk(ctx: SeedContext): Promise<void> {
 
 const SEEDERS: Seeder[] = [
   { name: 'users', phase: '01', run: seedUsers },
+  { name: 'plans, reminders', phase: '11', run: seedBilling },
   { name: 'readings', phase: '03', run: seedReadings },
   { name: 'interpretations', phase: '04', run: seedInterpretations },
   { name: 'bulk readings', phase: '05', run: seedBulk },

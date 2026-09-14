@@ -263,3 +263,44 @@ lists the user's records with the reading they answer and "Connections you confi
 event asked about appears under "Might belong here" like a pending reading. The journey
 list says "4 readings · 3 life events".
 
+
+Phase 11 built the money and reminder surfaces without a single wall. **`PremiumOffer`**
+(`src/ui/components/premium-offer.tsx`) is the one paywall, in two skins: `PaywallCard`, an
+inline section that stands *where the premium control would be* (Ask's composer for a free
+user), and `PaywallSheet`, a Radix Dialog opened by the control itself (the retrospective's
+"Write a summary (Premium)", the journey's "Rewrite the header (Premium)", Profile's "See
+Premium") — never on page load, never as an interstitial. It leads with the value sentence for
+*this* context ("Ask my history searches all 84 of your readings and answers with sources."),
+lists what Premium adds in four lines, offers the yearly price first (with its per-month
+equivalent and the saving) and the monthly price second as radio rows, states the trial's
+end date as a real date in real text, says cancellation is one tap from Profile, and ends
+with what still works — the line about the archive is on every variant. Its buttons say
+"Start 14 days free" / "Subscribe for a year" / "Not now"; the sheet traps focus, closes on
+Escape and returns focus to the control. A used-up allowance is not a wall either: the
+interpretation slot says "No new interpretation this time — your reading is saved." with the
+exact count, what stays readable, and a *See what Premium adds* link. Profile's
+**Subscription** section is one sentence with real dates ("Premium trial until 28 September
+2026. The yearly price starts then unless you cancel before.") plus the allowance used, and
+one control: *Manage billing* (the provider's portal) or *See Premium*. The fake provider's
+checkout and portal pages (`/billing/checkout`, `/billing/portal`) use the same components
+and say plainly that nothing is charged.
+
+Profile's **Reminders** section names the channel (Off / Email / Push with email as the
+fallback), a *Push on this device* control that asks the browser once, three switches each
+describing exactly when it fires ("Only when you set a revisit date on a reading and it has
+passed."), quiet hours as two time inputs, and *Recent reminders* as links. Copy rules for
+reminders are enforced by test: no streak, loss, hurry or "come back" vocabulary, and no
+entry's words. `/notifications/unsubscribed` is the one-tap landing: "Turned off." and the
+way back.
+
+**`ShareStudio`** (`src/ui/components/share-studio.tsx`) is the FR-24 surface: a fieldset of
+opt-ins that each name what they reveal ("Names this reading mentions: Maya, the agency."), a
+`<figure>` whose `<img>` *is* the server-rendered card with the caption "This is the exact
+image. Nothing else is added when you share it.", and *Share…* (Web Share API with the file)
+/ *Download image*. The card itself (`src/share/render.tsx`, 1080 × 1350) is the dark
+palette from `tokens.css` drawn with Newsreader and DM Sans: eyebrow with the deck's accent
+dot, the date, the question only if chosen, the cards in position (RWS art, or the
+typographic face for Thoth with its own numeral and name), theme chips, and the footer
+"Reflection, not prediction." The month card leads with the month in large serif, three
+plain numbers, "Kept coming back", and theme chips. Colours for the image are the one
+sanctioned literal set in `src/ui/theme-colors.ts` (`SHARE_PALETTE`).

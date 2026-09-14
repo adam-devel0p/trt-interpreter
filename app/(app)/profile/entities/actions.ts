@@ -1,5 +1,6 @@
 'use server';
 
+import { track } from '@/analytics/track';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
@@ -133,7 +134,10 @@ export async function mergeEntitiesAction(
 ): Promise<ActionResult<{ mergeId: string; movedMentions: number; keptRoles: number }>> {
   const t = uuid.safeParse(targetId);
   if (!t.success) return { ok: false, message: 'Pick who to merge into.' };
-  const res = await run('merged', sourceId, (c, _u, id) => mergeEntities(c, id, t.data));
+  const res = await run('merged', sourceId, (c, u, id) => {
+    track(u, 'entity_merged', { undone: false });
+    return mergeEntities(c, id, t.data);
+  });
   if (res.ok) done(t.data);
   return res;
 }
@@ -141,7 +145,10 @@ export async function mergeEntitiesAction(
 export async function undoMergeAction(entityId: unknown, mergeId: unknown): Promise<ActionResult> {
   const m = uuid.safeParse(mergeId);
   if (!m.success) return { ok: false, message: FAILED };
-  return run<undefined>('merge_undone', entityId, (c) => undoMerge(c, m.data));
+  return run<undefined>('merge_undone', entityId, (c, u) => {
+    track(u, 'entity_merged', { undone: true });
+    return undoMerge(c, m.data);
+  });
 }
 
 export async function splitEntityAction(
@@ -155,7 +162,10 @@ export async function splitEntityAction(
   const k = z.enum(ENTITY_KINDS).safeParse(kind);
   if (!ids.success || !l.success || !k.success)
     return { ok: false, message: 'Choose at least one mention and give the new entry a name.' };
-  return run('split', entityId, (c, _u, id) => splitEntity(c, id, ids.data, l.data, k.data));
+  return run('split', entityId, (c, u, id) => {
+    track(u, 'entity_split', {});
+    return splitEntity(c, id, ids.data, l.data, k.data);
+  });
 }
 
 export async function deleteEntityAction(entityId: unknown): Promise<ActionResult> {

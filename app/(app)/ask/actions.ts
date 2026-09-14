@@ -1,5 +1,6 @@
 'use server';
 
+import { track } from '@/analytics/track';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { getSessionClient, requireUser } from '@/auth/session';
@@ -26,6 +27,10 @@ export async function setAskFeedbackAction(
   try {
     await setAskFeedback(await getSessionClient(), id.data, f.data);
     logger.info('app.ask.feedback', { userId: user.id, askId: id.data, state: String(f.data) });
+    track(user.id, 'feedback_given', {
+      target: 'ask',
+      thumbs: f.data === 1 ? 'up' : f.data === -1 ? 'down' : 'cleared',
+    });
     revalidatePath(`/ask/${id.data}`);
     return { ok: true };
   } catch (err) {

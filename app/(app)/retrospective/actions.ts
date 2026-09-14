@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { getSessionClient, requireUser } from '@/auth/session';
+import { checkFeatureFor } from '@/billing/gate';
 import { getProfile, hasAiConsent } from '@/db/queries/profile';
 import { listActivePeriodStarts } from '@/db/queries/retrospective';
 import {
@@ -64,6 +65,12 @@ async function canGenerate(userId: string): Promise<string | null> {
     return 'AI is switched off in your profile, so nothing is generated.';
   if (!(await flag('period_summaries', { userId })))
     return 'Summaries are not switched on for your account yet.';
+  // Premium (§14): one verdict from the one gate; a denial means no job and no model call.
+  const verdict = await checkFeatureFor(userId, 'summaries');
+  if (!verdict.allowed)
+    return verdict.reason === 'plan'
+      ? 'Written summaries are part of Premium. Everything recorded here stays as it is.'
+      : 'This month’s analysis allowance is used up. The count starts again on the first of the month; everything recorded here stays as it is.';
   return null;
 }
 

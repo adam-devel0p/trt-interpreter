@@ -40,6 +40,10 @@ function files(p: string): string[] {
   );
 }
 
+function walk(dirs: string[]): string[] {
+  return dirs.flatMap(files);
+}
+
 describe('archive-readable-without-subscription', () => {
   it('no read, search, export or delete path consults the plan or a paywall', () => {
     const all = PATHS.flatMap(files);
@@ -69,7 +73,34 @@ describe('archive-readable-without-subscription', () => {
   it('the profile row exposes the plan only to display it; users cannot change it and nothing keys on it', () => {
     const profile = readFileSync(path.resolve(ROOT, 'src/db/queries/profile.ts'), 'utf8');
     expect(profile).toMatch(/`plan` is absent on purpose/);
-    const page = readFileSync(path.resolve(ROOT, 'app/(app)/profile/page.tsx'), 'utf8');
+    const page = readFileSync(path.resolve(ROOT, 'app/(app)/profile/billing-section.tsx'), 'utf8');
     expect(page).toContain('Your archive stays readable whatever the plan');
+  });
+
+  it('Phase 11: the one gate is imported only where new analysis starts, never on a read path', () => {
+    const all = walk(['app', 'src']).filter((f) => !f.includes('__tests__') && !/\.test\./.test(f));
+    const gateUsers = all
+      .filter((f) => /@\/billing\/(gate|offer)'/.test(readFileSync(path.resolve(ROOT, f), 'utf8')))
+      .map((f) => f.replace(/\\/g, '/'))
+      .sort();
+    expect(gateUsers).toEqual(
+      [
+        'app/(app)/ask/page.tsx',
+        'app/(app)/journey/[id]/page.tsx',
+        'app/(app)/profile/billing-section.tsx',
+        'app/(app)/retrospective/[period]/page.tsx',
+        'app/(app)/retrospective/actions.ts',
+        'app/api/ask/route.ts',
+        'app/api/readings/[id]/interpret/route.ts',
+        'src/ai/telemetry.ts',
+        'src/summaries/schedule.ts',
+      ].sort(),
+    );
+    // None of them is a journal, detail, search, export or delete path.
+    for (const f of gateUsers)
+      expect(
+        PATHS.some((p) => f.startsWith(p)),
+        f,
+      ).toBe(false);
   });
 });

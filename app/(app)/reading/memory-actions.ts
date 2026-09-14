@@ -1,5 +1,6 @@
 'use server';
 
+import { track } from '@/analytics/track';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { getSessionClient, requireUser } from '@/auth/session';
@@ -37,6 +38,7 @@ export async function correctMetadataAction(
       objectId: id.data,
       status: type,
     });
+    track(user.id, 'metadata_corrected', { object_type: 'reading' });
     revalidatePath(`/reading/${id.data}`);
     revalidatePath('/profile/entities');
     return { ok: true, value: { type } };

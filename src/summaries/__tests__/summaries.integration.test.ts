@@ -33,7 +33,7 @@ import { generatePeriodSummary } from '../generate';
 import { generateJourneyNarrative } from '../narrative';
 import { duePeriods } from '../schedule';
 import { loadJournalRefs, makeReading, type JournalRefs } from '@/__tests__/fixtures/journal-db';
-import { enableExtraction, enableSummaries } from '@/__tests__/fixtures/memory-db';
+import { enableExtraction, enableSummaries, grantPremium } from '@/__tests__/fixtures/memory-db';
 import { createTestUser, deleteTestUser, type TestUser } from '@/__tests__/rls/harness';
 
 /**
@@ -72,6 +72,7 @@ describe('summaries (integration)', () => {
     await setAiConsent(user.client, user.id, true);
     await enableExtraction(user.id);
     await enableSummaries(user.id);
+    await grantPremium(user.id); // summaries are premium (Phase 11)
     refs = await loadJournalRefs(user);
   });
   afterAll(async () => {

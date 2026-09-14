@@ -2,7 +2,9 @@ import { randomUUID } from 'node:crypto';
 import { after, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getAiRunner } from '@/ai';
+import { track } from '@/analytics/track';
 import { getSessionClient, getUser } from '@/auth/session';
+import { loadEntitlements } from '@/billing/gate';
 import { getInterpretationState, listSafetyFlags } from '@/db/queries/interpretations';
 import { getProfile, hasAiConsent } from '@/db/queries/profile';
 import { getReading } from '@/db/queries/readings';
@@ -121,6 +123,22 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     }
   }
 
+  // Only *new* generation is metered (§14, invariant 11): the stored path above never gets here.
+  const entitled = await loadEntitlements(user.id);
+  const gate = entitled.features.interpretation;
+  if (!gate.allowed) {
+    track(user.id, 'limit_reached', { feature: 'interpretation', reason: gate.reason ?? 'plan' });
+    logger.info('ai.interpretation.limit', {
+      userId: user.id,
+      objectId: id,
+      reason: gate.reason ?? 'plan',
+    });
+    return NextResponse.json(
+      { kind: 'limit', reason: gate.reason, used: gate.used, limit: gate.limit },
+      { status: 403 },
+    );
+  }
+
   const runKey = randomUUID();
   const abort = registerRun(runKey, id);
   const task = (async () => {
@@ -131,8 +149,15 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         store: dbStore(client),
         runner: getAiRunner(),
         signal: abort.signal,
+        modelTier: entitled.limits.interpretationTier,
       })) {
         publish(runKey, e);
+        if (e.type === 'complete')
+          track(user.id, 'interpretation_completed', {
+            latency_ms: Math.min(3_600_000, e.interpretation.latency_ms ?? 0),
+            first: !regenerate,
+            regenerated: regenerate,
+          });
       }
     } catch (err) {
       logger.error('ai.interpretation.task_crashed', {

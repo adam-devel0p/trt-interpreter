@@ -36,6 +36,30 @@ const serverSchema = z.object({
   FLAG_PERIOD_SUMMARIES: bool,
   FLAG_SHARE_CARDS: bool,
   FLAG_PHYSICAL_PHOTO_OCR: bool,
+
+  // ── Billing (Phase 11). `fake` runs the whole lifecycle locally through the real webhook
+  //    handler; `stripe` needs the secret key, the webhook secret and both price ids.
+  BILLING_PROVIDER: z.enum(['fake', 'stripe']).default('fake'),
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().min(8).default('whsec_local_fake_secret_0123456789'),
+  STRIPE_PRICE_MONTHLY: z.string().optional(),
+  STRIPE_PRICE_ANNUAL: z.string().optional(),
+  BILLING_CURRENCY: z.string().length(3).default('eur'),
+  BILLING_MONTHLY_CENTS: z.coerce.number().int().positive().default(599),
+  BILLING_ANNUAL_CENTS: z.coerce.number().int().positive().default(3999),
+  BILLING_TRIAL_DAYS: z.coerce.number().int().min(0).max(60).default(14),
+
+  // ── Reminders (Phase 11). `log` records deliveries without sending; `live` sends Web Push
+  //    (VAPID) and email (Resend).
+  NOTIFICATION_DELIVERY: z.enum(['log', 'live']).default('log'),
+  VAPID_PUBLIC_KEY: z.string().optional(),
+  VAPID_PRIVATE_KEY: z.string().optional(),
+  VAPID_SUBJECT: z.string().default('mailto:hello@localhost'),
+  EMAIL_PROVIDER: z.enum(['log', 'resend']).default('log'),
+  RESEND_API_KEY: z.string().optional(),
+  EMAIL_FROM: z.string().default('Tarot Journal <no-reply@localhost>'),
+  /** Signs unsubscribe and open links; falls back to JOBS_RUN_SECRET. */
+  NOTIFICATION_SIGNING_SECRET: z.string().min(16).optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverSchema>;

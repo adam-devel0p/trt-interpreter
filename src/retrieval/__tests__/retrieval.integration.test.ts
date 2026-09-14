@@ -30,7 +30,7 @@ import { embedDocument } from '@/retrieval/embed';
 import { loadHistoryObjects } from '@/retrieval/objects';
 import { resolveHints, searchHistory } from '@/retrieval/search';
 import { loadJournalRefs, makeReading, type JournalRefs } from '@/__tests__/fixtures/journal-db';
-import { enableExtraction } from '@/__tests__/fixtures/memory-db';
+import { enableExtraction, grantPremium } from '@/__tests__/fixtures/memory-db';
 import { createTestUser, deleteTestUser, type TestUser } from '@/__tests__/rls/harness';
 
 /**
@@ -84,6 +84,9 @@ describe('retrieval (integration)', () => {
     await setAiConsent(other.client, other.id, true);
     await enableExtraction(user.id);
     await enableExtraction(other.id);
+    // Ask My History is premium (Phase 11); the users here are entitled subscribers.
+    await grantPremium(user.id);
+    await grantPremium(other.id);
     refs = await loadJournalRefs(user);
   });
   afterAll(async () => {
@@ -546,6 +549,7 @@ describe('retrieval (integration)', () => {
     const bulk = await createTestUser('retrieval-bulk');
     try {
       await setAiConsent(bulk.client, bulk.id, true);
+      await grantPremium(bulk.id);
       const bulkRefs = await loadJournalRefs(bulk);
       // Direct inserts: the rows retrieval reads, without walking the flow 1000 times.
       const spread = bulkRefs.spread('one-card');

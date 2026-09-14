@@ -44,3 +44,49 @@ self.addEventListener('fetch', (event) => {
     );
   }
 });
+
+/* Reminders (Phase 11). The payload is app-authored copy — dates and counts, never an entry's
+ * words — plus a signed open link and a signed one-tap unsubscribe link. */
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = {};
+  }
+  if (!data.title) return;
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body || '',
+      tag: data.tag || 'reminder',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      data: { url: data.url, unsubscribeUrl: data.unsubscribeUrl },
+      actions: [
+        { action: 'open', title: 'Open' },
+        { action: 'unsubscribe', title: 'Turn these off' },
+      ],
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  const data = (event.notification && event.notification.data) || {};
+  event.notification.close();
+  if (event.action === 'unsubscribe' && data.unsubscribeUrl) {
+    event.waitUntil(fetch(data.unsubscribeUrl, { credentials: 'omit' }).catch(() => undefined));
+    return;
+  }
+  const url = data.url || '/home';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const client of list) {
+        if ('focus' in client) {
+          client.navigate(url);
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(url);
+    }),
+  );
+});

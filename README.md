@@ -51,6 +51,8 @@ is the retry path.
 | `pnpm art:build` | Re-encode the public-domain RWS scans into `public/cards/rws` (outputs are committed; only needed when the pipeline changes) |
 | `pnpm demo:seed --months 6 --bulk 1000` | Fictional multi-month journal for UI testing (extended every phase); `--bulk` sizes demo-cleo's generated journal |
 | `pnpm jobs:run` | Process one batch of background jobs locally (stands in for Vercel cron) |
+| `pnpm jobs:summaries` / `jobs:reminders` | Queue and run the summary sweep / the reminder sweep (local stand-ins for the hosted cron) |
+| `pnpm notifications:keys` | Print a fresh VAPID key pair for Web Push (`VAPID_*`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`) |
 | `pnpm test` | Vitest unit **and** integration suites (integration needs Supabase running) |
 | `pnpm test:unit` / `test:integration` | Either suite alone |
 | `pnpm test:rls` | Authorization suite: real users, real JWTs, row-level-security assertions |

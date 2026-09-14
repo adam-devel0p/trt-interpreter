@@ -41,8 +41,8 @@ checks were actually performed.
   - `rejected-link-not-resuggested.test.ts` (live since Phase 08: an identical re-run after a rejection yields the same fingerprint and is not re-surfaced, a day of drift neither; new evidence needs +0.15 or a user-confirmed overlap that did not exist before, and returns it once; the query layer records the rejection point and the run consults `shouldResurface` and never deletes a rejected row; the database half — reject, re-run unchanged → nothing, hand-link the mention → back once, reject again → gone for good — is `src/correlation/__tests__/correlation.integration.test.ts`)
   - `summary-never-sole-evidence.test.ts` (live since Phase 08: a bundle whose only evidence came from an interpretation or a summary produces no link even inside the stated window; generated evidence adds nothing to a bundle that has the user's words — identical score, signals and fingerprint; the feature loader reads only extractions of the user's words and marks them `user_text`, and the engine filters regardless. Phase 10: `validateSources` rejects a period summary's source set made only of summaries/interpretations and the empty set (the `period_summaries_sources_check` constraint is in the schema and migration and exercised against Postgres in the summaries integration suite); the generator validates before storing and builds evidence from readings and events only (structural); a `confirmed_fact` claim without confirmed evidence is dropped; an Ask claim citing only covering summaries is dropped)
   - `deleting-reading-purges-derived.test.ts` (live since Phase 05; Phase 09 adds `retrieval_documents` (job + trigger), `embeddings` (cascade) and the `asks` citation scrub to both roots, and the integration half embeds the reading, stores an ask citing it and the survivor, and asserts the vector is gone and the ask keeps only the survivor's citation; the purge job has a counter and remover for every registry target, every table with a `reading_id` FK is registered (a `set null` FK is a cleared pointer, not a dependent — Phase 08's `life_events.reading_id`), delete is soft delete + `purge_deleted`, every read path filters `deleted_at`; Phase 08 adds the `life_event` root on the same terms; `…integration.test.ts` soft-deletes a reading carrying every derived artifact — since 08 an outcome and a user link too — runs the job, asserts zero rows in every registry table, the event surviving with its pointer cleared, and a receipt with the counts)
-  - `archive-readable-without-subscription.test.ts` (live since Phase 05: no journal, detail, search, export or delete path references the plan, a subscription, a budget or a paywall; `…integration.test.ts` sets `plan = 'free'`, withdraws consent and proves list, search, detail with stored interpretation, history and export still work — Phase 11 must extend it to exhausted limits)
-  - `no-journal-content-in-logs.test.ts`
+  - `archive-readable-without-subscription.test.ts` (live since Phase 05: no journal, detail, search, export or delete path references the plan, a subscription, a budget or a paywall; Phase 11 adds an exact list of the files allowed to import the one gate (`@/billing/gate` / `offer`) and asserts none is a read path; `…integration.test.ts` sets `plan = 'free'`, withdraws consent and proves list, search, detail with stored interpretation, history and export still work — and since Phase 11 repeats it with every allowance exhausted and the subscription in `canceled`, `past_due`, `unpaid` and `incomplete_expired`, asserting the gate says no to new analysis while list, search, detail, edit, stored interpretation and export are unchanged)
+  - `no-journal-content-in-logs.test.ts` (live since Phase 11: the logger drops content props at runtime and rejects free-text event names — the type-level half is `observability/__tests__/logger.test-d.ts`; the Sentry scrubber redacts every content field and drops request bodies; every analytics schema is walked and no leaf is a string, and a `question` / `user_notes` prop is rejected by every event at runtime — the type-level half is `domain/analytics/__tests__/events.test-d.ts`; reminder copy never carries a question and the dispatcher never reads one; structurally, `analytics_events` is inserted only by `src/analytics/track.ts`, no `console.*` in `src/` or `app/` logs a content variable, and `AiCallRecord` has no text-shaped field)
   - `raw-text-never-overwritten.test.ts` (live since Phase 05: no derived-side module writes `readings` or `reading_cards`, every `modelWrite()` payload is free of user-text columns, the `readings_keep_text` trigger and the revisions policies are in the migration; `…integration.test.ts`: three note edits keep three versions + current, a question edit is kept and bumps `metadata_version`, a raw service-role update still leaves history, derived artifacts leave the words byte-identical, revisions cannot be forged or edited)
   - `alias-merge-preserves-historical-roles.test.ts` (live since Phase 06: the merge plan keeps every role row that is not an exact duplicate, a role change is add-and-close, the `entity_roles_immutable` trigger and the merge function's `UPDATE entity_roles SET entity_id` are in the migration; `…integration.test.ts` merges two partners with different ranges, undoes it exactly, refuses a rewritten role at the database, and splits mentions to a new confirmed entity)
 - **The provider spy in e2e is `ai_calls`.** Every model call lands there (with the mock provider
@@ -94,6 +94,31 @@ checks were actually performed.
   fresh user; `pnpm eval --dry` runs the summariser and narrator over the demo's recent
   periods and journeys and fails on any unsupported claim, unknown label, unsupported
   "confirmed fact", invented card or register slip.
+- **Phase 11 fixtures.** `grantPremium(userId, { status?, interval?, trialUsed? })` writes the
+  row the billing webhook would have left (default an active yearly subscription) and mirrors
+  the plan — every integration test of a premium feature (Ask, explanations, summaries) calls
+  it; `seedUsage(userId, task, calls, day?)` sets a counter so a limit can be reached without
+  making calls. `e2e/_helpers.ts` gained `premium: true` (the same row through the admin API)
+  and `share: true` (the `share_cards` rollout flag) on `createReadyUser`. The billing
+  integration suite (`src/billing/__tests__/billing.integration.test.ts`) uses the mock
+  provider's call log as the provider spy (a denied run makes zero calls), applies
+  Stripe-shaped events from `src/billing/fakeEvents.ts` through the real handler (duplicate,
+  stale, every transition, the HTTP body path with `signWebhookBody()` and a stale
+  signature), and asserts the analytics tracker refuses a content prop at runtime.
+  `src/notifications/__tests__/notifications.integration.test.ts` swaps the senders for spies
+  (`setSendersForTests`) and drives `dispatchReminders()` with a fixed clock through quiet
+  hours, the day cap, switches, the unsubscribe and open routes, push → email fallback and a
+  gone endpoint. `src/share/__tests__/share.integration.test.tsx` renders both card kinds
+  through `next/og` from database rows. `e2e/billing.spec.ts` walks a brand-new user to a
+  saved, interpreted reading and Home asserting `[data-paywall]` never renders; then, for a
+  seeded free user: paywall at the Ask action → the fake checkout page → entitlement → a
+  signed webhook replayed over HTTP (`applied`, then `duplicate`; a forged signature 400) →
+  cancel in the fake portal → journal, search, detail, edit and export unchanged; and the
+  interpretation limit (a seeded counter) → honest copy, zero provider calls, the sheet
+  focus-trapped and closed by Escape. `e2e/reminders-share.spec.ts` covers the reminder
+  channel and switches, one logged email reminder from a `deliver_reminders` job, the
+  one-tap unsubscribe without a session, and the share studio (exact preview URL, opt-in
+  flag, a real PNG, another user's 404).
 - **Tests that need the seed decks or the mock provider live outside `src/domain/` and `src/ai/`**
   (the layering lint applies to test files too): `src/interpretation/__tests__/` holds the
   purity, prompt and repeat-rule tests.

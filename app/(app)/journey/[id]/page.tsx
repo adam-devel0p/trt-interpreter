@@ -1,7 +1,9 @@
 import Link from 'next/link';
+import { track } from '@/analytics/track';
 import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import { getSessionClient, requireUser } from '@/auth/session';
+import { paywallOffer } from '@/billing/offer';
 import {
   currentOutcomes,
   listLinksForObjects,
@@ -17,6 +19,7 @@ import {
 import { getProfile, hasAiConsent } from '@/db/queries/profile';
 import { getJourneyNarrative, getJourneySummary } from '@/db/queries/summaries';
 import { SummaryView } from '@/ui/components/summary-view';
+import { notePaywallViewedAction, startCheckoutAction } from '../../billing/checkout-actions';
 import { NarrativeControls, SummaryControls } from '../../retrospective/controls';
 import { OUTCOME_LABEL, OUTCOME_SHORT } from '@/domain/outcomes/followUp';
 import { ConnectionReview, type ConnectionItem } from '../../event/connection-review';
@@ -99,6 +102,21 @@ export default async function JourneyPage({ params }: { params: Promise<{ id: st
     getJourneySummary(client, id),
   ]);
   const canGenerate = !!profile && hasAiConsent(profile) && summariesEnabled;
+  // Writing the header or a summary is premium (§14); the stored ones and the timeline are not.
+  const offer = canGenerate ? await paywallOffer(user.id, 'summaries') : null;
+  const premium =
+    offer && !offer.allowed
+      ? {
+          offer,
+          context: `A written summary of “${journey.title}”, each claim traced to its entries.`,
+          stillWorks:
+            'The timeline, progression, symbols and connections on this page come from what you recorded and stay here on any plan.',
+          returnTo: `/journey/${journey.id}`,
+          action: startCheckoutAction,
+          onViewed: notePaywallViewedAction,
+        }
+      : null;
+  track(user.id, 'journey_viewed', { members: members.length + events.length });
   const linked = await loadLinkedObjects(client, linkRows);
   const titleOf = (m: JourneyMemberView) =>
     m.reading.is_open_reflection ? 'Open reflection' : (m.reading.question ?? 'Reading');
@@ -288,7 +306,7 @@ export default async function JourneyPage({ params }: { params: Promise<{ id: st
       <MergeUndoNotice merged={merged.map((m) => ({ id: m.id, title: m.title }))} />
       {canGenerate && members.length + events.length >= 3 ? (
         <div className="mb-4">
-          <NarrativeControls journeyId={journey.id} canGenerate={canGenerate} />
+          <NarrativeControls journeyId={journey.id} canGenerate={canGenerate} premium={premium} />
         </div>
       ) : null}
       {journey.reasons.length && journey.created_by !== 'user' ? (
@@ -433,6 +451,7 @@ export default async function JourneyPage({ params }: { params: Promise<{ id: st
               dismissed={!!journeySummary?.dismissed_at}
               target={{ kind: 'journey', journeyId: journey.id }}
               canGenerate={canGenerate}
+              premium={premium}
             />
           </div>
         ) : null}

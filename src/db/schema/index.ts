@@ -10,3 +10,5 @@ export * from './journeys';
 export * from './events';
 export * from './retrieval';
 export * from './summaries';
+export * from './billing';
+export * from './notifications';

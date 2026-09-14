@@ -120,3 +120,11 @@ export const scheduleSummariesPayload = z
   })
   .strict();
 export type ScheduleSummariesPayload = z.infer<typeof scheduleSummariesPayload>;
+
+/** Phase 11: the reminder sweep — one user or everyone who chose a channel. */
+export const deliverRemindersPayload = z
+  .object({
+    userId: z.string().uuid().nullable().default(null),
+  })
+  .strict();
+export type DeliverRemindersPayload = z.infer<typeof deliverRemindersPayload>;

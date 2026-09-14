@@ -9,7 +9,7 @@ export default defineConfig({
   test: {
     name: 'integration',
     environment: 'node',
-    include: ['src/**/*.integration.test.ts'],
+    include: ['src/**/*.integration.test.{ts,tsx}'],
     setupFiles: ['src/__tests__/integration/setup.ts'],
     fileParallelism: false,
     testTimeout: 20_000,

@@ -31,7 +31,7 @@ import * as proposeJourney from './tasks/propose_journey';
 import { mockJourneyProposal } from './tasks/propose_journey/mock';
 import * as summarizePeriod from './tasks/summarize_period';
 import { mockPeriodSummary } from './tasks/summarize_period/mock';
-import { DbTelemetry, MemoryTelemetry, MultiTelemetry } from './telemetry';
+import { DbBudgetPolicy, DbTelemetry, MemoryTelemetry, MultiTelemetry } from './telemetry';
 import type { EmbedRequest, EmbedResult } from './types';
 
 let runner: AiRunner | undefined;
@@ -107,20 +107,21 @@ export function getAiRunner(): AiRunner {
   const routing = routingFromEnv(env);
   validateRouting(routing);
   const telemetry = new MultiTelemetry([new MemoryTelemetry(), new DbTelemetry()]);
+  const budget = new DbBudgetPolicy();
   if (env.AI_PROVIDER === 'anthropic') {
     if (!env.ANTHROPIC_API_KEY) throw new Error('AI_PROVIDER=anthropic needs ANTHROPIC_API_KEY');
     const provider = createAnthropicProvider({
       apiKey: env.ANTHROPIC_API_KEY,
       versions: taskVersions,
     });
-    runner = createAiRunner({ provider, routing, telemetry });
+    runner = createAiRunner({ provider, routing, telemetry, budget });
     return runner;
   }
   mock = createMockProvider({
     fixtures: mockFixtures(),
     latencyMs: env.NODE_ENV === 'test' ? 0 : 12,
   });
-  runner = createAiRunner({ provider: mock, routing, telemetry });
+  runner = createAiRunner({ provider: mock, routing, telemetry, budget });
   return runner;
 }
 

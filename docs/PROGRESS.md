@@ -2,23 +2,25 @@
 
 The first thing to read in any new session. Update it at the end of every phase.
 
-**Current state:** Phase 10 complete — accumulated history pays the user back on its own.
-Journey headers are stored, cited narratives (`journey_narratives`, regenerated only on a
-material change or after 14 days); period summaries (`period_summaries`) exist for complete
-weeks, months and journeys **only above the data floor** (3 / 5 / 5 objects), each claim
-carrying its basis (§9.2) and citations as object ids, a "confirmed fact" dropped unless it
-cites confirmed evidence, the source set non-empty by DB check and never generated-only by
-application rule; dismissal remembered, regeneration explicit, a deleted source scrubs and
-stales them (job + trigger); summaries are retrieval-eligible and join an Ask package only as
-compression of dropped entries (summary-only claims dropped). Recurring symbols are
-contextual (when, journeys, confirmed events around, confirmed connections; a pattern needs
-three). `/retrospective/YYYY-MM` is built from confirmed data first; Home's one insight comes
-from four dismissible, switchable surfaces (journey shift once per shift, unresolved review,
-month to look back on, one old reading per day). Demo: 7 summaries, 3 narratives, a real
-shift. Full gate green (128 e2e). Owner-side deferrals: the two real-model evals and their
-baselines, `FLAG_PERIOD_SUMMARIES`, and the **§22 study** (still to run before 11's pricing
-decisions).
-**Next phase:** [Phase 11 — Monetization + retention](phases/phase-11-monetization-retention.md)
+**Current state:** Phase 11 complete — the product can charge for analysis without holding
+the journal hostage. One pure `entitlements(plan, counters)` is the only feature check (lint
+restricts its import to `src/billing/` and the AI budget hook); the Phase 00 budget hook is
+real (`DbBudgetPolicy`: denied = zero provider calls), `usage_counters` per UTC day and task
+(a unit only on `ok`); Free = the whole journal + 10 interpretations a month, Premium = Ask,
+summaries/narratives, connection explanations, 300 interpretations on the deep tier. Stripe
+behind a provider seam with a **fake provider** that walks the same lifecycle through the
+real, signature-verified, idempotent, order-safe webhook (`subscriptions`, `billing_events`,
+plan mirrored onto `profiles.plan`); paywall only at a premium action (card in place of the
+control, or a focus-trapped sheet from it), annual first, trial end as a date, always says
+what still works; a used-up allowance keeps the reading and says so. Reminders: revisit due /
+month / week, one a day, quiet hours, each switchable, content-free, deep-linked, one-tap
+unsubscribe from the message, push (VAPID) with email fallback, delivery logged in
+`notifications`. Share cards (reading, month) rendered server-side from a private-by-default
+payload, exact preview, no public URL. `analytics_events` with a per-event allowlist that has
+no string field; `no-journal-content-in-logs` live. Archive invariant extended to exhausted
+limits and every non-paying state. Demo: Ana Premium yearly, Ben/Cleo Free. Full gate green
+(138 e2e). Owner-side: real Stripe test mode, live push/email, the §22 study.
+**Next phase:** [Phase 12 — Hardening + beta](phases/phase-12-hardening-beta.md)
 
 ## Phase status
 
@@ -35,7 +37,7 @@ decisions).
 | 08 | [Events, outcomes, correlation](phases/phase-08-events-outcomes.md) | ⚠️ complete with deferrals | [report](phases/completed/phase-08-report.md) | 2026-09-14 · real-model evals + the real-extraction event judgement are owner tasks |
 | 09 | [Retrieval + Ask My History](phases/phase-09-retrieval-ask.md) | ⚠️ complete with deferrals | [report](phases/completed/phase-09-report.md) | 2026-09-14 · ← MVP complete; real-model evals are owner tasks; **run the §22 study** |
 | 10 | [Summaries + retrospectives](phases/phase-10-summaries-retrospectives.md) | ⚠️ complete with deferrals | [report](phases/completed/phase-10-report.md) | 2026-09-14 · real-model evals are owner tasks; §22 study still owner-side |
-| 11 | [Monetization + retention](phases/phase-11-monetization-retention.md) | ⬜ not started | — | |
+| 11 | [Monetization + retention](phases/phase-11-monetization-retention.md) | ⚠️ complete with deferrals | [report](phases/completed/phase-11-report.md) | 2026-09-14 · real Stripe test mode, live push/email and the §22 study are owner tasks |
 | 12 | [Hardening + beta](phases/phase-12-hardening-beta.md) | ⬜ not started | — | |
 
 Status values: ⬜ not started · 🟡 in progress · ✅ complete · ⚠️ complete with deferrals
@@ -53,12 +55,12 @@ Each must be unskipped by the phase shown and never weakened afterwards. See
 | `reading-survives-ai-failure` | 04 | ✅ |
 | `raw-text-never-overwritten` | 05 | ✅ |
 | `deleting-reading-purges-derived` | 05 | ✅ |
-| `archive-readable-without-subscription` | 05 | ✅ (Phase 11 must extend it to exhausted limits) |
+| `archive-readable-without-subscription` | 05 | ✅ (extended in 11 to exhausted limits × canceled / past_due / unpaid / incomplete_expired) |
 | `alias-merge-preserves-historical-roles` | 06 | ✅ |
 | `card-overlap-alone-never-correlates` | 08 | ✅ |
 | `rejected-link-not-resuggested` | 08 | ✅ |
 | `summary-never-sole-evidence` | 08 | ✅ |
-| `no-journal-content-in-logs` | 11 | ⬜ |
+| `no-journal-content-in-logs` | 11 | ✅ |
 
 ## Open questions carried forward
 
@@ -70,7 +72,10 @@ Add anything a phase discovered but could not settle. Remove when resolved.
 - Thoth reversals: `supports_reversals = false` and null reversed meanings (deck reads by dignity).
   If Thoth readers who do use reversals ask for them, it is a data change plus authored text, not
   a schema change.
-- Pricing numbers are placeholders until retention data exists (§14).
+- Pricing numbers are placeholders until retention data exists (§14): `BILLING_MONTHLY_CENTS`
+  / `BILLING_ANNUAL_CENTS` / `BILLING_TRIAL_DAYS` (env, €5.99 / €39.99 / 14 by default) and
+  `PLAN_LIMITS` (`domain/billing/entitlements.ts`: 10 / 300 interpretations a month) — move
+  them there, nowhere else. The §22 study should inform them.
 - Google OAuth credentials: not present in any environment yet. The flow is wired and tested up to
   the provider redirect; the owner must create a Google OAuth client and export
   `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID/_SECRET` (local) / set them on the hosted project.
@@ -137,6 +142,18 @@ Add anything a phase discovered but could not settle. Remove when resolved.
   `markSummariesStaleForObjects` exists for the outcome / link actions (12).
 - **Home shows a pending journey suggestion before any retention surface** — one thing at a
   time; a surface is recorded as shown only when it takes the slot.
+- **Billing runs on the fake provider everywhere** (`BILLING_PROVIDER=fake`): local pages emit
+  Stripe-shaped events through the real webhook handler. The real adapter is the SDK's three
+  calls; no key has been set in any environment. `past_due` pauses premium analysis (effective
+  plan free) and touches nothing stored.
+- **Reminder delivery is logged, not sent** (`NOTIFICATION_DELIVERY=log`): rows land in
+  `notifications` with the copy and links; live push needs VAPID keys, email a Resend key.
+  Nothing schedules `deliver_reminders` on the host yet (`pnpm jobs:reminders` locally).
+- **Reminders are content-free by rule** (dates, counts, deck name, a deep link); the
+  `no-journal-content-in-logs` test greps the dispatcher for a `question` read.
+- **Share cards decode WebP art to PNG at render time** (`sharp`, now a runtime dependency)
+  because satori cannot read WebP; fonts are read from `node_modules/@fontsource/*` — Node
+  runtime only.
 
 ## Deferred items backlog
 
@@ -150,7 +167,7 @@ Phases append here when they defer something, so nothing is lost between session
 | ~~`profiles.default_deck_id` FK to `decks`~~ | 01 | 02 ✅ | done in `0003_deck_reference` |
 | Purge `%@test.local` users created by e2e runs | 01 | 12 | Harmless locally; CI DB is ephemeral |
 | ~~`ai_calls` write in `telemetry.ts`~~ | 00 | 04 ✅ | `DbTelemetry` writes every run |
-| Real per-user budgets (`BudgetPolicy`) | 00 | 11 | `usage_counters` lands in 11; hook wired and tested |
+| ~~Real per-user budgets (`BudgetPolicy`)~~ | 00 | 11 ✅ | `DbBudgetPolicy` + `usage_counters`; denied = zero provider calls |
 | Sentry source-map upload | 00 | 12 | Scrubbing proven without it |
 | ~~Live deck switch inside a flow (no navigation)~~ | 02 | 03 ✅ | Deck step switches accent and naming in place |
 | `fixtures/decks/` recorded fixtures | 02 → 04 | 12 (optional) | The mock's fixture *functions* answer for any reading; record real responses from the first eval run only if regression on specific outputs is wanted |
@@ -158,7 +175,7 @@ Phases append here when they defer something, so nothing is lost between session
 | ~~Soft delete (`deleted_at`) for readings~~ | 03 | 05 ✅ | soft delete + `purge_deleted` job + receipts |
 | Server-side card search RPC / Thoth `strength` ranking | 03 | — | In the Thoth picker, `strength` ranks Nine of Wands (titled *Strength*) above Lust (alias); correct per Phase 02 ranking, noted for UX review |
 | Real-model `pnpm eval`, human baseline review, 5 real interpretations read, Thoth zero-RWS against the real model, kill-the-key mid-flow, breaker/timeout against the real provider | 04 | owner (any time) | No `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` in this session; everything is wired and tested against the mock and a fake SDK client |
-| Region-aware safety resources | 04 | 11/12 | No region known (`profiles.locale = 'en'`); international + US/UK lines shown |
+| Region-aware safety resources | 04 | 12 | No region known (`profiles.locale = 'en'`); the billing country from Stripe could be a signal |
 | ~~Purge `safety_flags` with the reading~~ | 04 | 05 ✅ | explicit remover in `src/privacy/purge.ts`, receipt counts it |
 | ~~Interpretations in journal list / export~~ | 04 | 05 ✅ | list preview = current `synthesis`; export carries every generation |
 | ~~Entity / journey filters in the journal~~ | 05 | 06 ✅ / 07 ✅ | `entity=` in 06, `journey=` in 07 (`EXISTS` on `journey_members`, state ≠ removed) |
@@ -186,15 +203,20 @@ Phases append here when they defer something, so nothing is lost between session
 | Log 5 real-ish events against real extraction and judge every proposal (§22 trust check) | 08 | owner | done on the demo journal with the mock (0 wrong-and-confident of 21) |
 | `reading ↔ reading` correlation surfaced; model-proposed `INFERRED_EVENT` rows with a confirm step | 08 | when a surface asks | the pure engine and the constraints exist |
 | ~~`semantic_similarity` (0.20) in correlation~~ | 08 | 09 ✅ | `correlation/features.ts` attaches vectors; the theme-only pair still misses with mock vectors (0.43) — decide on the real-model read |
-| Push / email delivery of due revisits | 08 | 11 | in-app cards only |
+| ~~Push / email delivery of due revisits~~ | 08 | 11 ✅ | `revisit_due` reminders (`src/notifications/dispatch.ts`) |
 | Compact connection cards on the journey page; `ConnectionReview` / `OutcomePanel` / `EventForm` in `/dev/ui`; a "re-check connections" action; per-object lock for correlation runs | 08 | 12 | |
 | Real-model `pnpm eval` for `parse_history_query` and `answer_from_evidence`, human read of the nine baselines, real p95 / $ per ask, then `FLAG_ASK_MY_HISTORY=true` | 09 | owner (any time) | no provider key; mock baselines recorded; zero fabrication on the mock |
-| **§22 validation study** (10–20 users) on the complete MVP experience | 09 → 10 | owner, before 11 | a study, not code; Phase 10 did not depend on it, 11's pricing does |
+| ~~**§22 validation study** (10–20 users) on the complete MVP experience~~ | 09 → 10 | see the Phase 11 row below | carried forward |
 | `build_retrieval_document` as a model compression step; entity-context vectors | 09 | if ever needed | the deterministic template is 60–330 chars on the demo |
 | ~~Covering period summaries in the evidence package~~ | 09 | 10 ✅ | `withCoveringSummaries()` after the bound; summary-only claims dropped by the verifier |
 | `pnpm jobs:backfill` / cron for `backfill_embeddings`; delete control on the stored-ask page; `AskComposer` / `AnswerView` in `/dev/ui`; request abort threaded into the runner | 09 | 12 | |
 | Real-model `pnpm eval` for `summarize_period` and `journey_narrative`, human read of the two baselines, then `FLAG_PERIOD_SUMMARIES=true` | 10 | owner (any time) | no provider key; mock baselines recorded; zero unsupported claims on the mock |
 | Yearly summaries scheduled and listed | 10 | 12 / when a journal spans a year | admitted by schema, floor and screen; nothing schedules them |
-| Push / email delivery of the four retention surfaces and the "your month is ready" reminder | 10 | 11 | fingerprints, switches and `duePeriods()` are the memory to reuse |
+| ~~Push / email delivery of the four retention surfaces and the "your month is ready" reminder~~ | 10 | 11 ✅ | monthly and weekly reminders, silenced by an in-app dismissal; on-this-day and shifts stay in-app by design |
 | Cron entry for `schedule_summaries`; per-object generation lock; `retention_prompts` pruning; stale-on-outcome / link (`markSummariesStaleForObjects`) | 10 | 12 | `pnpm jobs:summaries` is the local stand-in |
 | `SummaryView` / `InsightCard` / `RecurringSymbols` v2 in `/dev/ui` | 10 | 12 | islands bound to actions |
+| Real Stripe test-mode lifecycle (Checkout, portal, `stripe listen`, dashboard replay) | 11 | owner (any time) | no keys; the fake provider proves the handler, the ledger and the UI |
+| Live Web Push on a phone and email through Resend | 11 | owner (any time) | `pnpm notifications:keys`, `NOTIFICATION_DELIVERY=live`, `RESEND_API_KEY` |
+| Hourly cron for `deliver_reminders`; `usage_counters` / `retention_prompts` pruning; `cancelSubscription` on the provider seam for the account job; `/dev/analytics` over `analytics_events` | 11 | 12 | ops + the account-deletion job |
+| `PremiumOffer` / `ShareStudio` / reminder controls in `/dev/ui` | 11 | 12 | islands bound to actions |
+| **§22 validation study** (asked for before 11); the pricing and limit numbers it should inform | 09 → 10 → 11 | owner | a study, not code; every number is configuration |

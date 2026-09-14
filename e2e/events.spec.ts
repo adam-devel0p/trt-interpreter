@@ -39,6 +39,7 @@ test.describe('life events, connections, outcomes', () => {
       extraction: true,
       journeys: true,
       correlation: true,
+      premium: true,
     });
     const ids = await seedReadings(user.id, [
       {
@@ -206,6 +207,7 @@ test.describe('life events, connections, outcomes', () => {
       aiConsent: true,
       extraction: true,
       correlation: true,
+      premium: true,
     });
     await signInViaUi(page, user.email);
     await page.goto('/journal');

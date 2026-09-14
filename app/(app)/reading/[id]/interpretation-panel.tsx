@@ -43,6 +43,8 @@ type Mode =
       interpretationId: string | null;
       message: string;
       partial: PartialInterpretation | null;
+      /** The monthly or daily allowance is used up: offer Premium instead of "Try again". */
+      limit?: boolean;
     };
 
 type Surfaced = Exclude<SafetyCategory, 'none'>;
@@ -121,7 +123,23 @@ export function InterpretationPanel({
         });
         const ct = res.headers.get('content-type') ?? '';
         if (ct.includes('application/json')) {
-          const body = (await res.json()) as { kind?: string; interpretation?: InterpretationRow };
+          const body = (await res.json()) as {
+            kind?: string;
+            interpretation?: InterpretationRow;
+            used?: number;
+            limit?: number;
+          };
+          if (body.kind === 'limit') {
+            // The allowance for new generation is used up (§14). Nothing stored is affected.
+            setMode({
+              kind: 'failed',
+              interpretationId: null,
+              message: limitCopy(body.used, body.limit),
+              partial: null,
+              limit: true,
+            });
+            return;
+          }
           if (res.status === 403 || body.kind === 'consent') {
             setMode({
               kind: 'failed',
@@ -367,16 +385,26 @@ export function InterpretationPanel({
           role="status"
           className="rounded-card border-l-2 border-hairline-strong bg-surface-ai px-4 py-3 text-sm"
         >
-          <p className="font-medium">Interpretation unavailable — your reading is saved.</p>
+          <p className="font-medium">
+            {mode.limit
+              ? 'No new interpretation this time — your reading is saved.'
+              : 'Interpretation unavailable — your reading is saved.'}
+          </p>
           <p className="mt-1 text-fg-muted">{mode.message}</p>
-          <Button
-            type="button"
-            variant="secondary"
-            className="mt-3"
-            onClick={() => void start(false)}
-          >
-            Try again
-          </Button>
+          {mode.limit ? (
+            <Button asChild variant="secondary" className="mt-3">
+              <a href="/profile#billing">See what Premium adds</a>
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="secondary"
+              className="mt-3"
+              onClick={() => void start(false)}
+            >
+              Try again
+            </Button>
+          )}
         </div>
       </div>
     );
@@ -409,6 +437,15 @@ export function InterpretationPanel({
       />
     </div>
   );
+}
+
+/** Honest, non-punitive limit copy (§4.8): what happened, what still works, what changes it. */
+function limitCopy(used: number | undefined, limit: number | undefined): string {
+  const allowance =
+    typeof limit === 'number' && typeof used === 'number'
+      ? `Free includes ${limit} interpretations a month and you have used ${used}. `
+      : 'You have reached the interpretation allowance for now. ';
+  return `${allowance}Your reading, your notes and every earlier interpretation stay readable, and the reference meanings below are always here. The count starts again on the first of the month; Premium raises it.`;
 }
 
 function failureCopy(errorClass: string | null | undefined): string {
