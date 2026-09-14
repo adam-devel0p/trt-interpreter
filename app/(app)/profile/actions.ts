@@ -78,3 +78,33 @@ export async function deleteAiArtifactsAction(): Promise<
     };
   }
 }
+
+/**
+ * Phase 10: switch one of the four in-app resurfacing surfaces off or on (spec §15.2, §4.7
+ * "habit support is optional"). One row per user, created on the first change; nothing
+ * about the journal is read or written here.
+ */
+export async function setRetentionSettingAction(
+  key: string,
+  enabled: boolean,
+): Promise<ProfileActionResult> {
+  const user = await requireUser();
+  const { RETENTION_SETTING_KEYS, setRetentionSetting } = await import('@/db/queries/summaries');
+  if (!(RETENTION_SETTING_KEYS as readonly string[]).includes(key))
+    return { ok: false, message: 'Unknown setting.' };
+  try {
+    await setRetentionSetting(
+      await getSessionClient(),
+      user.id,
+      key as (typeof RETENTION_SETTING_KEYS)[number],
+      enabled,
+    );
+    logger.info('retention.setting_changed', { userId: user.id, flag: key, enabled });
+    revalidatePath('/profile');
+    revalidatePath('/home');
+    return { ok: true, value: undefined };
+  } catch (err) {
+    logger.warn('retention.setting_failed', { userId: user.id, errorClass: errorClassOf(err) });
+    return { ok: false, message: "That didn't save. Try again." };
+  }
+}

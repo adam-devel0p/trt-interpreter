@@ -114,7 +114,7 @@ describe('retrieval (integration)', () => {
     // Never the notes, never the other deck's names.
     expect(doc!.text).not.toContain('PRIVATE-NOTE-MARKER');
     expect(doc!.text).not.toContain('Strength');
-    expect(doc!.builderVersion).toBe('retrieval_document/1.0.0');
+    expect(doc!.builderVersion).toBe('retrieval_document/1.1.0');
 
     // The outbound payload is the stored text, byte for byte, and nothing else.
     const sent: string[][] = [];

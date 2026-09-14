@@ -136,3 +136,41 @@ describe('evidence rendering', () => {
     expect(l!.tokens).toBeGreaterThan(50);
   });
 });
+
+describe('covering summaries are never the sole support (Phase 10, §19)', () => {
+  it('drops a claim that cites only summary labels and keeps one that also cites an entry', () => {
+    const labels = new Set(['E1', 'E2', 'E3']);
+    const out = verifyAnswer(
+      {
+        evidence_sufficient: true,
+        conclusion: 'You asked about work most in August.',
+        claims: [
+          { text: 'August was mostly about work.', citations: ['E3'] },
+          { text: 'The 3 August reading asked about the agency.', citations: ['E1', 'E3'] },
+        ],
+        found: null,
+        narrower_question: null,
+      },
+      labels,
+      { summaryLabels: new Set(['E3']) },
+    );
+    expect(out.answer.claims).toEqual([
+      { text: 'The 3 August reading asked about the agency.', citations: ['E1', 'E3'] },
+    ]);
+    expect(out.issues).toContain('summary-only claim');
+    expect(out.grounded).toBe(true);
+    const only = verifyAnswer(
+      {
+        evidence_sufficient: true,
+        conclusion: 'x',
+        claims: [{ text: 'a', citations: ['E3'] }],
+        found: null,
+        narrower_question: null,
+      },
+      labels,
+      { summaryLabels: new Set(['E3']) },
+    );
+    expect(only.grounded).toBe(false);
+    expect(only.issues).toContain('no cited claim');
+  });
+});

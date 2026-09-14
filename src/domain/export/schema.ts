@@ -12,8 +12,10 @@ import { z } from 'zod';
  * 1.3.0 (Phase 08): life events, event media (paths), outcomes and connections (scored links).
  * 1.4.0 (Phase 09): asks — every question put to the history with its verified answer and
  * citations. Retrieval documents and vectors are derived and rebuildable, so they stay out.
+ * 1.5.0 (Phase 10): period summaries (with every claim's basis and citations) and journey
+ * narratives — generated text with the source ids it rested on, never records.
  */
-export const EXPORT_SCHEMA_VERSION = 'export/1.4.0';
+export const EXPORT_SCHEMA_VERSION = 'export/1.5.0';
 
 export const EXPORT_FILES = [
   'profile.json',
@@ -40,6 +42,8 @@ export const EXPORT_FILES = [
   'outcomes.json',
   'connections.json',
   'asks.json',
+  'period_summaries.json',
+  'journey_narratives.json',
   'links.json',
 ] as const;
 export type ExportFile = (typeof EXPORT_FILES)[number];
@@ -516,6 +520,60 @@ export const exportAskSchema = z
   })
   .strict();
 
+const sourceRef = z.object({ type: z.string(), id: uuid }).strict();
+const storedClaim = z
+  .object({
+    text: z.string(),
+    basis: z.enum(['confirmed_fact', 'tarot_interpretation', 'user_reflection', 'inferred']),
+    citations: z.array(sourceRef),
+  })
+  .strict();
+
+/** One generated period summary (Phase 10). Generated text; every claim names its sources. */
+export const exportPeriodSummarySchema = z
+  .object({
+    id: uuid,
+    scope: z.enum(['user', 'journey']),
+    journey_id: uuid.nullable(),
+    kind: z.enum(['weekly', 'monthly', 'journey', 'yearly']),
+    period_start: z.string(),
+    period_end: z.string(),
+    summary: z.string(),
+    highlights: z
+      .object({
+        recurred: z.array(storedClaim),
+        shifted: z.array(storedClaim),
+        open: z.array(storedClaim),
+        confirmed: z.array(storedClaim),
+      })
+      .strict(),
+    sources: z.array(sourceRef),
+    object_count: z.number().int(),
+    model_id: z.string(),
+    prompt_version: z.string(),
+    schema_version: z.string(),
+    generated_at: iso,
+    stale_at: iso.nullable(),
+    dismissed_at: iso.nullable(),
+  })
+  .strict();
+
+export const exportJourneyNarrativeSchema = z
+  .object({
+    id: uuid,
+    journey_id: uuid,
+    sentence: z.string(),
+    progression: z.array(z.string()),
+    sources: z.array(sourceRef),
+    object_count: z.number().int(),
+    model_id: z.string(),
+    prompt_version: z.string(),
+    schema_version: z.string(),
+    generated_at: iso,
+    stale_at: iso.nullable(),
+  })
+  .strict();
+
 export const LINK_KINDS = [
   'reading_uses_spread',
   'reading_uses_deck',
@@ -550,6 +608,11 @@ export const LINK_KINDS = [
   'connection_to',
   // Phase 09
   'ask_cites',
+  // Phase 10
+  'summary_of_journey',
+  'summary_source',
+  'narrative_of',
+  'narrative_source',
 ] as const;
 
 export const exportLinkSchema = z
@@ -586,6 +649,8 @@ export const EXPORT_FILE_SCHEMAS = {
   'outcomes.json': z.array(exportOutcomeSchema),
   'connections.json': z.array(exportConnectionSchema),
   'asks.json': z.array(exportAskSchema),
+  'period_summaries.json': z.array(exportPeriodSummarySchema),
+  'journey_narratives.json': z.array(exportJourneyNarrativeSchema),
   'links.json': z.array(exportLinkSchema),
 } as const satisfies Record<ExportFile, z.ZodType>;
 

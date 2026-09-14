@@ -25,9 +25,21 @@ export interface AnswerViewModel {
   modelId: string | null;
 }
 
-export function evidenceHref(e: { type: 'reading' | 'life_event'; id: string }): string {
+export function evidenceHref(e: {
+  type: 'reading' | 'life_event' | 'period_summary';
+  id: string;
+  periodKey?: string | null;
+}): string {
+  if (e.type === 'period_summary')
+    return e.periodKey ? `/retrospective/${e.periodKey}` : '/retrospective';
   return e.type === 'reading' ? `/reading/${e.id}` : `/event/${e.id}`;
 }
+
+const TYPE_LABEL = {
+  reading: 'Reading',
+  life_event: 'Life event',
+  period_summary: 'Summary written by the app',
+} as const;
 
 export function AnswerView({
   model,
@@ -121,14 +133,13 @@ export function AnswerView({
                 <Link
                   href={evidenceHref(e)}
                   className="block rounded-card bg-surface p-3 hairline hover:bg-surface-2"
-                  aria-label={`${e.label}: ${e.type === 'reading' ? 'reading' : 'life event'} on ${e.date}${e.title ? `, ${e.title}` : ''}`}
+                  aria-label={`${e.label}: ${TYPE_LABEL[e.type].toLowerCase()} on ${e.date}${e.title ? `, ${e.title}` : ''}`}
                   data-evidence={e.id}
                 >
                   <div className="flex items-baseline justify-between gap-3 text-xs text-fg-muted">
                     <span>
                       <span className="rounded-control bg-surface-2 px-1.5 py-0.5">{e.label}</span>{' '}
-                      {e.type === 'reading' ? 'Reading' : 'Life event'} ·{' '}
-                      <LocalTime iso={`${e.date}T12:00:00Z`} dateOnly />
+                      {TYPE_LABEL[e.type]} · <LocalTime iso={`${e.date}T12:00:00Z`} dateOnly />
                     </span>
                     {e.deck ? <span>{e.deck}</span> : null}
                   </div>

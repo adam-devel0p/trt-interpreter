@@ -473,12 +473,43 @@ pending, answerless row** (the pipeline completes it through the service role). 
 job scrubs every reference to a deleted object out of the four citation columns; the
 question and answer text stay.
 
-**Phase 10 (planned):** **`period_summaries`** — `id`, `user_id`, `scope enum('user','journey')`,
-`journey_id null`, `period_start`, `period_end`, `kind enum('weekly','monthly','journey','yearly')`,
-`summary text`, `highlights jsonb`, `source_object_ids uuid[] not null` (empty array rejected by
-check constraint), `model_id`, `prompt_version`, `schema_version`, `created_at`, `dismissed_at`.
-Check constraint + test: a summary may never cite another summary as its sole evidence (§19).
-`retrieval_documents.object_type = 'period_summary'` is already admitted for it.
+**Built in Phase 10** (`0011_summaries_retrospectives.sql`, `src/db/schema/summaries.ts`):
+
+**`period_summaries`** — `id`, `user_id`, `scope` (`user | journey`, check), `journey_id`
+(FK journeys, cascade; non-null ⇔ scope `journey`, check), `kind` (`weekly | monthly |
+journey | yearly`, check), `period_start`, `period_end` (dates, inclusive; start ≤ end),
+`summary` (the headline sentence), `highlights jsonb` (`{recurred, shifted, open,
+confirmed}`: claims `{text, basis, citations: [{type, id}]}` — `basis` ∈ `confirmed_fact |
+tarot_interpretation | user_reflection | inferred`, spec §9.2), **`source_object_ids uuid[]
+not null` with `cardinality(...) > 0` by check** (§19), `sources jsonb` (the same set typed),
+`object_count` (live objects in the period at generation — the floor evidence),
+`input_hash` (over the rendered evidence package; unchanged → not regenerated), `model_id`,
+`prompt_version`, `schema_version`, `generated_at`, `stale_at` (a source was deleted since),
+`dismissed_at`, `created_at`, `updated_at`. Unique `(user_id, kind, period_start,
+coalesce(journey_id, zero-uuid))`; GIN on `source_object_ids`. Written by the
+`summarize_period` job (service role); RLS **select / update / delete own**, no session
+insert, and the `period_summaries_protect` trigger lets a session change **only
+`dismissed_at`**. Application rule (`domain/summaries/provenance.ts`): the source set may not
+consist solely of other summaries or interpretations. A summary gets a `retrieval_documents`
+row (`object_type = 'period_summary'`, cascaded by trigger on delete) and a vector.
+**`journey_narratives`** — one per journey (`journey_id` unique, cascade): `sentence`,
+`progression text[]`, `source_object_ids` (non-empty check), `sources`, `fingerprint`
+(`narrativeFingerprint`: live member ids + confirmed-outcome count), `object_count`,
+provenance, `generated_at`, `stale_at`. RLS select + delete own; written by the
+`journey_narrative` job. `journeys.summary` (planned in 07) is unused; this table is the
+narrative header.
+**`retention_prompts`** — the memory of the Home surfaces (§15.2): `kind` (`on_this_day |
+unresolved_review | journey_shift | retrospective`, check), `fingerprint` (from the picker;
+unique per `(user_id, kind, fingerprint)`), `object_type`/`object_id`, `payload jsonb` (ids
+and keys only), `shown_on date`, `dismissed_at`. Standard four policies.
+**`reminder_settings`** gained `on_this_day`, `unresolved_review`, `journey_shifts`,
+`retrospectives` (boolean, default true) — the in-app switches; a row is created on the first
+change and absence means "on".
+**Cascades:** the `summaries_source_cascade` trigger (`AFTER DELETE` on `readings` and
+`life_events`, `SECURITY DEFINER`) removes the id from `source_object_ids`, `sources` and every
+claim's citations (a claim left uncited goes), sets `stale_at`, deletes a summary or narrative
+whose set would be empty, and deletes prompts pointing at the object. The purge job runs the
+same steps explicitly and verifies zero references.
 
 ---
 

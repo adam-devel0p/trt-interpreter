@@ -9,7 +9,7 @@ import type { AskScope } from '@/domain/retrieval/query';
  */
 
 export interface AskCitation {
-  object_type: 'reading' | 'life_event';
+  object_type: 'reading' | 'life_event' | 'period_summary';
   object_id: string;
   label: string;
 }

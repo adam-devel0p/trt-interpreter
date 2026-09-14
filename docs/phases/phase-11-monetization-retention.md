@@ -28,6 +28,12 @@ cards, `analytics_events` with a validated allowlist.
   | **Full export and delete** | Monthly/yearly retrospectives |
 - `usage_counters` incremented in `src/ai/telemetry.ts` (the budget hook built in Phase 00); limits
   enforced **before** the provider call.
+- **From Phase 10:** summaries (`summarize_period`) and narratives (`journey_narrative`) are
+  standard-tier calls made by jobs, not by views — meter them per generation; the explicit
+  "Regenerate (one model call)" buttons on the retrospective and journey pages are the
+  user-triggered path (`app/(app)/retrospective/actions.ts`, queued with `maxAttempts: 1`).
+  Stored summaries, narratives and the retrospective screens must stay readable on any plan
+  (invariant 11); only *new* generation is metered.
 - **Invariant 11 — the archive is never paywalled.** Reading, searching, editing, exporting and deleting
   existing content work identically on an expired subscription. Only *new analysis* is limited.
 
@@ -56,6 +62,17 @@ cards, `analytics_events` with a validated allowlist.
 - Rules: quiet hours respected, at most one notification per day, no generic "come back" nags, every
   notification deep-links to the specific object it is about, one-tap unsubscribe from the notification
   itself. **No streak or loss-aversion framing anywhere** (§15.2, §4.7).
+
+- **From Phase 10:** the in-app surfaces already exist and are switchable in Profile under
+  "Looking back" — `reminder_settings.on_this_day / unresolved_review / journey_shifts /
+  retrospectives` (default on, row created on first change). Delivery here means *pushing*
+  what `src/retention/home.ts` picks (`loadHomeInsight`) and what `duePeriods()` /
+  `listDueRevisits()` find; the fingerprints in `retention_prompts` are the "once per
+  shift / once per day" memory to reuse, and a dismissal there must silence the notification
+  too. The monthly retrospective notification deep-links to `/retrospective/YYYY-MM`; send it
+  only when the period met the floor (`meetsSummaryFloor`) — a summary is optional, the
+  screen stands without one. `pnpm jobs:summaries` is the local stand-in for the cron that
+  enqueues `schedule_summaries`; the hosted cron needs that entry.
 
 ### 5. Share cards (FR-24, §15.1)
 - "My month in tarot" and single-reading cards, rendered server-side into an image.

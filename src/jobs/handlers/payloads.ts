@@ -79,3 +79,44 @@ export const backfillEmbeddingsPayload = z
   })
   .strict();
 export type BackfillEmbeddingsPayload = z.infer<typeof backfillEmbeddingsPayload>;
+
+/** Phase 10: generate (or regenerate) one period summary. Ids, a kind and dates only. */
+export const summarizePeriodPayload = z
+  .object({
+    userId: z.string().uuid(),
+    kind: z.enum(['weekly', 'monthly', 'journey', 'yearly']),
+    periodStart: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullable()
+      .default(null),
+    periodEnd: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullable()
+      .default(null),
+    journeyId: z.string().uuid().nullable().default(null),
+    force: z.boolean().default(false),
+  })
+  .strict();
+export type SummarizePeriodPayload = z.infer<typeof summarizePeriodPayload>;
+
+/** Phase 10: regenerate a journey's narrative header when it materially changed. */
+export const journeyNarrativePayload = z
+  .object({
+    journeyId: z.string().uuid(),
+    force: z.boolean().default(false),
+  })
+  .strict();
+export type JourneyNarrativePayload = z.infer<typeof journeyNarrativePayload>;
+
+/** Phase 10: the sweep — recent complete periods and journeys of one or every consenting user. */
+export const scheduleSummariesPayload = z
+  .object({
+    userId: z.string().uuid().nullable().default(null),
+    /** How many recent complete months and weeks to consider. */
+    months: z.number().int().min(1).max(12).default(2),
+    weeks: z.number().int().min(0).max(8).default(2),
+  })
+  .strict();
+export type ScheduleSummariesPayload = z.infer<typeof scheduleSummariesPayload>;

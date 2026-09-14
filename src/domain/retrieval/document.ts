@@ -14,7 +14,7 @@ import { fnv1a } from '../extraction/hash';
  * re-embedded.
  */
 
-export const BUILDER_VERSION = 'retrieval_document/1.0.0';
+export const BUILDER_VERSION = 'retrieval_document/1.1.0';
 
 export const DOCUMENT_MAX_CHARS = 700;
 export const DOCUMENT_TEXT_MAX_CHARS = 200;
@@ -23,6 +23,7 @@ export const DOCUMENT_MAX_CARDS = 10;
 export const DOCUMENT_MAX_ENTITIES = 6;
 export const DOCUMENT_MAX_POSSIBILITIES = 2;
 export const DOCUMENT_MAX_LINKED = 2;
+export const DOCUMENT_MAX_HIGHLIGHTS = 4;
 export const DOCUMENT_ITEM_MAX_CHARS = 100;
 
 export type DocumentObjectType = 'reading' | 'life_event' | 'period_summary';
@@ -55,6 +56,8 @@ export interface DocumentInput {
   outcome?: string | null;
   /** One line each for objects linked by a user-confirmed connection. */
   linked?: readonly string[];
+  /** Period summaries only (Phase 10): the verified claim texts, generated prose. */
+  highlights?: readonly string[];
 }
 
 export interface RetrievalDocument {
@@ -131,6 +134,8 @@ export function buildRetrievalDocument(input: DocumentInput): RetrievalDocument 
   if (input.outcome) segments.push(`Outcome: ${clip(input.outcome, 120).replace(/[.!?…]+$/, '')}`);
   const linked = list(input.linked ?? [], DOCUMENT_MAX_LINKED);
   for (const l of linked) segments.push(`Linked: ${l.replace(/[.!?…]+$/, '')}`);
+  const highlights = list(input.highlights ?? [], DOCUMENT_MAX_HIGHLIGHTS, 160);
+  for (const h of highlights) segments.push(`Highlight: ${h.replace(/[.!?…]+$/, '')}`);
 
   let text = [head, ...segments].filter(Boolean).join('. ') + '.';
   while (text.length > DOCUMENT_MAX_CHARS && segments.length > 0) {

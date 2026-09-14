@@ -61,6 +61,16 @@ import {
   type SafetyClassification,
 } from '../src/domain/safety/categories';
 import { bannedTermsFor, forbiddenTermsSample } from '../src/interpretation/vocabulary';
+import * as narrativeTask from '../src/ai/tasks/journey_narrative';
+import * as summarizeTask from '../src/ai/tasks/summarize_period';
+import { journeys as journeysTable } from '../src/db/schema';
+import { verifyNarrative, verifySummary } from '../src/domain/summaries/provenance';
+import { SUMMARY_SECTIONS } from '../src/domain/summaries/schema';
+import { periodLabel, recentCompletePeriods } from '../src/domain/summaries/periods';
+import { meetsSummaryFloor } from '../src/domain/summaries/floors';
+import { loadJourneyEvidence, loadPeriodEvidence } from '../src/summaries/evidence';
+import { platformDb } from '../src/db/admin';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 
 /**
  * Prompt eval runner (docs/AI_LAYER.md#eval-suite). Never runs in CI — with the real provider it
@@ -106,6 +116,19 @@ interface ExtractFixture {
     possibilities_max: number;
     timeframe: boolean;
   };
+}
+
+interface SummaryFixture {
+  name: string;
+  description: string;
+  periods: { kind: 'monthly' | 'weekly'; ago: number }[];
+  expect: { min_claims: number; sections_any: string[] };
+}
+
+interface NarrativeFixture {
+  name: string;
+  description: string;
+  expect: { max_words: number; cites_min: number };
 }
 
 interface ProposeFixture {
@@ -971,6 +994,220 @@ async function main() {
         const line = `  ask       · latency p95 ${p95} ms over ${latencies.length} asks · ${c.n} model calls · ${c.tokens_in} in / ${c.tokens_out} out tokens · $${(c.cost / 1_000_000 / Math.max(latencies.length, 1)).toFixed(4)} per ask`;
         console.log(line);
         summary.push(line.trim());
+      }
+    }
+  }
+
+  // ── summarize_period + journey_narrative (Phase 10) — against the demo journal ──────────
+  // The raw model output is verified exactly as the generator does it; the eval reports
+  // what would have been stripped or dropped. An unsupported claim (an unknown label, or a
+  // "confirmed fact" without confirmed evidence) is a phase blocker; so is a claim that
+  // names a card no cited entry drew.
+  {
+    const demo = await demoAnaClient();
+    const summaryDir = path.join(TASKS_DIR, 'summarize_period/fixtures/__baselines__');
+    const narrativeDir = path.join(TASKS_DIR, 'journey_narrative/fixtures/__baselines__');
+    mkdirSync(summaryDir, { recursive: true });
+    mkdirSync(narrativeDir, { recursive: true });
+    if (!demo) {
+      const line = '  summarize – skipped: demo-ana@tarot.local not found (run `pnpm demo:seed`)';
+      console.log(line);
+      summary.push(line.trim());
+    } else {
+      const today = new Date().toISOString().slice(0, 10);
+      const cardRe =
+        /\b((?:ace|two|three|four|five|six|seven|eight|nine|ten|page|knight|queen|king|prince|princess) of (?:cups|wands|swords|pentacles|disks)|the (?:fool|magician|magus|high priestess|priestess|empress|emperor|hierophant|lovers|chariot|hermit|hanged man|devil|tower|star|moon|sun|aeon|world|universe)|wheel of fortune|temperance|justice|adjustment|strength|lust|death|judgement|art|fortune)\b/gi;
+      for (const fx of loadFixtures<SummaryFixture>('summarize_period')) {
+        const results = [];
+        let failed = 0;
+        for (const spec of fx.periods) {
+          const period = recentCompletePeriods(spec.kind, today, spec.ago)[spec.ago - 1]!;
+          const evidence = await loadPeriodEvidence(demo.userId, period);
+          const checks: Record<string, { pass: boolean; detail?: unknown }> = {};
+          let output: unknown = null;
+          if (!meetsSummaryFloor(spec.kind, evidence.objectCount)) {
+            results.push({
+              period: period.key,
+              skipped: 'below the data floor',
+              objects: evidence.objectCount,
+            });
+            continue;
+          }
+          const r = await runner.runObject(
+            summarizeTask.buildSummarizePeriodRequest(
+              {
+                periodLabel: periodLabel(period),
+                kind: spec.kind,
+                start: period.start,
+                end: period.end,
+                today,
+                counts: evidence.counts,
+                journeys: evidence.journeys,
+                evidence: evidence.rendered,
+                droppedCount: evidence.droppedCount,
+              },
+              { userId: demo.userId, objectRefs: [], mockObjects: evidence.mockObjects },
+            ),
+          );
+          if (!r.ok) checks.completed = { pass: false, detail: `${r.status}/${r.errorClass}` };
+          else {
+            output = r.value;
+            const v = verifySummary(r.value, evidence.labels);
+            const claims = SUMMARY_SECTIONS.flatMap((sec) => r.value[sec]);
+            checks.completed = { pass: true };
+            checks.no_unknown_labels = { pass: v.stripped.length === 0, detail: v.stripped };
+            checks.no_unsupported_facts = {
+              pass: !v.dropped.some((d) => d.reason === 'unsupported_fact'),
+              detail: v.dropped,
+            };
+            checks.every_claim_cited = { pass: claims.every((c) => c.citations.length > 0) };
+            checks.basis_attribution = {
+              pass: claims.every(
+                (c) =>
+                  c.basis !== 'confirmed_fact' ||
+                  c.citations.some((l) => evidence.labels.get(l)?.confirmed),
+              ),
+            };
+            const prose = [r.value.headline, ...claims.map((c) => c.text)].join(' ');
+            checks.register = {
+              pass: findRegisterViolations(prose).length === 0,
+              detail: findRegisterViolations(prose),
+            };
+            const drawn = new Set(
+              evidence.package.objects.flatMap((o) => o.cards.map((c) => c.name.toLowerCase())),
+            );
+            const invented = [...prose.matchAll(cardRe)]
+              .map((m) => m[1]!.toLowerCase())
+              .filter((c) => !drawn.has(c));
+            checks.no_invented_cards = { pass: invented.length === 0, detail: invented };
+            checks.enough_claims = {
+              pass: claims.length >= fx.expect.min_claims,
+              detail: claims.length,
+            };
+            checks.grounded = { pass: v.grounded, detail: v.issues };
+          }
+          const bad = Object.entries(checks)
+            .filter(([, c]) => !c.pass)
+            .map(([k]) => k);
+          if (bad.length) failed += 1;
+          results.push({
+            period: period.key,
+            objects: evidence.objectCount,
+            package: evidence.package.objects.length,
+            checks,
+            output,
+            pass: bad.length === 0,
+          });
+          const line = `  summarize ${bad.length === 0 ? '✓' : '✗'} ${period.key.padEnd(32)} ${evidence.objectCount} objects${bad.length ? `  FAILED: ${bad.join(', ')}` : ''}`;
+          console.log(line);
+          summary.push(line.trim());
+        }
+        hardFailures += failed;
+        writeFileSync(
+          path.join(summaryDir, `${fx.name}.json`),
+          JSON.stringify(
+            {
+              fixture: fx.name,
+              description: fx.description,
+              provider,
+              prompt_version: summarizeTask.PROMPT_VERSION,
+              schema_version: summarizeTask.SCHEMA_VERSION,
+              ran_at: new Date().toISOString(),
+              results,
+              human_review: { reviewed_by: null, reviewed_at: null, verdict: null, notes: null },
+            },
+            null,
+            2,
+          ),
+        );
+      }
+      for (const fx of loadFixtures<NarrativeFixture>('journey_narrative')) {
+        const open = await platformDb()
+          .select({ id: journeysTable.id, title: journeysTable.title })
+          .from(journeysTable)
+          .where(
+            and(
+              eq(journeysTable.userId, demo.userId),
+              inArray(journeysTable.status, ['active', 'dormant']),
+              isNull(journeysTable.mergedIntoId),
+            ),
+          );
+        const results = [];
+        let failed = 0;
+        for (const j of open) {
+          const loaded = await loadJourneyEvidence(j.id);
+          if (!loaded || loaded.evidence.objectCount < 3) continue;
+          const { evidence } = loaded;
+          const r = await runner.runObject(
+            narrativeTask.buildJourneyNarrativeRequest(
+              {
+                title: j.title,
+                today,
+                progression: [],
+                counts: {
+                  readings: evidence.counts.readings,
+                  events: evidence.counts.events,
+                  confirmedOutcomes: loaded.confirmedOutcomes,
+                },
+                evidence: evidence.rendered,
+                droppedCount: evidence.droppedCount,
+              },
+              { userId: demo.userId, journeyId: j.id, mockObjects: evidence.mockObjects },
+            ),
+          );
+          const checks: Record<string, { pass: boolean; detail?: unknown }> = {};
+          if (!r.ok) checks.completed = { pass: false, detail: `${r.status}/${r.errorClass}` };
+          else {
+            const v = verifyNarrative(r.value, new Set(evidence.labels.keys()));
+            checks.completed = { pass: true };
+            checks.no_unknown_labels = { pass: v.stripped.length === 0, detail: v.stripped };
+            checks.cites = { pass: v.narrative.citations.length >= fx.expect.cites_min };
+            checks.register = { pass: findRegisterViolations(r.value.sentence).length === 0 };
+            checks.length = {
+              pass: r.value.sentence.split(/\s+/).length <= fx.expect.max_words,
+              detail: r.value.sentence.split(/\s+/).length,
+            };
+            const drawn = new Set(
+              evidence.package.objects.flatMap((o) => o.cards.map((c) => c.name.toLowerCase())),
+            );
+            const invented = [...r.value.sentence.matchAll(cardRe)]
+              .map((m) => m[1]!.toLowerCase())
+              .filter((c) => !drawn.has(c));
+            checks.no_invented_cards = { pass: invented.length === 0, detail: invented };
+          }
+          const bad = Object.entries(checks)
+            .filter(([, c]) => !c.pass)
+            .map(([k]) => k);
+          if (bad.length) failed += 1;
+          results.push({
+            journey: j.title,
+            objects: evidence.objectCount,
+            checks,
+            output: r.ok ? r.value : null,
+            pass: bad.length === 0,
+          });
+          const line = `  narrative ${bad.length === 0 ? '✓' : '✗'} ${j.title.slice(0, 32).padEnd(32)} ${evidence.objectCount} objects${bad.length ? `  FAILED: ${bad.join(', ')}` : ''}`;
+          console.log(line);
+          summary.push(line.trim());
+        }
+        hardFailures += failed;
+        writeFileSync(
+          path.join(narrativeDir, `${fx.name}.json`),
+          JSON.stringify(
+            {
+              fixture: fx.name,
+              description: fx.description,
+              provider,
+              prompt_version: narrativeTask.PROMPT_VERSION,
+              schema_version: narrativeTask.SCHEMA_VERSION,
+              ran_at: new Date().toISOString(),
+              results,
+              human_review: { reviewed_by: null, reviewed_at: null, verdict: null, notes: null },
+            },
+            null,
+            2,
+          ),
+        );
       }
     }
   }

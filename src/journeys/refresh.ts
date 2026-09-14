@@ -7,6 +7,7 @@ import { themeProgression } from '@/domain/journeys/progression';
 import { DORMANT_AFTER_DAYS } from '@/domain/journeys/thresholds';
 import { loadMembersByJourney, type LiveMembers } from './assign';
 import { loadObjectFeatures } from './features';
+import { enqueueNarrativeSafely } from '@/summaries/enqueue';
 
 /**
  * Recompute what a journey derives from its live members: the activity window, the
@@ -20,6 +21,7 @@ const DAY_MS = 86_400_000;
 
 export interface RefreshResult {
   journeyId: string;
+  userId: string;
   members: number;
   progressionSteps: number;
   status: string;
@@ -102,11 +104,22 @@ export async function refreshJourney(
         })),
       );
   });
-  return { journeyId, members: members.length, progressionSteps: steps.length, status };
+  return {
+    journeyId,
+    userId: journey.userId,
+    members: members.length,
+    progressionSteps: steps.length,
+    status,
+  };
 }
 
 export async function refreshJourneys(journeyIds: readonly string[]): Promise<void> {
-  for (const id of new Set(journeyIds)) await refreshJourney(id);
+  for (const id of new Set(journeyIds)) {
+    const res = await refreshJourney(id);
+    // Phase 10: the narrative header follows the live members (deduped, delayed; the runner
+    // regenerates only on a material change).
+    if (res) await enqueueNarrativeSafely(id, res.userId);
+  }
 }
 
 /** Journeys a set of readings belong to (any state but removed) — the ones a purge touches. */

@@ -86,7 +86,83 @@ export const READING_DEPENDENT_COUNTERS: Record<string, Counter> = {
       sql`select count(*)::int as n from public.embeddings where object_type = 'reading' and object_id = ${id}`,
     ),
   asks: (id) => countAskReferences(id),
+  // Phase 10
+  period_summaries: (id) => countSummaryReferences('period_summaries', id),
+  journey_narratives: (id) => countSummaryReferences('journey_narratives', id),
+  retention_prompts: (id) => countPromptReferences(id),
 };
+
+/** Summaries / narratives whose source set (or a claim's citations) still name the object (Phase 10). */
+function countSummaryReferences(table: 'period_summaries' | 'journey_narratives', id: string) {
+  return countWhere(
+    table === 'period_summaries'
+      ? sql`select count(*)::int as n from public.period_summaries
+            where ${id}::uuid = any(source_object_ids) or sources::text like ${`%${id}%`} or highlights::text like ${`%${id}%`}`
+      : sql`select count(*)::int as n from public.journey_narratives
+            where ${id}::uuid = any(source_object_ids) or sources::text like ${`%${id}%`}`,
+  );
+}
+
+function countPromptReferences(id: string) {
+  return countWhere(
+    sql`select count(*)::int as n from public.retention_prompts where object_id = ${id}::uuid or payload::text like ${`%${id}%`}`,
+  );
+}
+
+/**
+ * Scrub a deleted source out of every summary that rested on it (§19): the id leaves the
+ * source set, the typed list and every claim's citations, a claim left without citations
+ * goes, and the row is marked stale so the screen can say so and offer regeneration. A
+ * summary whose set would be empty is deleted — a summary of nothing is nothing. Same
+ * statements as the `summaries_source_cascade` trigger; the job runs them explicitly and
+ * verifies zero references remain.
+ */
+async function scrubSummaryReferences(id: string): Promise<void> {
+  const db = platformDb();
+  await db.execute(
+    sql`delete from public.period_summaries where ${id}::uuid = any(source_object_ids) and cardinality(source_object_ids) <= 1`,
+  );
+  await db.execute(sql`
+    update public.period_summaries set
+      source_object_ids = array_remove(source_object_ids, ${id}::uuid),
+      sources = (select coalesce(jsonb_agg(s), '[]'::jsonb) from jsonb_array_elements(sources) s where s->>'id' <> ${id}),
+      highlights = (
+        select jsonb_object_agg(sec.key, (
+          select coalesce(jsonb_agg(
+            jsonb_set(cl, '{citations}', (
+              select coalesce(jsonb_agg(c), '[]'::jsonb)
+              from jsonb_array_elements(coalesce(cl->'citations', '[]'::jsonb)) c
+              where c->>'id' <> ${id}))
+          ), '[]'::jsonb)
+          from jsonb_array_elements(sec.value) cl
+          where exists (
+            select 1 from jsonb_array_elements(coalesce(cl->'citations', '[]'::jsonb)) c2
+            where c2->>'id' <> ${id})
+        ))
+        from jsonb_each(highlights) sec
+      ),
+      stale_at = now()
+    where ${id}::uuid = any(source_object_ids) or sources::text like ${`%${id}%`} or highlights::text like ${`%${id}%`}`);
+}
+
+async function scrubNarrativeReferences(id: string): Promise<void> {
+  const db = platformDb();
+  await db.execute(
+    sql`delete from public.journey_narratives where ${id}::uuid = any(source_object_ids) and cardinality(source_object_ids) <= 1`,
+  );
+  await db.execute(sql`
+    update public.journey_narratives set
+      source_object_ids = array_remove(source_object_ids, ${id}::uuid),
+      sources = (select coalesce(jsonb_agg(s), '[]'::jsonb) from jsonb_array_elements(sources) s where s->>'id' <> ${id}),
+      stale_at = now()
+    where ${id}::uuid = any(source_object_ids) or sources::text like ${`%${id}%`}`);
+}
+
+async function removePromptReferences(id: string): Promise<void> {
+  await platformDb().execute(
+    sql`delete from public.retention_prompts where object_id = ${id}::uuid or payload::text like ${`%${id}%`}`,
+  );
+}
 
 /** Asks that still reference an object anywhere in their citation columns (Phase 09). */
 function countAskReferences(id: string): Promise<number> {
@@ -160,6 +236,9 @@ const READING_JOB_REMOVERS: Record<string, Remover> = {
     );
   },
   asks: scrubAskReferences,
+  period_summaries: scrubSummaryReferences,
+  journey_narratives: scrubNarrativeReferences,
+  retention_prompts: removePromptReferences,
 };
 
 // ── Life events (Phase 08) ─────────────────────────────────────────────────────────────────
@@ -186,6 +265,9 @@ export const EVENT_DEPENDENT_COUNTERS: Record<string, Counter> = {
   retrieval_documents: byObject('retrieval_documents'),
   embeddings: byObject('embeddings'),
   asks: (id) => countAskReferences(id),
+  period_summaries: (id) => countSummaryReferences('period_summaries', id),
+  journey_narratives: (id) => countSummaryReferences('journey_narratives', id),
+  retention_prompts: (id) => countPromptReferences(id),
 };
 
 const deleteByObject = (table: string) => async (id: string) => {
@@ -216,6 +298,9 @@ const EVENT_JOB_REMOVERS: Record<string, Remover> = {
   },
   retrieval_documents: deleteByObject('retrieval_documents'),
   asks: scrubAskReferences,
+  period_summaries: scrubSummaryReferences,
+  journey_narratives: scrubNarrativeReferences,
+  retention_prompts: removePromptReferences,
 };
 
 export function eventRegistryTables(): string[] {

@@ -9,3 +9,4 @@ export * from './memory';
 export * from './journeys';
 export * from './events';
 export * from './retrieval';
+export * from './summaries';

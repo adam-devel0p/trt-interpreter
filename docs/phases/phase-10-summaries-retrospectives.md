@@ -63,34 +63,34 @@ Seed enough density for a real monthly retrospective and at least one detectable
 
 ## Test plan
 
-- [ ] Unit: threshold logic (no summary below the data floor); recurring-symbol contextualiser (a
+- [x] Unit: threshold logic (no summary below the data floor); recurring-symbol contextualiser (a
       2-occurrence card is not a pattern); change detection fires once per genuine shift.
-- [ ] **Invariant `summary-never-sole-evidence.test.ts`** extended: a `period_summaries` row whose
+- [x] **Invariant `summary-never-sole-evidence.test.ts`** extended: a `period_summaries` row whose
       `source_object_ids` contain only summaries/interpretations is rejected at the application boundary,
       and the empty-set case is rejected by the DB constraint.
-- [ ] Provenance: every claim in a generated summary maps to a source ID present at generation time;
+- [x] Provenance: every claim in a generated summary maps to a source ID present at generation time;
       deleting a source scrubs or stales the summary and the UI reflects it (§19).
-- [ ] Integration: narrative regenerates on material change only; stored narrative served on view with
+- [x] Integration: narrative regenerates on material change only; stored narrative served on view with
       **zero AI calls** (provider spy); dismissals persist.
-- [ ] **RLS** on `period_summaries`; B cannot read A's summaries.
-- [ ] E2E at 390px on demo data: open a journey and read the narrative header → open the monthly
+- [x] **RLS** on `period_summaries`; B cannot read A's summaries.
+- [x] E2E at 390px on demo data: open a journey and read the narrative header → open the monthly
       retrospective → tap through to sources → see an on-this-day card and dismiss it → turn the
       resurfacing off in Profile and confirm it stops.
-- [ ] Anti-compulsion check (manual + test): no streak counters, no badges, at most one resurfacing per
+- [x] Anti-compulsion check (manual + test): no streak counters, no badges, at most one resurfacing per
       day, every retention surface dismissible and switchable off (§4.7, §15.2).
-- [ ] a11y: retrospective sections are navigable by heading; the one visual has a text equivalent.
-- [ ] `pnpm eval`: summary fixtures checked for unsupported claims, correct fact-status attribution and
+- [x] a11y: retrospective sections are navigable by heading; the one visual has a text equivalent.
+- [x] `pnpm eval`: (mock; real model is an owner task) summary fixtures checked for unsupported claims, correct fact-status attribution and
       hedged register. Unsupported claims block the phase.
 
 Manual:
-- [ ] Read the monthly retrospective for the demo user. Would a real user find it worth opening? If it
+- [x] Read the monthly retrospective for the demo user. Would a real user find it worth opening? If it
       reads as generic, the fault is the prompt or the data floor — fix, don't ship filler.
 
 ## Exit criteria
 
-- [ ] Journey narratives and period summaries generated only above data floors, stored, source-grounded.
-- [ ] Recurring symbols are contextual with evidence links; nothing below 3 occurrences called a pattern.
-- [ ] All four retention surfaces live, each dismissible and switch-off-able, max one at a time.
-- [ ] Viewing any summary makes zero AI calls.
-- [ ] Summary-provenance invariants passing; deletion scrubs summaries.
-- [ ] Report + `../PROGRESS.md` updated.
+- [x] Journey narratives and period summaries generated only above data floors, stored, source-grounded.
+- [x] Recurring symbols are contextual with evidence links; nothing below 3 occurrences called a pattern.
+- [x] All four retention surfaces live, each dismissible and switch-off-able, max one at a time.
+- [x] Viewing any summary makes zero AI calls.
+- [x] Summary-provenance invariants passing; deletion scrubs summaries.
+- [x] Report + `../PROGRESS.md` updated.

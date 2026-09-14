@@ -23,6 +23,8 @@ import { logger } from '@/observability/logger';
  * Phase 09: embeddings and retrieval documents go (they are rebuilt by the backfill if AI is
  * switched on again); so do `asks` — a question put to the AI and its generated answer are a
  * transcript of the feature, not a journal entry, and the confirmation names them.
+ * Phase 10: period summaries and journey narratives are generated text and go (their
+ * retrieval documents cascade by trigger). `retention_prompts` hold no AI output and stay.
  */
 
 export interface AiArtifactTarget {
@@ -51,6 +53,8 @@ export const AI_ARTIFACT_TARGETS: readonly AiArtifactTarget[] = [
   { table: 'embeddings', where: [] },
   { table: 'retrieval_documents', where: [] },
   { table: 'asks', where: [] },
+  { table: 'period_summaries', where: [] },
+  { table: 'journey_narratives', where: [] },
 ];
 
 export const AI_ARTIFACT_TABLES = [
@@ -68,6 +72,8 @@ export const AI_ARTIFACT_TABLES = [
   'embeddings',
   'retrieval_documents',
   'asks',
+  'period_summaries',
+  'journey_narratives',
 ] as const;
 export type AiArtifactTable = (typeof AI_ARTIFACT_TABLES)[number];
 export type AiArtifactCounts = Record<AiArtifactTable, number>;

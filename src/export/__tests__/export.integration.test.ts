@@ -97,6 +97,56 @@ describe('export (integration)', () => {
     });
 
     const exportId = await requestExport(user.client, user.id);
+    // Phase 10: a period summary citing a live reading and the deleted one (the deleted id is
+    // scrubbed by the cascade trigger before the export runs) and a journey narrative.
+    const { platformDb: pdb } = await import('@/db/admin');
+    const { periodSummaries, journeyNarratives } = await import('@/db/schema');
+    const [summaryRow] = await pdb()
+      .insert(periodSummaries)
+      .values({
+        userId: user.id,
+        scope: 'user',
+        kind: 'monthly',
+        periodStart: '2026-08-01',
+        periodEnd: '2026-08-31',
+        summary: 'August, in a sentence.',
+        highlights: {
+          recurred: [],
+          shifted: [],
+          open: [],
+          confirmed: [
+            {
+              text: 'You recorded it happened.',
+              basis: 'confirmed_fact',
+              citations: [{ type: 'reading', id: a.id }],
+            },
+          ],
+        },
+        sourceObjectIds: [a.id],
+        sources: [{ type: 'reading', id: a.id }],
+        objectCount: 5,
+        inputHash: 'h',
+        modelId: 'mock/x',
+        promptVersion: 'summarize_period/1.0.0',
+        schemaVersion: 'period_summary/1.0.0',
+      })
+      .returning({ id: periodSummaries.id });
+    await pdb()
+      .insert(journeyNarratives)
+      .values({
+        userId: user.id,
+        journeyId: journey!,
+        sentence: 'Your readings moved.',
+        progression: ['a', 'b'],
+        sourceObjectIds: [a.id],
+        sources: [{ type: 'reading', id: a.id }],
+        fingerprint: 'fp',
+        objectCount: 3,
+        modelId: 'mock/x',
+        promptVersion: 'journey_narrative/1.0.0',
+        schemaVersion: 'journey_narrative/1.0.0',
+      });
+
     const job = await enqueue('export_user_data', { exportId }, { userId: user.id });
     expect(await runBatch({ jobId: job.id })).toMatchObject({ succeeded: 1, dead: 0 });
 
@@ -286,7 +336,21 @@ describe('export (integration)', () => {
     ).toBe(true);
     expect(links.some((l) => l.kind === 'outcome_event' && l.to.id === eventId)).toBe(true);
     expect(links.some((l) => l.kind === 'connection_to' && l.to.id === eventId)).toBe(true);
-    expect(manifest.schema_version).toBe('export/1.4.0');
+    expect(manifest.schema_version).toBe('export/1.5.0');
+    // Phase 10: summaries and narratives travel with their bases and sources.
+    const summaries = files['period_summaries.json'] as {
+      id: string;
+      highlights: { confirmed: { basis: string; citations: { id: string }[] }[] };
+      sources: { id: string }[];
+    }[];
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]!.id).toBe(summaryRow!.id);
+    expect(summaries[0]!.highlights.confirmed[0]).toMatchObject({ basis: 'confirmed_fact' });
+    expect(summaries[0]!.sources).toEqual([{ type: 'reading', id: a.id }]);
+    expect(links.some((l) => l.kind === 'summary_source' && l.to.id === a.id)).toBe(true);
+    const narratives = files['journey_narratives.json'] as { journey_id: string }[];
+    expect(narratives).toHaveLength(1);
+    expect(links.some((l) => l.kind === 'narrative_of' && l.to.id === journey)).toBe(true);
     expect(JSON.stringify(files)).not.toContain(gone.id);
     expect(JSON.stringify(files)).not.toContain('Deleted before export');
     expect(JSON.stringify(files)).not.toMatch(/ai_calls/);

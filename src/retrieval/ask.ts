@@ -24,6 +24,7 @@ import { boundPackage, PACKAGE_MAX_OBJECTS, PACKAGE_MAX_TOKENS } from '@/domain/
 import {
   excerpt,
   labelEvidence,
+  labelSummaries,
   renderPackage,
   type EvidenceObject,
   type EvidencePackage,
@@ -39,6 +40,7 @@ import { rankCandidates, type RankedCandidate } from '@/domain/retrieval/rank';
 import { errorClassOf, logger } from '@/observability/logger';
 import { loadHistoryObjects, type HistoryObject, type HistoryObjectType } from './objects';
 import { resolveHints, searchHistory } from './search';
+import { coveringSummaries } from './summaries';
 
 /**
  * Ask My History, the run (spec §6.6, §8.1, §19; docs/ALGORITHMS.md §4). One generator, one
@@ -57,9 +59,11 @@ import { resolveHints, searchHistory } from './search';
 
 export type AskStage = 'parsing' | 'searching' | 'ranking' | 'answering' | 'verifying';
 
+export type AskEvidenceType = HistoryObjectType | 'period_summary';
+
 export interface AskEvidenceCard {
   label: string;
-  type: HistoryObjectType;
+  type: AskEvidenceType;
   id: string;
   date: string;
   title: string | null;
@@ -67,6 +71,8 @@ export interface AskEvidenceCard {
   cards: string[];
   /** The first claim resting on this object — "why this matters". */
   why: string | null;
+  /** Period summaries only: the retrospective the card opens. */
+  periodKey?: string | null;
 }
 
 export interface AskResult {
@@ -212,7 +218,9 @@ export async function augment(
 }
 
 /** Step 5: label, render, bound. */
-export function packageFrom(objects: readonly HistoryObject[]): EvidencePackage {
+export function packageFrom(objects: readonly HistoryObject[]): EvidencePackage & {
+  droppedDates: string[];
+} {
   const labelled = labelEvidence(objects.map(toEvidenceObject));
   const bound = boundPackage(labelled, {
     maxObjects: PACKAGE_MAX_OBJECTS,
@@ -223,8 +231,24 @@ export function packageFrom(objects: readonly HistoryObject[]): EvidencePackage 
   return {
     objects: kept,
     droppedIds: bound.dropped.map((d) => ({ type: d.type, id: d.id })),
+    droppedDates: bound.dropped.map((d) => d.date),
     tokens: kept.reduce((s, o) => s + o.tokens, 0),
   };
+}
+
+/**
+ * Phase 10 compression (step 4): stored summaries covering what the bound left out join the
+ * package after the objects, labelled in sequence. They never displace an entry and never
+ * carry a claim on their own (`verifyAnswer` drops summary-only claims).
+ */
+export async function withCoveringSummaries(
+  userId: string,
+  pkg: ReturnType<typeof packageFrom>,
+): Promise<EvidencePackage> {
+  const covering = await coveringSummaries(userId, pkg.droppedDates);
+  if (covering.length === 0) return pkg;
+  const summaries = labelSummaries(covering, pkg.objects.length);
+  return { ...pkg, summaries, tokens: pkg.tokens + summaries.reduce((s, x) => s + x.tokens, 0) };
 }
 
 function scopeDescription(scope: AskScope, names: { journey?: string; entity?: string }): string {
@@ -337,7 +361,8 @@ export async function* askHistory(args: AskArgs): AsyncGenerator<AskEvent> {
     // 4–5. Augment and bound.
     const restrictTo = args.scope.kind === 'journey' ? new Set(candidates.map((c) => c.id)) : null;
     const objects = await abortable(augment(userId, ranked, { restrictTo }), signal);
-    const pkg = packageFrom(objects);
+    const pkg = await withCoveringSummaries(userId, packageFrom(objects));
+    const summaries = pkg.summaries ?? [];
     logger.info('ask.package', {
       userId,
       askId,
@@ -362,8 +387,12 @@ export async function* askHistory(args: AskArgs): AsyncGenerator<AskEvent> {
       yield { type: 'stage', stage: 'verifying' };
     } else {
       yield { type: 'stage', stage: 'answering' };
-      const labels = new Set(pkg.objects.map((o) => o.label));
-      const objectRefs = pkg.objects.map((o) => ({ type: o.type, id: o.id }));
+      const labels = new Set([...pkg.objects, ...summaries].map((o) => o.label));
+      const summaryLabels = new Set(summaries.map((s) => s.label));
+      const objectRefs = [
+        ...pkg.objects.map((o) => ({ type: o.type, id: o.id })),
+        ...summaries.map((s) => ({ type: 'period_summary', id: s.id })),
+      ];
       const droppedRefs = pkg.droppedIds.map((d) => ({ type: `dropped_${d.type}`, id: d.id }));
       const input = {
         question: args.question,
@@ -391,7 +420,7 @@ export async function* askHistory(args: AskArgs): AsyncGenerator<AskEvent> {
         answer = insufficientAnswer(foundSummary(pkg, candidates.length), null);
       } else {
         modelId = first.meta.modelId;
-        let verified = verifyAnswer(first.value, labels);
+        let verified = verifyAnswer(first.value, labels, { summaryLabels });
         if (!verified.grounded || verified.stripped.length) {
           logger.info('ask.verify', {
             userId,
@@ -414,7 +443,7 @@ export async function* askHistory(args: AskArgs): AsyncGenerator<AskEvent> {
           );
           if (second.ok) {
             modelId = second.meta.modelId;
-            verified = verifyAnswer(second.value, labels);
+            verified = verifyAnswer(second.value, labels, { summaryLabels });
           }
         }
         answer = verified.grounded
@@ -429,9 +458,12 @@ export async function* askHistory(args: AskArgs): AsyncGenerator<AskEvent> {
 
     // Store, then say so.
     const byLabel = new Map(pkg.objects.map((o) => [o.label, o]));
+    const summaryByLabel = new Map(summaries.map((s) => [s.label, s]));
     const cite = (label: string): AskCitation | null => {
       const o = byLabel.get(label);
-      return o ? { object_type: o.type, object_id: o.id, label } : null;
+      if (o) return { object_type: o.type, object_id: o.id, label };
+      const s = summaryByLabel.get(label);
+      return s ? { object_type: 'period_summary', object_id: s.id, label } : null;
     };
     const claims: AskClaim[] = answer.claims.map((c) => ({
       text: c.text,
@@ -441,16 +473,30 @@ export async function* askHistory(args: AskArgs): AsyncGenerator<AskEvent> {
       .map(cite)
       .filter((x): x is AskCitation => !!x);
     const evidence: AskEvidenceCard[] = citations.map((c) => {
-      const o = byLabel.get(c.label)!;
+      const why = claims.find((cl) => cl.citations.some((x) => x.label === c.label))?.text ?? null;
+      const o = byLabel.get(c.label);
+      if (o)
+        return {
+          label: c.label,
+          type: o.type,
+          id: o.id,
+          date: o.date,
+          title: o.title,
+          deck: o.deck,
+          cards: o.cards.map((x) => x.name),
+          why,
+        };
+      const s = summaryByLabel.get(c.label)!;
       return {
         label: c.label,
-        type: o.type,
-        id: o.id,
-        date: o.date,
-        title: o.title,
-        deck: o.deck,
-        cards: o.cards.map((x) => x.name),
-        why: claims.find((cl) => cl.citations.some((x) => x.label === c.label))?.text ?? null,
+        type: 'period_summary',
+        id: s.id,
+        date: s.periodStart,
+        title: s.headline,
+        deck: null,
+        cards: [],
+        why,
+        periodKey: s.periodKey,
       };
     });
     const latencyMs = Date.now() - started;
@@ -465,7 +511,10 @@ export async function* askHistory(args: AskArgs): AsyncGenerator<AskEvent> {
         evidenceSufficient: answer.evidence_sufficient,
         found: answer.found,
         narrowerQuestion: answer.narrower_question,
-        packageObjectIds: pkg.objects.map((o) => ({ type: o.type, id: o.id })),
+        packageObjectIds: [
+          ...pkg.objects.map((o) => ({ type: o.type, id: o.id })),
+          ...summaries.map((s) => ({ type: 'period_summary', id: s.id })),
+        ],
         droppedObjectIds: pkg.droppedIds,
         modelId,
         promptVersion: ANSWER_PROMPT_VERSION,

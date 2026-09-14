@@ -14,6 +14,10 @@ import {
   listMergedInto,
   type JourneyMemberView,
 } from '@/db/queries/journeys';
+import { getProfile, hasAiConsent } from '@/db/queries/profile';
+import { getJourneyNarrative, getJourneySummary } from '@/db/queries/summaries';
+import { SummaryView } from '@/ui/components/summary-view';
+import { NarrativeControls, SummaryControls } from '../../retrospective/controls';
 import { OUTCOME_LABEL, OUTCOME_SHORT } from '@/domain/outcomes/followUp';
 import { ConnectionReview, type ConnectionItem } from '../../event/connection-review';
 import { journalHref } from '@/domain/journal/filters';
@@ -44,10 +48,11 @@ import {
 export const dynamic = 'force-dynamic';
 
 /**
- * Journey detail (spec §6.5 — the centrepiece). Eight sections in the specified order, each
- * with a real empty state: narrative header (deterministic until Phase 10), timeline,
- * theme progression, recurring symbols, open loops, confirmed outcomes (08), possible
- * connections (08), ask (09). Everything renders from stored rows plus pure functions in
+ * Journey detail (spec §6.5 — the centrepiece). The sections in the specified order, each
+ * with a real empty state: narrative header (the stored `journey_narratives` sentence since
+ * Phase 10, the deterministic counts beneath or instead), timeline, theme progression, the
+ * summary so far (10), recurring symbols (contextual since 10), open loops, confirmed
+ * outcomes (08), possible connections (08), ask (09). Everything renders from stored rows plus pure functions in
  * `src/domain/journeys`; opening this page makes zero model calls. Every card is shown under
  * its own deck's name — a Thoth card is never rendered as its RWS cousin (§6.7).
  */
@@ -56,9 +61,11 @@ export default async function JourneyPage({ params }: { params: Promise<{ id: st
   if (!z.string().uuid().safeParse(id).success) notFound();
   const user = await requireUser();
   const client = await getSessionClient();
-  const [detail, askEnabled] = await Promise.all([
+  const [detail, askEnabled, summariesEnabled, profile] = await Promise.all([
     getJourney(client, id),
     flag('ask_my_history', { userId: user.id }),
+    flag('period_summaries', { userId: user.id }),
+    getProfile(client, user.id),
   ]);
   if (!detail) notFound();
   const { journey, members, pending, events, pendingEvents, progression } = detail;
@@ -83,12 +90,15 @@ export default async function JourneyPage({ params }: { params: Promise<{ id: st
 
   const memberReadingIds = members.map((m) => m.reading.id);
   const memberEventIds = events.map((e) => e.event.id);
-  const [others, merged, outcomeRows, linkRows] = await Promise.all([
+  const [others, merged, outcomeRows, linkRows, narrative, journeySummary] = await Promise.all([
     listJourneys(client),
     listMergedInto(client, id),
     listOutcomesForReadings(client, memberReadingIds),
     listLinksForObjects(client, { readings: memberReadingIds, events: memberEventIds }),
+    getJourneyNarrative(client, id),
+    getJourneySummary(client, id),
   ]);
+  const canGenerate = !!profile && hasAiConsent(profile) && summariesEnabled;
   const linked = await loadLinkedObjects(client, linkRows);
   const titleOf = (m: JourneyMemberView) =>
     m.reading.is_open_reflection ? 'Open reflection' : (m.reading.question ?? 'Reading');
@@ -164,6 +174,18 @@ export default async function JourneyPage({ params }: { params: Promise<{ id: st
       })),
       themes: m.themes.map((t) => ({ slug: t.slug, label: t.label })),
     })),
+    {
+      events: events.map((e) => ({
+        id: e.event.id,
+        occurredOn: e.event.occurred_on,
+        description: e.event.description,
+      })),
+      confirmedLinks: linkRows
+        .filter(
+          (l) => l.state === 'confirmed' && l.from_type === 'reading' && l.to_type === 'life_event',
+        )
+        .map((l) => ({ readingId: l.from_id, eventId: l.to_id })),
+    },
   );
   const openLoops = members.filter((m) =>
     isOpenLoop({ followUpStatus: m.reading.follow_up_status, revisitAt: m.reading.revisit_at }),
@@ -172,7 +194,7 @@ export default async function JourneyPage({ params }: { params: Promise<{ id: st
     ...members.map((m) => m.reading.occurred_at),
     ...events.map((e) => `${e.event.occurred_on}T12:00:00.000Z`),
   ].sort()[0];
-  const header = narrativeHeader({
+  const plainHeader = narrativeHeader({
     readings: members.length,
     events: events.length,
     confirmedOutcomes: confirmedOutcomes.length,
@@ -180,6 +202,45 @@ export default async function JourneyPage({ params }: { params: Promise<{ id: st
     deckSystems: new Set(members.map((m) => m.reading.deck.system)).size,
     since: earliest ?? null,
   });
+  // Phase 10: the stored narrative sentence leads when one exists (never generated here);
+  // the honest counts stay beneath it. Its sources link to the entries it rests on.
+  const narrativeSources = (narrative?.source_object_ids ?? []).filter(
+    (oid) => titles.has(oid) || events.some((e) => e.event.id === oid),
+  );
+  const header = narrative ? (
+    <span data-testid="journey-narrative" data-stale={narrative.stale_at ? 'true' : 'false'}>
+      <span className="block">{narrative.sentence}</span>
+      {narrative.progression.length ? (
+        <span className="mt-1 block text-xs text-fg-muted">
+          {narrative.progression.join(' → ')}
+        </span>
+      ) : null}
+      <span className="mt-1 block text-xs text-fg-muted">
+        {plainHeader}
+        {narrativeSources.length ? (
+          <>
+            {' '}
+            Rests on{' '}
+            {narrativeSources.map((oid, i) => (
+              <span key={oid}>
+                {i > 0 ? ', ' : ''}
+                <Link
+                  href={titles.has(oid) ? `/reading/${oid}` : `/event/${oid}`}
+                  className="underline underline-offset-4"
+                >
+                  {titles.get(oid) ?? events.find((e) => e.event.id === oid)?.event.description}
+                </Link>
+              </span>
+            ))}
+            .
+          </>
+        ) : null}
+        {narrative.stale_at ? ' An entry it rested on was deleted since.' : ''}
+      </span>
+    </span>
+  ) : (
+    plainHeader
+  );
   const steps = progression
     .filter((s) => s.source_object_ids.length >= 2)
     .map((s) => ({
@@ -225,6 +286,11 @@ export default async function JourneyPage({ params }: { params: Promise<{ id: st
         </div>
       ) : null}
       <MergeUndoNotice merged={merged.map((m) => ({ id: m.id, title: m.title }))} />
+      {canGenerate && members.length + events.length >= 3 ? (
+        <div className="mb-4">
+          <NarrativeControls journeyId={journey.id} canGenerate={canGenerate} />
+        </div>
+      ) : null}
       {journey.reasons.length && journey.created_by !== 'user' ? (
         <details className="mb-6 text-sm text-fg-muted">
           <summary className="min-h-11 cursor-pointer py-2">
@@ -323,9 +389,59 @@ export default async function JourneyPage({ params }: { params: Promise<{ id: st
       </Section>
 
       <Section
+        id="summary"
+        title="Summary so far"
+        lead="Written by the app from this journey’s entries, every line traceable. Not a record of anything."
+      >
+        {journeySummary && !journeySummary.dismissed_at ? (
+          <SummaryView
+            id={journeySummary.id}
+            headline={journeySummary.summary}
+            highlights={journeySummary.highlights}
+            titles={{
+              get(oid) {
+                const t = titles.get(oid);
+                if (t) return { title: t, href: `/reading/${oid}` };
+                const e = events.find((x) => x.event.id === oid);
+                return e ? { title: e.event.description, href: `/event/${oid}` } : undefined;
+              },
+            }}
+            stale={!!journeySummary.stale_at}
+            meta={
+              <>
+                Written <LocalTime iso={journeySummary.generated_at} dateOnly /> from{' '}
+                {journeySummary.object_count}{' '}
+                {journeySummary.object_count === 1 ? 'entry' : 'entries'}
+              </>
+            }
+          />
+        ) : (
+          <Empty>
+            {journeySummary?.dismissed_at
+              ? 'You dismissed this summary. The sections below are unchanged.'
+              : members.length + events.length < 5
+                ? 'Once five entries are here, a summary can be written from them.'
+                : canGenerate
+                  ? 'No summary written yet. It follows the journey as it grows.'
+                  : 'No summary here. The sections below come straight from your entries.'}
+          </Empty>
+        )}
+        {members.length + events.length >= 5 ? (
+          <div className="mt-3">
+            <SummaryControls
+              summaryId={journeySummary?.id ?? null}
+              dismissed={!!journeySummary?.dismissed_at}
+              target={{ kind: 'journey', journeyId: journey.id }}
+              canGenerate={canGenerate}
+            />
+          </div>
+        ) : null}
+      </Section>
+
+      <Section
         id="symbols"
         title="Recurring symbols"
-        lead="Cards, suits and themes that keep coming back — each under its own deck’s name."
+        lead="Cards, suits and themes that keep coming back — when, around what, each under its own deck’s name. Three readings make a pattern; two are two."
       >
         {symbols.length === 0 ? (
           <Empty>

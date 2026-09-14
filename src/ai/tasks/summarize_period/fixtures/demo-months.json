@@ -1,0 +1,11 @@
+{
+  "name": "demo-months",
+  "description": "The demo journal's recent complete months and week (pnpm demo:seed). Every claim must cite package labels only; a confirmed fact must cite confirmed evidence; the register is hedged. Any unsupported claim is a phase blocker.",
+  "periods": [
+    { "kind": "monthly", "ago": 1 },
+    { "kind": "monthly", "ago": 2 },
+    { "kind": "monthly", "ago": 3 },
+    { "kind": "weekly", "ago": 1 }
+  ],
+  "expect": { "min_claims": 2, "sections_any": ["recurred", "confirmed", "open", "shifted"] }
+}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { narrativeHeader } from '../narrative';
 import { chooseBucketing, themeProgression } from '../progression';
-import { recurringSymbols, type SymbolObject } from '../symbols';
+import { occurrencesSentence, patterns, recurringSymbols, type SymbolObject } from '../symbols';
 import { buildTimeline, isOpenLoop, type TimelineEntry } from '../timeline';
 
 /**
@@ -240,5 +240,77 @@ describe('narrative header and timeline', () => {
     expect(isOpenLoop({ followUpStatus: 'resolved', revisitAt: at(-1) }, at(0))).toBe(true);
     expect(isOpenLoop({ followUpStatus: 'resolved', revisitAt: at(1) }, at(0))).toBe(false);
     expect(isOpenLoop({ followUpStatus: 'not_relevant', revisitAt: null })).toBe(false);
+  });
+});
+
+describe('recurring symbols v2 — context, not statistics (§3.3, Phase 10)', () => {
+  const rws = (
+    id: string,
+    day: number,
+    cardId: string,
+    name: string,
+    journeys?: { id: string; title: string }[],
+  ): SymbolObject => ({
+    id,
+    occurredAt: at(day),
+    deckSystem: 'rws',
+    deckName: 'Rider–Waite–Smith',
+    cards: [{ cardId, name, suit: null, suitLabel: null, positionName: 'Outcome' }],
+    themes: [],
+    ...(journeys ? { journeys } : {}),
+  });
+
+  it('two appearances are listed but never called a pattern; three are', () => {
+    const two = recurringSymbols([
+      rws('a', 0, 'tower', 'The Tower'),
+      rws('b', 10, 'tower', 'The Tower'),
+    ]);
+    expect(two[0]).toMatchObject({ label: 'The Tower', isPattern: false });
+    expect(patterns(two)).toEqual([]);
+    const three = recurringSymbols([
+      ...[rws('a', 0, 'tower', 'The Tower'), rws('b', 10, 'tower', 'The Tower')],
+      rws('c', 30, 'tower', 'The Tower'),
+    ]);
+    expect(three[0]!.isPattern).toBe(true);
+    expect(patterns(three).map((s) => s.label)).toEqual(['The Tower']);
+    expect(three[0]!.occurrences.map((o) => o.objectId)).toEqual(['a', 'b', 'c']);
+    expect(occurrencesSentence(three[0]!)).toMatch(/^The Tower: .+, .+, .+\.$/);
+  });
+
+  it('says when, around which journeys, before or after which confirmed events, and whether a connection was confirmed', () => {
+    const j = { id: 'j1', title: 'The move' };
+    const objects = [
+      rws('a', 0, 'tower', 'The Tower', [j]),
+      rws('b', 20, 'tower', 'The Tower', [j]),
+      rws('c', 60, 'tower', 'The Tower'),
+    ];
+    const events = [
+      { id: 'e1', occurredOn: at(23).slice(0, 10), description: 'Signed the lease' },
+      { id: 'e2', occurredOn: at(200).slice(0, 10), description: 'Far away' },
+    ];
+    const [tower] = recurringSymbols(objects, {
+      events,
+      confirmedLinks: [{ readingId: 'b', eventId: 'e1' }],
+    });
+    expect(tower!.journeys).toEqual([{ id: 'j1', title: 'The move', count: 2 }]);
+    expect(tower!.around).toEqual([
+      {
+        eventId: 'e1',
+        description: 'Signed the lease',
+        occurredOn: events[0]!.occurredOn,
+        relation: 'after',
+        days: 3,
+        objectId: 'b',
+        confirmed: true,
+      },
+    ]);
+    expect(tower!.context).toContain('In “The move”.');
+    expect(tower!.context).toContain(
+      'Once 3 days after “Signed the lease”, a connection you confirmed.',
+    );
+    // Without the link the same event is context but not a confirmed connection.
+    const [plain] = recurringSymbols(objects, { events });
+    expect(plain!.around[0]!.confirmed).toBe(false);
+    expect(plain!.context).not.toContain('confirmed');
   });
 });

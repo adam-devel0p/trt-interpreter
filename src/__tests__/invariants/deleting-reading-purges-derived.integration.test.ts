@@ -92,6 +92,42 @@ describe('deleting-reading-purges-derived (integration)', () => {
         ${JSON.stringify([{ type: 'reading', id: reading.id }])}::jsonb)
       returning id`;
     const askId = askRows[0]!.id;
+    // Phase 10: a summary and a narrative resting on the reading and the kept one, and a
+    // prompt pointing at the reading.
+    const summaryRows = await platformSql()<{ id: string }[]>`
+      insert into public.period_summaries (user_id, scope, kind, period_start, period_end, summary, highlights, source_object_ids, sources, object_count, input_hash, model_id, prompt_version, schema_version)
+      values (${user.id}, 'user', 'monthly', '2026-08-01', '2026-08-31', 'A month.',
+        ${JSON.stringify({
+          recurred: [
+            {
+              text: 'Both.',
+              basis: 'inferred',
+              citations: [
+                { type: 'reading', id: reading.id },
+                { type: 'reading', id: keep.id },
+              ],
+            },
+          ],
+          shifted: [
+            {
+              text: 'Only the purged one.',
+              basis: 'inferred',
+              citations: [{ type: 'reading', id: reading.id }],
+            },
+          ],
+          open: [],
+          confirmed: [],
+        })}::jsonb,
+        ${[reading.id, keep.id]}::uuid[], ${JSON.stringify([
+          { type: 'reading', id: reading.id },
+          { type: 'reading', id: keep.id },
+        ])}::jsonb,
+        5, 'h', 'mock/x', 'p', 's')
+      returning id`;
+    const summaryId = summaryRows[0]!.id;
+    await platformSql()`
+      insert into public.retention_prompts (user_id, kind, fingerprint, object_type, object_id)
+      values (${user.id}, 'on_this_day', 'fp-purge', 'reading', ${reading.id})`;
 
     const before = {
       reading_cards: await countRows('reading_cards', 'reading_id', reading.id),
@@ -110,6 +146,9 @@ describe('deleting-reading-purges-derived (integration)', () => {
       retrieval_documents: await countRows('retrieval_documents', 'object_id', reading.id),
       embeddings: await countRows('embeddings', 'object_id', reading.id),
       asks: 1,
+      period_summaries: 1,
+      journey_narratives: 0,
+      retention_prompts: 1,
     };
     expect(before).toMatchObject({
       reading_cards: 3,
@@ -162,6 +201,11 @@ describe('deleting-reading-purges-derived (integration)', () => {
     ]);
     for (const table of DELETION_REGISTRY.reading.map((t) => t.table)) {
       if (table === 'asks') continue; // scrubbed, not deleted — checked below
+      if (table === 'period_summaries' || table === 'journey_narratives') continue; // scrubbed — below
+      if (table === 'retention_prompts') {
+        expect(await countRows(table, 'object_id', reading.id)).toBe(0);
+        continue;
+      }
       const column =
         table === 'links' ? 'from_id' : POLYMORPHIC.has(table) ? 'object_id' : 'reading_id';
       expect(await countRows(table, column, reading.id), `${table} after purge`).toBe(0);
@@ -185,6 +229,25 @@ describe('deleting-reading-purges-derived (integration)', () => {
     ]);
     expect(ask!.package_object_ids).toEqual([{ type: 'reading', id: keep.id }]);
     expect(ask!.dropped_object_ids).toEqual([]);
+    // Phase 10: the summary survives with the reading scrubbed out of its sources and
+    // every claim's citations, the claim that rested on it alone gone, and is marked stale.
+    const [summary] = await platformSql()<
+      {
+        source_object_ids: string[];
+        sources: unknown;
+        highlights: unknown;
+        stale_at: string | null;
+      }[]
+    >`select source_object_ids, sources, highlights, stale_at from public.period_summaries where id = ${summaryId}`;
+    expect(summary!.source_object_ids).toEqual([keep.id]);
+    expect(JSON.stringify(summary)).not.toContain(reading.id);
+    expect(summary!.stale_at).not.toBeNull();
+    const h = summary!.highlights as {
+      recurred: { citations: { id: string }[] }[];
+      shifted: unknown[];
+    };
+    expect(h.recurred[0]!.citations).toEqual([{ type: 'reading', id: keep.id }]);
+    expect(h.shifted).toEqual([]);
     // The life event is the user's own record and stays; its pointer at the reading clears.
     expect(await countRows('life_events', 'id', event!)).toBe(1);
     expect(await countRows('life_events', 'reading_id', reading.id)).toBe(0);

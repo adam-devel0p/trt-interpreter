@@ -200,10 +200,17 @@ decision`) with a screen-reader sentence, never as a chart; each step opens to i
 
 ### Recurring symbols (§3.3)
 `recurringSymbols()`: cards by their own id, suits by `(deck, suit)`, themes by slug, each
-counted over distinct objects and shown when it appears in **≥ 2** (`RECURRENCE_MIN`) — with a
+counted over distinct objects and listed when it appears in **≥ 2** (`RECURRENCE_MIN`) — with a
 context sentence ("Appeared in 3 of 9 readings between March and July, twice in the outcome
 position.") and its source readings. Thoth *Lust* and RWS *Strength* are two symbols; Disks
 are not Pentacles. No archetype mapping is consulted on any render path.
+**v2 (Phase 10, "not merely statistics"):** every symbol carries its `occurrences` in date
+order (the section's one visual, a sparse timeline with a text equivalent), the `journeys`
+its readings sit in, the confirmed life events within `PATTERN_EVENT_WINDOW_DAYS` (14) of an
+occurrence with before/after and whether the user confirmed a connection between that reading
+and that event, and `isPattern`: a symbol is **called a pattern only from
+`PATTERN_MIN_OCCURRENCES` = 3** distinct readings — two appearances read "twice". The
+retrospective shows `patterns()` only; the journey page lists both and labels them honestly.
 
 ---
 
@@ -295,7 +302,8 @@ evidence".
   *used* as 1.0 (the journey's outcomes section, exports). A re-run refreshes its signals
   and reasons, never its state.
 - **Maybe** → `state='maybe'`, visible in the Journey's *Possible connections*, excluded from
-  summaries' factual claims (Phase 10).
+  summaries' factual claims (Phase 10: the evidence package renders links as "the user
+  marked maybe"; a maybe is never `confirmed` evidence for a `confirmed_fact` claim).
 - **Reject** → `state='rejected'`; `rejected_score` and `rejected_fingerprint` recorded.
   Re-suggestion (`shouldResurface`) requires a new fingerprint **and** `new_score ≥
   rejected_score + 0.15`, **or** a user-confirmed entity / journey overlap (a `user`
@@ -303,7 +311,8 @@ evidence".
   rejection. `rejected-link-not-resuggested` asserts an identical re-run produces nothing
   and that the return happens once.
 - Every decision is undoable (back to an offered suggestion).
-- Rejections also suppress the same pair's inclusion in period summaries (Phase 10).
+- A rejected pair is never rendered together in a summary's evidence (Phase 10: the package
+  carries citeable links only — `confirmed` and `maybe`).
 
 **Measured** (`pnpm eval`, model-free section, and `score.test.ts`): precision 1.00, recall
 0.86 on the 18 hand-labelled pairs in `fixtures/history/correlation/labeled-pairs.json`.
@@ -352,8 +361,9 @@ loaders, the SQL search, the pipeline), `search_history()` in `0010_retrieval_as
 4. AUGMENT    each anchor (top 48) is followed by the objects it is connected to — confirmed /
               maybe links, the event an outcome points at — so a cited reading never travels
               without the record that makes it evidence. Inside a journey scope nothing outside
-              the candidate set is added. Covering period summaries: Phase 10 (the object
-              type is admitted; the hook is `packageFrom()`).
+              the candidate set is added. Covering period summaries (Phase 10): after the
+              bound, up to 2 stored summaries covering the dropped entries join the package
+              as compression (`withCoveringSummaries`; §8 below) — never as sole evidence.
 5. BOUND      ≤ 24 objects and ≤ 6000 estimated tokens (4 chars/token). A strict rank prefix:
               the first object that does not fit ends the package, so nothing lower-ranked ever
               displaces something higher-ranked, and nothing is truncated. Labels are E1…En
@@ -372,7 +382,7 @@ loaders, the SQL search, the pipeline), `search_history()` in `0010_retrieval_as
 ```
 
 **Retrieval documents (§8.3).** Deterministic template, not model prose
-(`domain/retrieval/document.ts`, `retrieval_document/1.0.0`):
+(`domain/retrieval/document.ts`, `retrieval_document/1.1.0` — 1.1.0 adds the `Highlight:` segments of a period summary, Phase 10):
 `"{journeys}. {question | event sentence | open reflection}. Event: {type}. Life area: {…}.
 Themes: {≤6}. Cards ({deck}): {deck-native names, ≤10}. Entities: {canonical labels of
 auto/user mentions, ≤6}. Possibility: {≤2}. Timeframe: {…}. Outcome: {the user's record}.
@@ -453,3 +463,60 @@ non-superseded row), explicit `card_ids`. Sort is `newest` (`occurred_at desc, i
 (`after_key`, `after_id`, base64url in the URL), never an offset, so rows inserted between pages
 neither shift nor duplicate. Search results keep the chosen sort rather than a relevance rank —
 a journal is read in time. Measured at 1000 readings (Phase 05 report): p95 13–81 ms.
+
+---
+
+## 8. Summaries, narratives and retention surfaces (FR-20, §6.5, §15.2 — Phase 10)
+
+Implemented in `src/domain/summaries/` (pure: `periods.ts`, `floors.ts`, `provenance.ts`,
+`retention.ts`, `schema.ts`, constants in `thresholds.ts`) and `src/domain/journeys/shift.ts`,
+`narrativeChange.ts`; executed by `src/summaries/` (evidence, generate, narrative, schedule,
+retrieval) and `src/retention/home.ts`.
+
+### Data floors
+A summary is generated only when the period holds enough live objects (readings + events):
+**weekly 3 · monthly 5 · journey 5 · yearly 12** (`SUMMARY_MIN_OBJECTS`); a narrative needs
+**3** (`NARRATIVE_MIN_OBJECTS`). Below the floor nothing is generated *and nothing is shown*
+— the retrospective index lists the period with its count and no link. Periods are UTC
+calendar months, ISO weeks and years (`periodContaining`, keys `YYYY-MM`, `YYYY-Www`, `YYYY`);
+only **complete** periods are summarised. The sweep (`schedule_summaries` job) queues the
+last 2 months and 2 weeks per consenting flagged user that have no summary; regeneration of an
+existing summary is the user's explicit action only.
+
+### Evidence and verification
+The package is the Ask package (`retrieval/evidence.ts`) built from the period's or the
+journey's live objects in date order, bounded to 24 objects / 6000 tokens; each label carries
+`confirmed` (a life event, an outcome, a confirmed connection). The model's claims are verified
+(`verifySummary`): unknown labels stripped; a claim without a citation dropped; a
+`confirmed_fact` that cites no confirmed label dropped (generated text never makes a fact,
+§21.7); register-checked; one repair turn; nothing stored unless a claim survives. Sources
+stored are the cited objects (the whole package if none), never empty (`validateSources` +
+the DB check), never solely summaries/interpretations. An unchanged `input_hash` (or prompt
+version) is not regenerated.
+
+### Narrative regeneration
+`narrativeFingerprint` = sorted live member ids + confirmed-outcome count. Regenerated when
+absent, when the fingerprint changed, or after **14 days** (`NARRATIVE_REFRESH_DAYS`); queued
+(deduped, 120 s) from `refreshJourneys`, so a burst of changes costs one call. Never on a view.
+
+### Retention surfaces (one at a time)
+- **On this day:** the same calendar day one or more years ago (oldest anniversary first),
+  else exactly **30 days** ago; nothing otherwise. At most **one** per calendar day
+  (`RESURFACE_MAX_PER_DAY`); fingerprint = reading + day.
+- **Unresolved question review:** the largest group of `unresolved`/`partly_resolved`
+  readings sharing a resolved entity (else the strongest theme) with **≥ 3** members
+  (`UNRESOLVED_REVIEW_MIN`); fingerprint over the member set, so a dismissal holds until a
+  further reading joins. Offers reflection and outcome recording — never a new pull.
+- **Journey shift:** the newest progression step's theme differs from the one before it and
+  the step ended within **45 days** (`SHIFT_MAX_AGE_DAYS`); fingerprint = journey + the two
+  themes + the step's start, so it is surfaced once.
+- **Retrospective:** the latest complete month meets the monthly floor.
+`pickInsight` takes the highest priority (shift → retrospective → review → on this day) not
+dismissed and not switched off (`reminder_settings`); what is shown is recorded in
+`retention_prompts`. No streaks, no counters, no badges.
+
+### Compaction in Ask (§8.1 step 4)
+When the bound left entries out, up to **2** stored user-scope summaries
+(`ASK_COVERING_SUMMARIES_MAX`; months before weeks, never dismissed or stale) whose periods
+hold the dropped dates join the package after the objects, labelled in sequence and rendered
+as generated text. `verifyAnswer` drops any claim that cites only summaries (§19).

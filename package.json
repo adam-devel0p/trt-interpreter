@@ -20,6 +20,7 @@
     "demo:seed": "tsx --conditions=react-server scripts/seed-demo.ts",
     "jobs:run": "tsx --conditions=react-server scripts/jobs-run.ts",
     "jobs:reprocess": "tsx --conditions=react-server scripts/jobs-reprocess.ts",
+    "jobs:summaries": "tsx --conditions=react-server scripts/jobs-schedule-summaries.ts",
     "test": "vitest run --config vitest.config.ts && vitest run --config vitest.integration.config.ts",
     "test:unit": "vitest run --config vitest.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",

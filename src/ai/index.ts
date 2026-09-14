@@ -22,11 +22,15 @@ import { mockEventExtraction } from './tasks/extract_event_metadata/mock';
 import * as extractReading from './tasks/extract_reading_metadata';
 import { mockExtraction } from './tasks/extract_reading_metadata/mock';
 import * as interpretReading from './tasks/interpret_reading';
+import * as journeyNarrative from './tasks/journey_narrative';
+import { mockJourneyNarrative } from './tasks/journey_narrative/mock';
 import { mockInterpretation } from './tasks/interpret_reading/mock';
 import * as parseHistoryQuery from './tasks/parse_history_query';
 import { mockHistoryQuery } from './tasks/parse_history_query/mock';
 import * as proposeJourney from './tasks/propose_journey';
 import { mockJourneyProposal } from './tasks/propose_journey/mock';
+import * as summarizePeriod from './tasks/summarize_period';
+import { mockPeriodSummary } from './tasks/summarize_period/mock';
 import { DbTelemetry, MemoryTelemetry, MultiTelemetry } from './telemetry';
 import type { EmbedRequest, EmbedResult } from './types';
 
@@ -67,6 +71,14 @@ const VERSIONS: Record<string, { promptVersion: string; schemaVersion: string }>
     promptVersion: answerFromEvidence.PROMPT_VERSION,
     schemaVersion: answerFromEvidence.SCHEMA_VERSION,
   },
+  summarize_period: {
+    promptVersion: summarizePeriod.PROMPT_VERSION,
+    schemaVersion: summarizePeriod.SCHEMA_VERSION,
+  },
+  journey_narrative: {
+    promptVersion: journeyNarrative.PROMPT_VERSION,
+    schemaVersion: journeyNarrative.SCHEMA_VERSION,
+  },
 };
 
 export function taskVersions(task: string): { promptVersion: string; schemaVersion: string } {
@@ -84,6 +96,8 @@ export function mockFixtures() {
     explain_correlation: { default: mockExplanation },
     parse_history_query: { default: mockHistoryQuery },
     answer_from_evidence: { default: mockHistoryAnswer },
+    summarize_period: { default: mockPeriodSummary },
+    journey_narrative: { default: mockJourneyNarrative },
   };
 }
 

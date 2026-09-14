@@ -31,9 +31,9 @@ embeddings/summaries/links" true and testable.
 
 | Root | Cascade targets |
 |---|---|
-| `reading` | `reading_cards`, `interpretations`, `extractions`, `metadata_overrides`, `predictions`, `outcomes`, `object_themes`, `entity_mentions`, `journey_members`, `links` (either side), `retrieval_documents`, `embeddings`, `period_summaries` **source-ID scrub + regeneration flag**, `safety_flags`, `asks` citation scrub |
+| `reading` | `reading_cards`, `interpretations`, `extractions`, `metadata_overrides`, `predictions`, `outcomes`, `object_themes`, `entity_mentions`, `journey_members`, `links` (either side), `retrieval_documents`, `embeddings`, `period_summaries` and `journey_narratives` **source-ID scrub + `stale_at`** (deleted when the set would be empty; job + `summaries_source_cascade` trigger), `retention_prompts` pointing at it, `safety_flags`, `asks` citation scrub |
 | `life_event` | `event_media` (+ storage objects), `extractions`, `metadata_overrides`, `object_themes`, `entity_mentions`, `journey_members`, `outcomes` links, `links`, `retrieval_documents`, `embeddings`, summary scrub |
-| `journey` | `journey_members`, `journey_theme_progression`, journey-scoped `period_summaries`, `links` of type journey_* ; member readings/events are **not** deleted |
+| `journey` | `journey_members`, `journey_theme_progression`, journey-scoped `period_summaries`, `journey_narratives` (all FK cascade); member readings/events are **not** deleted |
 | `entity` | `entity_aliases`, `entity_roles`, `entity_mentions`, `links` of type entity_* ; source objects untouched |
 | `user` | everything above + `profiles`, `subscriptions`, `usage_counters`, `asks`, `analytics_events`, `jobs`, all storage prefixes; `auth.users` last |
 
@@ -103,7 +103,7 @@ remaining trace of deleted content.
 | Flow | Behaviour | Phase |
 |---|---|---|
 | Delete one entry | **Built (05).** `softDeleteReading()` sets `deleted_at` as the user (every read path and the search function filter it, so the reading is out of all views at once); the action enqueues `purge_deleted {readingId}` and runs it immediately (`runBatch({ jobId })`); the cron batch retries a failed purge and the payload-less sweep mode purges anything left. The confirmation names exactly what goes (cards, notes, earlier versions, interpretations). Receipt on Profile. | 05 |
-| Delete AI artifacts only | **Built (05, extended 06):** `deleteAiArtifacts()` removes, as the user (RLS-scoped), `interpretations`, `safety_flags`, `question_embeddings`, `extractions`, model-sourced `object_themes`, `auto`/`tentative` `entity_mentions`, un-edited `predictions` and unconfirmed `entities` (aliases and roles cascade); keeps every word **and every correction** (`metadata_overrides`, confirmed themes, user-linked mentions, edited predictions, confirmed entities, merge receipts); writes an `ai_artifacts` receipt; the confirmation quotes the counts. Phase 10 adds summaries. | 05 → 06 → 10 |
+| Delete AI artifacts only | **Built (05, extended 06):** `deleteAiArtifacts()` removes, as the user (RLS-scoped), `interpretations`, `safety_flags`, `question_embeddings`, `extractions`, model-sourced `object_themes`, `auto`/`tentative` `entity_mentions`, un-edited `predictions` and unconfirmed `entities` (aliases and roles cascade); keeps every word **and every correction** (`metadata_overrides`, confirmed themes, user-linked mentions, edited predictions, confirmed entities, merge receipts); writes an `ai_artifacts` receipt; the confirmation quotes the counts. **Phase 10:** `period_summaries` and `journey_narratives` go (generated text; their retrieval documents cascade); `retention_prompts` hold no AI output and stay. | 05 → 06 → 10 ✅ |
 | Delete all history | Everything user-owned except the account | 12 |
 | Delete account | Full purge + storage + auth identity; irreversible, double-confirmed, receipt emailed | 12 |
 

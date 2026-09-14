@@ -12,7 +12,10 @@ import { estimateTokens } from './bound';
  *   - a `confirmed` connection is the highest-grade evidence, a `maybe` may be cited *as*
  *     maybe, `pending` and `rejected` never appear;
  *   - entities are resolved ones only — a tentative mention is never rendered as a fact;
- *   - interpretations and summaries are never evidence of anything that happened.
+ *   - interpretations and summaries are never evidence of anything that happened. Phase 10
+ *     lets a stored period summary travel with a package as *compression* of entries the
+ *     bound left out (`summaries`, labelled after the objects and rendered as generated
+ *     text); the verifier drops any claim that cites only summaries.
  */
 
 export const NOTE_EXCERPT_CHARS = 240;
@@ -69,11 +72,33 @@ export interface LabelledEvidence extends EvidenceObject {
   tokens: number;
 }
 
+/** A stored period summary offered as compression (Phase 10), never as a record. */
+export interface EvidenceSummary {
+  id: string;
+  kind: 'weekly' | 'monthly' | 'journey' | 'yearly';
+  /** `YYYY-MM` / `YYYY-Www` / `YYYY`; null for a journey summary. */
+  periodKey: string | null;
+  periodStart: string;
+  periodEnd: string;
+  headline: string;
+  claims: string[];
+  /** How many entries the summary was generated from. */
+  coversCount: number;
+}
+
+export interface LabelledSummary extends EvidenceSummary {
+  label: string;
+  rendered: string;
+  tokens: number;
+}
+
 export interface EvidencePackage {
   objects: LabelledEvidence[];
   /** Ids ranked but dropped by the bound, in rank order. */
   droppedIds: { type: 'reading' | 'life_event'; id: string }[];
   tokens: number;
+  /** Covering summaries appended after the objects (Phase 10); labels continue the sequence. */
+  summaries?: LabelledSummary[];
 }
 
 export function excerpt(text: string | null | undefined, max = NOTE_EXCERPT_CHARS): string | null {
@@ -132,6 +157,27 @@ export function labelEvidence(objects: readonly EvidenceObject[]): LabelledEvide
   });
 }
 
+export function renderSummaryEvidence(s: EvidenceSummary, label: string): string {
+  const lines = [
+    `[${label}] Summary written by the app for ${s.periodStart} to ${s.periodEnd} from ${s.coversCount} entries — generated text, not a record; cite it only alongside the entries themselves`,
+    `  Headline: ${s.headline}`,
+  ];
+  for (const c of s.claims.slice(0, 6)) lines.push(`  Noted: ${c}`);
+  return lines.join('\n');
+}
+
+/** Labels continue after the objects (`E25`…) so every label stays unique in the package. */
+export function labelSummaries(
+  summaries: readonly EvidenceSummary[],
+  offset: number,
+): LabelledSummary[] {
+  return summaries.map((s, i) => {
+    const label = `E${offset + i + 1}`;
+    const rendered = renderSummaryEvidence(s, label);
+    return { ...s, label, rendered, tokens: estimateTokens(rendered) };
+  });
+}
+
 export function renderPackage(pkg: EvidencePackage): string {
-  return pkg.objects.map((o) => o.rendered).join('\n\n');
+  return [...pkg.objects, ...(pkg.summaries ?? [])].map((o) => o.rendered).join('\n\n');
 }

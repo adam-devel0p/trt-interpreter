@@ -17,6 +17,8 @@ import {
   extractions,
   lifeEvents,
   asks,
+  journeyNarratives,
+  periodSummaries,
   links as linkRows,
   outcomes,
   interpretations,
@@ -314,6 +316,16 @@ export async function buildExportArchive(
     .from(asks)
     .where(eq(asks.userId, userId))
     .orderBy(asks.createdAt, asks.id);
+  const summaryRows = await db
+    .select()
+    .from(periodSummaries)
+    .where(eq(periodSummaries.userId, userId))
+    .orderBy(periodSummaries.periodStart, periodSummaries.id);
+  const narrativeRows = await db
+    .select()
+    .from(journeyNarratives)
+    .where(eq(journeyNarratives.userId, userId))
+    .orderBy(journeyNarratives.createdAt, journeyNarratives.id);
 
   const cardsByReading = new Map<string, typeof cardRows>();
   for (const c of cardRows) {
@@ -768,6 +780,66 @@ export async function buildExportArchive(
         completed_at: iso(a.completedAt),
       };
     }),
+    'period_summaries.json': summaryRows.map((p) => {
+      type Ref = { type: string; id: string };
+      const live = (r: Ref) => liveObject({ objectType: r.type, objectId: r.id });
+      const sources = ((p.sources as Ref[]) ?? []).filter(live);
+      if (p.journeyId)
+        link('summary_of_journey', ['period_summary', p.id], ['journey', p.journeyId]);
+      for (const r of sources) link('summary_source', ['period_summary', p.id], [r.type, r.id]);
+      const h = p.highlights as Record<string, { text: string; basis: string; citations: Ref[] }[]>;
+      const section = (k: string) =>
+        (h[k] ?? []).map((c) => ({
+          text: c.text,
+          basis: c.basis,
+          citations: (c.citations ?? []).filter(live),
+        }));
+      return {
+        id: p.id,
+        scope: p.scope as 'user' | 'journey',
+        journey_id: p.journeyId,
+        kind: p.kind as 'weekly' | 'monthly' | 'journey' | 'yearly',
+        period_start: p.periodStart,
+        period_end: p.periodEnd,
+        summary: p.summary,
+        highlights: {
+          recurred: section('recurred'),
+          shifted: section('shifted'),
+          open: section('open'),
+          confirmed: section('confirmed'),
+        },
+        sources,
+        object_count: p.objectCount,
+        model_id: p.modelId,
+        prompt_version: p.promptVersion,
+        schema_version: p.schemaVersion,
+        generated_at: isoReq(p.generatedAt),
+        stale_at: iso(p.staleAt),
+        dismissed_at: iso(p.dismissedAt),
+      };
+    }),
+    'journey_narratives.json': narrativeRows.map((n) => {
+      type Ref = { type: string; id: string };
+      const sources = ((n.sources as Ref[]) ?? []).filter((r) =>
+        liveObject({ objectType: r.type, objectId: r.id }),
+      );
+      link('narrative_of', ['journey_narrative', n.id], ['journey', n.journeyId]);
+      for (const r of sources)
+        link('narrative_source', ['journey_narrative', n.id], [r.type, r.id]);
+      return {
+        id: n.id,
+        journey_id: n.journeyId,
+        sentence: n.sentence,
+        progression: n.progression,
+        sources,
+        object_count: n.objectCount,
+        model_id: n.modelId,
+        prompt_version: n.promptVersion,
+        schema_version: n.schemaVersion,
+        generated_at: isoReq(n.generatedAt),
+        stale_at: iso(n.staleAt),
+      };
+    }),
     'links.json': links,
   };
 
@@ -793,6 +865,7 @@ export async function buildExportArchive(
       'extractions.json, entities.json, entity_mentions.json, object_themes.json and predictions.json are derived by the app and can be regenerated; metadata_overrides.json holds your corrections to them.',
       'journeys.json and journey_members.json are gathered by the app from those; a journey you accepted, renamed or built carries user_confirmed = true.',
       'asks.json holds every question you put to your history with the answer the app composed and the entries it cited; answers are generated text, not records.',
+      'period_summaries.json and journey_narratives.json are generated retrospectives: every claim carries its basis and the entries it cites; they are not records of anything.',
       'life_events.json and outcomes.json are your own words and records (CONFIRMED_FACT). connections.json holds the app’s scored suggestions between readings and events with their reasons; state says what you decided. event_media.json lists photo paths; the bytes are not in this archive.',
     ],
   } satisfies ExportManifest);

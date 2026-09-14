@@ -29,7 +29,9 @@ export type LogNamespace =
   | 'correlation'
   | 'events'
   | 'retrieval'
-  | 'ask';
+  | 'ask'
+  | 'summaries'
+  | 'retention';
 export type LogEvent = `${LogNamespace}.${string}`;
 
 /** The complete set of props a log line may carry. Extend deliberately; never add prose fields. */
@@ -75,6 +77,9 @@ export interface LogProps {
   flag?: string;
   enabled?: boolean;
   migration?: string;
+  /** Summaries: the row id and the period kind (a key, never content). */
+  summaryId?: string;
+  kind?: string;
 }
 
 /** Rejects any key not in LogProps, even when `P` comes from a variable rather than a literal. */
@@ -134,6 +139,8 @@ const ALLOWED_KEYS: ReadonlySet<string> = new Set<keyof LogProps>([
   'flag',
   'enabled',
   'migration',
+  'summaryId',
+  'kind',
 ]);
 
 const MAX_STRING = 128;

@@ -26,3 +26,11 @@ export async function enableCorrelation(userId: string): Promise<void> {
     values (${userId}, 'correlation_suggestions', true, 'rollout')
     on conflict (user_id, flag) do update set enabled = true`;
 }
+
+/** Phase 10 fixtures: summaries and narratives are flag-gated (`period_summaries`). */
+export async function enableSummaries(userId: string): Promise<void> {
+  await platformSql()`
+    insert into public.user_flags (user_id, flag, enabled, set_by)
+    values (${userId}, 'period_summaries', true, 'rollout')
+    on conflict (user_id, flag) do update set enabled = true`;
+}

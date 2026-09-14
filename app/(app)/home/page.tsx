@@ -4,7 +4,9 @@ import { getSessionClient, requireUser } from '@/auth/session';
 import { listDueRevisits } from '@/db/queries/events';
 import { nextSuggestedJourney } from '@/db/queries/journeys';
 import { listReadings } from '@/db/queries/readings';
+import { loadHomeInsight } from '@/retention/home';
 import { SuggestedJourneyCard } from '../journey/suggested-card';
+import { InsightCard } from './insight-card';
 import { Button } from '@/ui/components/button';
 import { EmptyState } from '@/ui/components/empty-state';
 import { PageHeader } from '@/ui/components/page-header';
@@ -15,17 +17,21 @@ export const dynamic = 'force-dynamic';
 
 /**
  * Home (§5): fast start and current context. One primary action, one slot for an unresolved
- * reading, one slot for a single relevant insight. Never a dashboard (§4.3): no counters, no
- * greeting, no grid of charts.
+ * reading, one slot for a single relevant insight — a pending journey suggestion first, else
+ * (since Phase 10) one of the four retention surfaces (§15.2), each dismissible.
+ * Never a dashboard (§4.3): no counters, no greeting, no grid of charts, no streaks.
  */
 export default async function Page() {
-  await requireUser();
+  const user = await requireUser();
   const client = await getSessionClient();
   const [open, suggested, due] = await Promise.all([
     listReadings(client, { limit: 1, followUp: 'unresolved' }).then((r) => r[0]),
     nextSuggestedJourney(client),
     listDueRevisits(client, { limit: 2 }),
   ]);
+  // One thing at a time: a journey suggestion is a decision waiting on the user and takes
+  // the slot; only when none is pending is a retention surface picked (and recorded as shown).
+  const insight = suggested ? null : (await loadHomeInsight(client, user.id)).insight;
   return (
     <>
       <PageHeader title="Home" />
@@ -111,12 +117,19 @@ export default async function Page() {
         </h2>
         {suggested ? (
           <SuggestedJourneyCard journey={suggested} />
+        ) : insight ? (
+          <InsightCard insight={insight} />
         ) : (
           <EmptyState
             title="No insight yet"
-            description="After a few readings, one connection at a time will appear here — with the entries it came from."
+            description="After a few readings, one thing at a time will appear here — a shift, a month to look back on, an old reading — with the entries it came from."
           />
         )}
+        <p className="mt-3 text-sm">
+          <Link href="/retrospective" className="text-accent underline underline-offset-4">
+            Look back over a month
+          </Link>
+        </p>
       </section>
     </>
   );

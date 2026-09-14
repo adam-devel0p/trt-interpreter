@@ -139,6 +139,9 @@ export function DeleteAiArtifactsControl({ counts }: { counts: AiArtifactCounts 
         (counts.asks > 0
           ? ` and ${plural(counts.asks, 'question you asked your history, with its answer', 'questions you asked your history, with their answers')}`
           : '') +
+        (counts.period_summaries + counts.journey_narratives > 0
+          ? ` and ${plural(counts.period_summaries, 'generated retrospective summary', 'generated retrospective summaries')} and ${plural(counts.journey_narratives, 'journey narrative')}`
+          : '') +
         ' will be removed. Every reading, card and note you wrote stays exactly as it is, and so do your own corrections. This cannot be undone.';
   return (
     <div className="flex flex-col items-end gap-2">

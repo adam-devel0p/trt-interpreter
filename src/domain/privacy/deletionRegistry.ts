@@ -39,6 +39,13 @@
  * `dropped_object_ids` (the question and the answer text stay — an answer about an entry
  * that is gone still names no content of it, and the user asked it). All three cascade
  * from the user.
+ * Phase 10: summaries. `period_summaries` and `journey_narratives` keep `source_object_ids`:
+ * deleting a source scrubs the id out of the set (and out of every claim's citations), marks
+ * the row `stale_at`, and deletes a row whose set would be empty — by the
+ * `summaries_source_cascade` trigger on `readings` / `life_events` and by the purge job's
+ * explicit step (which verifies zero references). A summary's own retrieval document dies
+ * with it by trigger. `retention_prompts` (ids only) referencing the object are deleted.
+ * Journey-scoped summaries and narratives cascade from the journey. All cascade from the user.
  * The `purge_deleted` job (`src/privacy/purge.ts`) is driven by the `reading` and
  * `life_event` roots of this registry and a test asserts its receipt names every table listed.
  */
@@ -98,6 +105,21 @@ export const DELETION_REGISTRY: Record<RootType, readonly CascadeTarget[]> = {
       via: 'job',
       note: 'citation scrub: every reference to the object is removed from citations, claims and package ids',
     },
+    {
+      table: 'period_summaries',
+      via: 'job',
+      note: 'source scrub: the id leaves source_object_ids, sources and every citation; the row is marked stale, or deleted when its set would be empty (also the summaries_source_cascade trigger)',
+    },
+    {
+      table: 'journey_narratives',
+      via: 'job',
+      note: 'source scrub + stale, as for period_summaries (also the trigger)',
+    },
+    {
+      table: 'retention_prompts',
+      via: 'job',
+      note: 'prompts pointing at the object (object_id or payload ids) are deleted (also the trigger)',
+    },
   ],
   life_event: [
     {
@@ -127,9 +149,18 @@ export const DELETION_REGISTRY: Record<RootType, readonly CascadeTarget[]> = {
     },
     { table: 'embeddings', via: 'cascade', note: 'FK retrieval_documents.id on delete cascade' },
     { table: 'asks', via: 'job', note: 'citation scrub, as for readings' },
+    { table: 'period_summaries', via: 'job', note: 'source scrub + stale, as for readings' },
+    { table: 'journey_narratives', via: 'job', note: 'source scrub + stale, as for readings' },
+    { table: 'retention_prompts', via: 'job', note: 'as for readings' },
   ],
   journey: [
     { table: 'journey_members', via: 'cascade', note: 'FK journeys.id on delete cascade' },
+    {
+      table: 'period_summaries',
+      via: 'cascade',
+      note: 'journey-scoped summaries: FK journeys.id on delete cascade',
+    },
+    { table: 'journey_narratives', via: 'cascade', note: 'FK journeys.id on delete cascade' },
     {
       table: 'journey_theme_progression',
       via: 'cascade',
@@ -214,6 +245,9 @@ export const DELETION_REGISTRY: Record<RootType, readonly CascadeTarget[]> = {
     { table: 'retrieval_documents', via: 'cascade', note: 'compact template text; never notes' },
     { table: 'embeddings', via: 'cascade', note: 'vectors and model ids' },
     { table: 'asks', via: 'cascade', note: 'the user’s questions, answers and citations' },
+    { table: 'period_summaries', via: 'cascade', note: 'generated summaries with source ids' },
+    { table: 'journey_narratives', via: 'cascade', note: 'generated header sentences' },
+    { table: 'retention_prompts', via: 'cascade', note: 'ids and days only' },
   ],
 };
 

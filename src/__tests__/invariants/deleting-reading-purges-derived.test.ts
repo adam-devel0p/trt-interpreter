@@ -36,10 +36,24 @@ describe('deleting-reading-purges-derived', () => {
       'links',
       'retrieval_documents',
       'asks',
+      'period_summaries',
+      'journey_narratives',
+      'retention_prompts',
     ]);
     const purgeSrc = read('src/privacy/purge.ts');
     for (const t of jobTargets.filter((t) => t !== 'asks'))
       expect(purgeSrc).toMatch(new RegExp(`delete from public\\.${t}`));
+    // Phase 10: summaries and narratives are scrubbed and marked stale (deleted only when
+    // the deleted source was their last one); the database trigger does the same.
+    expect(purgeSrc).toMatch(
+      /update public\.period_summaries set[\s\S]*source_object_ids = array_remove[\s\S]*highlights[\s\S]*stale_at = now\(\)/,
+    );
+    expect(purgeSrc).toMatch(
+      /update public\.journey_narratives set[\s\S]*source_object_ids = array_remove[\s\S]*stale_at = now\(\)/,
+    );
+    expect(read('src/db/migrations/0011_summaries_retrospectives.sql')).toMatch(
+      /readings_summaries_cascade AFTER DELETE ON public\.readings/,
+    );
     // Phase 09: an ask is not deleted with a reading — its references are scrubbed (§19).
     expect(purgeSrc).toMatch(
       /update public\.asks set[\s\S]*citations[\s\S]*claims[\s\S]*package_object_ids[\s\S]*dropped_object_ids/,
@@ -59,6 +73,7 @@ describe('deleting-reading-purges-derived', () => {
       '0008_journeys',
       '0009_events_outcomes',
       '0010_retrieval_ask',
+      '0011_summaries_retrospectives',
     ]
       .map((m) => read(`src/db/migrations/${m}.sql`))
       .join('\n');
@@ -131,9 +146,15 @@ describe('deleting-reading-purges-derived', () => {
       'links',
       'retrieval_documents',
       'asks',
+      'period_summaries',
+      'journey_narratives',
+      'retention_prompts',
     ]);
     const purgeSrc = read('src/privacy/purge.ts');
     expect(purgeSrc).toMatch(/removeEventMedia\(/);
+    expect(read('src/db/migrations/0011_summaries_retrospectives.sql')).toMatch(
+      /life_events_summaries_cascade AFTER DELETE ON public\.life_events/,
+    );
     expect(read('src/db/migrations/0010_retrieval_ask.sql')).toMatch(
       /life_events_retrieval_cascade AFTER DELETE ON public\.life_events/,
     ); // bytes go before rows

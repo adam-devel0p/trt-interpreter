@@ -1,0 +1,5 @@
+{
+  "name": "demo-journeys",
+  "description": "The demo user's open journeys with three or more entries. The sentence must cite package labels, name no card not in the evidence, and read hedged; the progression labels come from the evidence.",
+  "expect": { "max_words": 32, "cites_min": 1 }
+}

@@ -101,7 +101,11 @@ export const userFlags = pgTable(
 
 export type UserFlag = typeof userFlags.$inferSelect;
 
-/** Reminder preferences. Table lands now so the Profile placeholder has a home; UI in Phase 11. */
+/**
+ * Reminder and resurfacing preferences. Delivery channels are Phase 11; the four in-app
+ * surfaces (Phase 10) read the row when it exists and default to on. One row per user,
+ * created on the first change.
+ */
 export const reminderSettings = pgTable(
   'reminder_settings',
   {
@@ -115,6 +119,11 @@ export const reminderSettings = pgTable(
     revisitReminders: boolean('revisit_reminders').notNull().default(true),
     weeklyReflection: boolean('weekly_reflection').notNull().default(false),
     monthlyRetrospective: boolean('monthly_retrospective').notNull().default(false),
+    /** Phase 10: the in-app retention surfaces (§15.2), each switchable off. */
+    onThisDay: boolean('on_this_day').notNull().default(true),
+    unresolvedReview: boolean('unresolved_review').notNull().default(true),
+    journeyShifts: boolean('journey_shifts').notNull().default(true),
+    retrospectives: boolean('retrospectives').notNull().default(true),
     quietHoursStart: time('quiet_hours_start'),
     quietHoursEnd: time('quiet_hours_end'),
     channel: reminderChannel('channel').notNull().default('none'),

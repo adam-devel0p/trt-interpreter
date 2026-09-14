@@ -1,0 +1,343 @@
+{
+  "fixture": "demo-months",
+  "description": "The demo journal's recent complete months and week (pnpm demo:seed). Every claim must cite package labels only; a confirmed fact must cite confirmed evidence; the register is hedged. Any unsupported claim is a phase blocker.",
+  "provider": "mock",
+  "prompt_version": "summarize_period/1.0.0",
+  "schema_version": "period_summary/1.0.0",
+  "ran_at": "2026-09-14T11:15:49.860Z",
+  "results": [
+    {
+      "period": "2026-08",
+      "objects": 6,
+      "package": 6,
+      "checks": {
+        "completed": {
+          "pass": true
+        },
+        "no_unknown_labels": {
+          "pass": true,
+          "detail": []
+        },
+        "no_unsupported_facts": {
+          "pass": true,
+          "detail": []
+        },
+        "every_claim_cited": {
+          "pass": true
+        },
+        "basis_attribution": {
+          "pass": true
+        },
+        "register": {
+          "pass": true,
+          "detail": []
+        },
+        "no_invented_cards": {
+          "pass": true,
+          "detail": []
+        },
+        "enough_claims": {
+          "pass": true,
+          "detail": 6
+        },
+        "grounded": {
+          "pass": true,
+          "detail": []
+        }
+      },
+      "output": {
+        "headline": "August 2026: 3 readings and 3 life events, mostly circling uncertainty, with 4 things you confirmed happened.",
+        "recurred": [],
+        "shifted": [],
+        "open": [
+          {
+            "text": "Still open: “Is leaving the agency the same story as leaving the flat?” from August 12.",
+            "basis": "user_reflection",
+            "citations": ["E2"]
+          },
+          {
+            "text": "Still open: “How are things really with M.?” from August 25.",
+            "basis": "user_reflection",
+            "citations": ["E5"]
+          }
+        ],
+        "confirmed": [
+          {
+            "text": "You recorded that August 14's “Should I say yes to the conference talk the agency offered?” happened — “Said yes before I could talk myself out of it.”.",
+            "basis": "confirmed_fact",
+            "citations": ["E3"]
+          },
+          {
+            "text": "On August 5 you logged “Saw the doctor about the sleep problems.”.",
+            "basis": "confirmed_fact",
+            "citations": ["E1"]
+          },
+          {
+            "text": "On August 17 you logged “Said yes to the conference talk the agency offered.”, and confirmed its connection to an earlier reading.",
+            "basis": "confirmed_fact",
+            "citations": ["E4"]
+          },
+          {
+            "text": "On August 27 you logged “Maya and I decided to take a break.”.",
+            "basis": "confirmed_fact",
+            "citations": ["E6"]
+          }
+        ]
+      },
+      "pass": true
+    },
+    {
+      "period": "2026-07",
+      "objects": 6,
+      "package": 6,
+      "checks": {
+        "completed": {
+          "pass": true
+        },
+        "no_unknown_labels": {
+          "pass": true,
+          "detail": []
+        },
+        "no_unsupported_facts": {
+          "pass": true,
+          "detail": []
+        },
+        "every_claim_cited": {
+          "pass": true
+        },
+        "basis_attribution": {
+          "pass": true
+        },
+        "register": {
+          "pass": true,
+          "detail": []
+        },
+        "no_invented_cards": {
+          "pass": true,
+          "detail": []
+        },
+        "enough_claims": {
+          "pass": true,
+          "detail": 6
+        },
+        "grounded": {
+          "pass": true,
+          "detail": []
+        }
+      },
+      "output": {
+        "headline": "July 2026: 5 readings and 1 life event, mostly circling independence, with 2 things you confirmed happened.",
+        "recurred": [],
+        "shifted": [
+          {
+            "text": "Earlier entries leaned toward hope; later ones toward work and life — which may point to the question moving on.",
+            "basis": "inferred",
+            "citations": ["E1", "E2", "E3", "E5", "E6"]
+          }
+        ],
+        "open": [
+          {
+            "text": "Still open: “What would three weeks in Thailand on my own give me?” from July 12.",
+            "basis": "user_reflection",
+            "citations": ["E2"]
+          },
+          {
+            "text": "Still open: “Am I ready to make decisions on my own terms?” from July 24.",
+            "basis": "user_reflection",
+            "citations": ["E5"]
+          },
+          {
+            "text": "Still open: “What does the autumn hold for my health?” from July 31.",
+            "basis": "user_reflection",
+            "citations": ["E6"]
+          }
+        ],
+        "confirmed": [
+          {
+            "text": "You recorded that July 18's “Is the side project worth the evenings?” no longer relevant — “Shelved it; the new role took the evenings anyway.”.",
+            "basis": "confirmed_fact",
+            "citations": ["E3"]
+          },
+          {
+            "text": "On July 21 you logged “Spent the evenings on the side project instead of sleeping.”.",
+            "basis": "confirmed_fact",
+            "citations": ["E4"]
+          }
+        ]
+      },
+      "pass": true
+    },
+    {
+      "period": "2026-06",
+      "objects": 5,
+      "package": 5,
+      "checks": {
+        "completed": {
+          "pass": true
+        },
+        "no_unknown_labels": {
+          "pass": true,
+          "detail": []
+        },
+        "no_unsupported_facts": {
+          "pass": true,
+          "detail": []
+        },
+        "every_claim_cited": {
+          "pass": true
+        },
+        "basis_attribution": {
+          "pass": true
+        },
+        "register": {
+          "pass": true,
+          "detail": []
+        },
+        "no_invented_cards": {
+          "pass": true,
+          "detail": []
+        },
+        "enough_claims": {
+          "pass": true,
+          "detail": 7
+        },
+        "grounded": {
+          "pass": true,
+          "detail": []
+        }
+      },
+      "output": {
+        "headline": "June 2026: 3 readings and 2 life events, mostly circling distance, with 4 things you confirmed happened.",
+        "recurred": [
+          {
+            "text": "Nine of Wands appeared twice — noted, not yet a pattern.",
+            "basis": "tarot_interpretation",
+            "citations": ["E2", "E4"]
+          }
+        ],
+        "shifted": [],
+        "open": [
+          {
+            "text": "Still open: “What does Maya need from me right now?” from June 6.",
+            "basis": "user_reflection",
+            "citations": ["E1"]
+          },
+          {
+            "text": "Still open: “What am I not seeing about the new team?” from June 10.",
+            "basis": "user_reflection",
+            "citations": ["E2"]
+          }
+        ],
+        "confirmed": [
+          {
+            "text": "You recorded that June 6's “What does Maya need from me right now?” unresolved.",
+            "basis": "confirmed_fact",
+            "citations": ["E1"]
+          },
+          {
+            "text": "You recorded that June 22's “How do I keep the friendship with J. alive from a distance?” did not happen — “We never did find the rhythm.”.",
+            "basis": "confirmed_fact",
+            "citations": ["E4"]
+          },
+          {
+            "text": "On June 11 you logged “First week on the new team at the agency.”.",
+            "basis": "confirmed_fact",
+            "citations": ["E3"]
+          },
+          {
+            "text": "On June 26 you logged “Long phone call with J. about the distance.”.",
+            "basis": "confirmed_fact",
+            "citations": ["E5"]
+          }
+        ]
+      },
+      "pass": true
+    },
+    {
+      "period": "2026-W37",
+      "objects": 6,
+      "package": 6,
+      "checks": {
+        "completed": {
+          "pass": true
+        },
+        "no_unknown_labels": {
+          "pass": true,
+          "detail": []
+        },
+        "no_unsupported_facts": {
+          "pass": true,
+          "detail": []
+        },
+        "every_claim_cited": {
+          "pass": true
+        },
+        "basis_attribution": {
+          "pass": true
+        },
+        "register": {
+          "pass": true,
+          "detail": []
+        },
+        "no_invented_cards": {
+          "pass": true,
+          "detail": []
+        },
+        "enough_claims": {
+          "pass": true,
+          "detail": 6
+        },
+        "grounded": {
+          "pass": true,
+          "detail": []
+        }
+      },
+      "output": {
+        "headline": "Week of September 7, 2026: 3 readings and 3 life events, mostly circling anxiety, with 3 things you confirmed happened.",
+        "recurred": [],
+        "shifted": [],
+        "open": [
+          {
+            "text": "Still open: “What should I focus on before the review at the agency?” from September 8.",
+            "basis": "user_reflection",
+            "citations": ["E1"]
+          },
+          {
+            "text": "Still open: “Will the new routine stick?” from September 11.",
+            "basis": "user_reflection",
+            "citations": ["E3"]
+          },
+          {
+            "text": "The open reflection from September 13 has no answer yet.",
+            "basis": "user_reflection",
+            "citations": ["E6"]
+          }
+        ],
+        "confirmed": [
+          {
+            "text": "On September 9 you logged “Started the new routine: bed by eleven, run at seven.”.",
+            "basis": "confirmed_fact",
+            "citations": ["E2"]
+          },
+          {
+            "text": "On September 12 you logged “The review at the agency went better than I feared.”, and confirmed its connection to an earlier reading.",
+            "basis": "confirmed_fact",
+            "citations": ["E4"]
+          },
+          {
+            "text": "On September 13 you logged “Dinner with Sam.”.",
+            "basis": "confirmed_fact",
+            "citations": ["E5"]
+          }
+        ]
+      },
+      "pass": true
+    }
+  ],
+  "human_review": {
+    "reviewed_by": null,
+    "reviewed_at": null,
+    "verdict": null,
+    "notes": null
+  }
+}

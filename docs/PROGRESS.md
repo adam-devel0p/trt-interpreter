@@ -2,25 +2,23 @@
 
 The first thing to read in any new session. Update it at the end of every phase.
 
-**Current state:** Phase 09 complete — the §17 MVP experience is complete and testable end
-to end. Every live reading and event carries a compact retrieval document
-(`domain/retrieval/document.ts`, never the notes) and a vector of exactly that text, rebuilt
-through the deduped `embed_object` job from the write paths that change it and backfilled by
-`backfill_embeddings`. Hybrid retrieval runs all seven §8.1 steps: `parse_history_query`
-(hints only), `search_history()` (SECURITY INVOKER + `auth.uid()`, scope filters, cap 400
-hits-first), the 0.60/0.20/0.15/0.05 re-rank with unavailable signals renormalised out,
-augmentation with linked events and outcomes, a strict-prefix bound of 24 objects / 6000
-tokens with dropped ids recorded, `answer_from_evidence` with E-label citations, and a
-verifier that strips unknown labels, repairs once and otherwise degrades to "not enough
-evidence" — stages stream, answer text never does before verification. The Ask screen has
-the §6.6 examples and scope chips; "Ask about this journey" is live and journey-only;
-stored asks reopen with zero calls; the same vectors feed correlation and journey affinity.
-Purge (trigger + job; asks scrubbed), export (`export/1.4.0`) and delete-AI-artifacts cover
-the three tables. Demo: 42 documents; the six benchmark and two adversarial questions pass
-with zero fabrication; `search_history` 124 ms at 1000 objects. Full gate green (124 e2e).
-Owner-side deferrals: the two real-model evals and their baselines, real p95 / $ per ask,
-then `FLAG_ASK_MY_HISTORY`; **run the §22 study before Phase 10**.
-**Next phase:** [Phase 10 — Summaries + retrospectives](phases/phase-10-summaries-retrospectives.md) — after the §22 validation study
+**Current state:** Phase 10 complete — accumulated history pays the user back on its own.
+Journey headers are stored, cited narratives (`journey_narratives`, regenerated only on a
+material change or after 14 days); period summaries (`period_summaries`) exist for complete
+weeks, months and journeys **only above the data floor** (3 / 5 / 5 objects), each claim
+carrying its basis (§9.2) and citations as object ids, a "confirmed fact" dropped unless it
+cites confirmed evidence, the source set non-empty by DB check and never generated-only by
+application rule; dismissal remembered, regeneration explicit, a deleted source scrubs and
+stales them (job + trigger); summaries are retrieval-eligible and join an Ask package only as
+compression of dropped entries (summary-only claims dropped). Recurring symbols are
+contextual (when, journeys, confirmed events around, confirmed connections; a pattern needs
+three). `/retrospective/YYYY-MM` is built from confirmed data first; Home's one insight comes
+from four dismissible, switchable surfaces (journey shift once per shift, unresolved review,
+month to look back on, one old reading per day). Demo: 7 summaries, 3 narratives, a real
+shift. Full gate green (128 e2e). Owner-side deferrals: the two real-model evals and their
+baselines, `FLAG_PERIOD_SUMMARIES`, and the **§22 study** (still to run before 11's pricing
+decisions).
+**Next phase:** [Phase 11 — Monetization + retention](phases/phase-11-monetization-retention.md)
 
 ## Phase status
 
@@ -36,7 +34,7 @@ then `FLAG_ASK_MY_HISTORY`; **run the §22 study before Phase 10**.
 | 07 | [Journeys](phases/phase-07-journeys.md) | ⚠️ complete with deferrals | [report](phases/completed/phase-07-report.md) | 2026-09-13 · comprehension check + real-model naming eval are owner tasks |
 | 08 | [Events, outcomes, correlation](phases/phase-08-events-outcomes.md) | ⚠️ complete with deferrals | [report](phases/completed/phase-08-report.md) | 2026-09-14 · real-model evals + the real-extraction event judgement are owner tasks |
 | 09 | [Retrieval + Ask My History](phases/phase-09-retrieval-ask.md) | ⚠️ complete with deferrals | [report](phases/completed/phase-09-report.md) | 2026-09-14 · ← MVP complete; real-model evals are owner tasks; **run the §22 study** |
-| 10 | [Summaries + retrospectives](phases/phase-10-summaries-retrospectives.md) | ⬜ not started | — | |
+| 10 | [Summaries + retrospectives](phases/phase-10-summaries-retrospectives.md) | ⚠️ complete with deferrals | [report](phases/completed/phase-10-report.md) | 2026-09-14 · real-model evals are owner tasks; §22 study still owner-side |
 | 11 | [Monetization + retention](phases/phase-11-monetization-retention.md) | ⬜ not started | — | |
 | 12 | [Hardening + beta](phases/phase-12-hardening-beta.md) | ⬜ not started | — | |
 
@@ -125,6 +123,20 @@ Add anything a phase discovered but could not settle. Remove when resolved.
   change); a cron entry / `pnpm jobs:backfill` is a Phase 12 ops item with the purge sweep.
 - The 0009 migration file was extended (receipt-scope ALTER) after it was applied locally;
   the ALTER was applied by hand on the dev database. Fresh databases get it from the file.
+  Likewise 0011: the `summaries_source_cascade` function was corrected (citation key) after
+  it was applied and re-applied by hand locally.
+- **The mock summariser writes templated headlines** ("August 2026: 3 readings and 3 life
+  events, mostly circling uncertainty…"). The sections built from confirmed data carry the
+  retrospective; whether the real model's headline reads as *the person's month* is the
+  owner's read of `summarize_period/fixtures/__baselines__/demo-months.json`. If it reads
+  generic, fix the prompt — never ship filler (phase-10 manual check).
+- **Yearly summaries** are admitted everywhere (kind, floor 12, `/retrospective/2026`) but
+  nothing schedules them yet.
+- **Only deletion stales a summary today.** An outcome recorded or a link confirmed after
+  generation changes the evidence hash, which the next explicit regeneration picks up;
+  `markSummariesStaleForObjects` exists for the outcome / link actions (12).
+- **Home shows a pending journey suggestion before any retention surface** — one thing at a
+  time; a surface is recorded as shown only when it takes the slot.
 
 ## Deferred items backlog
 
@@ -150,7 +162,7 @@ Phases append here when they defer something, so nothing is lost between session
 | ~~Purge `safety_flags` with the reading~~ | 04 | 05 ✅ | explicit remover in `src/privacy/purge.ts`, receipt counts it |
 | ~~Interpretations in journal list / export~~ | 04 | 05 ✅ | list preview = current `synthesis`; export carries every generation |
 | ~~Entity / journey filters in the journal~~ | 05 | 06 ✅ / 07 ✅ | `entity=` in 06, `journey=` in 07 (`EXISTS` on `journey_members`, state ≠ removed) |
-| ~~Extractions~~ + summaries in "Delete AI artifacts" and in the export | 05 | 06 ✅ / 10 | extractions, themes, mentions, predictions, entities in both (export/1.1.0); summaries in 10 |
+| ~~Extractions + summaries in "Delete AI artifacts" and in the export~~ | 05 | 06 ✅ / 10 ✅ | extractions, themes, mentions, predictions, entities (export/1.1.0); summaries and narratives (export/1.5.0) |
 | Real-model `pnpm eval` for `extract_reading_metadata`, human read of the four baselines, then `FLAG_AI_EXTRACTION=true` | 06 | owner (any time) | no provider key; mock baseline recorded (recall 100 %, precision 88 %) |
 | Embedding channel for entity candidates (`embeddingSimilarity`) | 06 → 09 | when resolution needs it | vectors are per object (09), not per entity; hook + threshold exist |
 | ~~Journey overlap signal in resolution~~ | 06 | 07 ✅ | `loadJourneyLinks()`; null (not zero) when either side is in no journey; arcs pass under three variants |
@@ -167,7 +179,7 @@ Phases append here when they defer something, so nothing is lost between session
 | Real-model `pnpm eval` for `propose_journey`, human read of the three baselines, then `FLAG_JOURNEY_AUTOCREATE=true` | 07 | owner (any time) | no provider key; mock baselines recorded |
 | ~~`semantic_similarity` (0.25 weight) in journey affinity~~ | 07 | 09 ✅ | `journeys/features.ts` attaches retrieval-document vectors |
 | ~~Events, outcomes, connections on the Journey screen; polymorphic-member RLS for `life_event` rows~~ | 07 | 08 ✅ | timeline interleaves; both sections filled; four policies tightened |
-| `journey_narrative` header; ~~scoped "Ask about this journey"~~ | 07 | 10 / 09 ✅ | deterministic header until 10; the journey ask is live behind `ask_my_history` |
+| ~~`journey_narrative` header; scoped "Ask about this journey"~~ | 07 | 10 ✅ / 09 ✅ | stored narrative with sources (`journey_narratives`); the journey ask is live behind `ask_my_history` |
 | `MemberControls` / `SuggestedJourneyCard` / `JourneyPanel` in `/dev/ui` | 07 | 12 | islands bound to actions |
 | Re-evaluate existing memberships after many corrections; journey scroll instrumentation at 100+ | 07 | 12 | one-tap remove is the correction path; 100-member read is 5 queries |
 | Real-model `pnpm eval` for `extract_event_metadata` and `explain_correlation`, human read of the five baselines, then `FLAG_CORRELATION_SUGGESTIONS=true` | 08 | owner (any time) | no provider key; mock baselines recorded; labelled precision 1.00 |
@@ -177,7 +189,12 @@ Phases append here when they defer something, so nothing is lost between session
 | Push / email delivery of due revisits | 08 | 11 | in-app cards only |
 | Compact connection cards on the journey page; `ConnectionReview` / `OutcomePanel` / `EventForm` in `/dev/ui`; a "re-check connections" action; per-object lock for correlation runs | 08 | 12 | |
 | Real-model `pnpm eval` for `parse_history_query` and `answer_from_evidence`, human read of the nine baselines, real p95 / $ per ask, then `FLAG_ASK_MY_HISTORY=true` | 09 | owner (any time) | no provider key; mock baselines recorded; zero fabrication on the mock |
-| **§22 validation study** (10–20 users) on the complete MVP experience | 09 | owner, before 10 | a study, not code |
+| **§22 validation study** (10–20 users) on the complete MVP experience | 09 → 10 | owner, before 11 | a study, not code; Phase 10 did not depend on it, 11's pricing does |
 | `build_retrieval_document` as a model compression step; entity-context vectors | 09 | if ever needed | the deterministic template is 60–330 chars on the demo |
-| Covering period summaries in the evidence package | 09 | 10 | `object_type = 'period_summary'` admitted; `packageFrom()` is the hook |
+| ~~Covering period summaries in the evidence package~~ | 09 | 10 ✅ | `withCoveringSummaries()` after the bound; summary-only claims dropped by the verifier |
 | `pnpm jobs:backfill` / cron for `backfill_embeddings`; delete control on the stored-ask page; `AskComposer` / `AnswerView` in `/dev/ui`; request abort threaded into the runner | 09 | 12 | |
+| Real-model `pnpm eval` for `summarize_period` and `journey_narrative`, human read of the two baselines, then `FLAG_PERIOD_SUMMARIES=true` | 10 | owner (any time) | no provider key; mock baselines recorded; zero unsupported claims on the mock |
+| Yearly summaries scheduled and listed | 10 | 12 / when a journal spans a year | admitted by schema, floor and screen; nothing schedules them |
+| Push / email delivery of the four retention surfaces and the "your month is ready" reminder | 10 | 11 | fingerprints, switches and `duePeriods()` are the memory to reuse |
+| Cron entry for `schedule_summaries`; per-object generation lock; `retention_prompts` pruning; stale-on-outcome / link (`markSummariesStaleForObjects`) | 10 | 12 | `pnpm jobs:summaries` is the local stand-in |
+| `SummaryView` / `InsightCard` / `RecurringSymbols` v2 in `/dev/ui` | 10 | 12 | islands bound to actions |

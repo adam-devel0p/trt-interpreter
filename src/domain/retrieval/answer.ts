@@ -9,6 +9,9 @@ import { findRegisterViolations } from '../interpretation/register';
  * a "sufficient" answer with no cited claim at all, is not grounded and the caller
  * regenerates once, then degrades to "not enough evidence" rather than shipping an uncited
  * claim (§19). `evidence_sufficient: false` is a first-class answer (§6.6), not a failure.
+ * Phase 10: labels in `summaryLabels` are generated period summaries travelling with the
+ * package as compression; a claim resting on them alone is dropped (§19 "never the sole
+ * evidence") — it may only support a claim that also cites an entry.
  */
 
 export const HISTORY_ANSWER_SCHEMA_VERSION = 'history_answer/1.0.0';
@@ -49,19 +52,34 @@ export interface VerifiedAnswer {
   issues: string[];
 }
 
-export function verifyAnswer(answer: HistoryAnswer, labels: ReadonlySet<string>): VerifiedAnswer {
+export function verifyAnswer(
+  answer: HistoryAnswer,
+  labels: ReadonlySet<string>,
+  opts: { summaryLabels?: ReadonlySet<string> } = {},
+): VerifiedAnswer {
   const stripped: string[] = [];
-  const claims = answer.claims.map((c) => {
-    const citations: string[] = [];
-    for (const l of c.citations) {
-      if (labels.has(l)) {
-        if (!citations.includes(l)) citations.push(l);
-      } else stripped.push(l);
-    }
-    return { text: c.text, citations };
-  });
+  const summaryLabels = opts.summaryLabels ?? new Set<string>();
+  let summaryOnly = 0;
+  const claims = answer.claims
+    .map((c) => {
+      const citations: string[] = [];
+      for (const l of c.citations) {
+        if (labels.has(l)) {
+          if (!citations.includes(l)) citations.push(l);
+        } else stripped.push(l);
+      }
+      return { text: c.text, citations };
+    })
+    .filter((c) => {
+      if (c.citations.length && c.citations.every((l) => summaryLabels.has(l))) {
+        summaryOnly += 1;
+        return false;
+      }
+      return true;
+    });
   const issues: string[] = [];
   if (stripped.length) issues.push(`unknown citation${stripped.length > 1 ? 's' : ''}`);
+  if (summaryOnly) issues.push(`summary-only claim${summaryOnly > 1 ? 's' : ''}`);
   if (answer.evidence_sufficient) {
     if (claims.length === 0) issues.push('no cited claim');
     if (claims.some((c) => c.citations.length === 0)) issues.push('uncited claim');

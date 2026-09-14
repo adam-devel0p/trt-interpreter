@@ -1,0 +1,115 @@
+{
+  "fixture": "demo-journeys",
+  "description": "The demo user's open journeys with three or more entries. The sentence must cite package labels, name no card not in the evidence, and read hedged; the progression labels come from the evidence.",
+  "provider": "mock",
+  "prompt_version": "journey_narrative/1.0.0",
+  "schema_version": "journey_narrative/1.0.0",
+  "ran_at": "2026-09-14T11:15:49.954Z",
+  "results": [
+    {
+      "journey": "Sam and independence",
+      "objects": 3,
+      "checks": {
+        "completed": {
+          "pass": true
+        },
+        "no_unknown_labels": {
+          "pass": true,
+          "detail": []
+        },
+        "cites": {
+          "pass": true
+        },
+        "register": {
+          "pass": true
+        },
+        "length": {
+          "pass": true,
+          "detail": 14
+        },
+        "no_invented_cards": {
+          "pass": true,
+          "detail": []
+        }
+      },
+      "output": {
+        "sentence": "Your readings about Sam and independence keep returning to independence over about 4 months.",
+        "progression": [],
+        "citations": ["E1", "E3"]
+      },
+      "pass": true
+    },
+    {
+      "journey": "Me and Maya",
+      "objects": 4,
+      "checks": {
+        "completed": {
+          "pass": true
+        },
+        "no_unknown_labels": {
+          "pass": true,
+          "detail": []
+        },
+        "cites": {
+          "pass": true
+        },
+        "register": {
+          "pass": true
+        },
+        "length": {
+          "pass": true,
+          "detail": 14
+        },
+        "no_invented_cards": {
+          "pass": true,
+          "detail": []
+        }
+      },
+      "output": {
+        "sentence": "Your readings about Me and Maya keep returning to distance over about 2 months.",
+        "progression": [],
+        "citations": ["E1", "E4"]
+      },
+      "pass": true
+    },
+    {
+      "journey": "The agency and ambition",
+      "objects": 8,
+      "checks": {
+        "completed": {
+          "pass": true
+        },
+        "no_unknown_labels": {
+          "pass": true,
+          "detail": []
+        },
+        "cites": {
+          "pass": true
+        },
+        "register": {
+          "pass": true
+        },
+        "length": {
+          "pass": true,
+          "detail": 15
+        },
+        "no_invented_cards": {
+          "pass": true,
+          "detail": []
+        }
+      },
+      "output": {
+        "sentence": "Your readings about The agency and ambition keep returning to ambition over about 5 months.",
+        "progression": [],
+        "citations": ["E1", "E7"]
+      },
+      "pass": true
+    }
+  ],
+  "human_review": {
+    "reviewed_by": null,
+    "reviewed_at": null,
+    "verdict": null,
+    "notes": null
+  }
+}

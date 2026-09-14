@@ -103,3 +103,87 @@ describe('summary-never-sole-evidence', () => {
     expect(score).toMatch(/const a = filterEvidence\(rawA\);\s*const b = filterEvidence\(rawB\);/);
   });
 });
+
+/**
+ * Phase 10: a period summary's own source set (spec §19 "journey summaries never cite a
+ * model-generated summary as the sole evidence", FR-20). The application boundary refuses
+ * a set made only of summaries or interpretations; the database refuses the empty set by
+ * check constraint (exercised in `src/summaries/__tests__/summaries.integration.test.ts`);
+ * the generator only ever builds a set from readings and life events (structural); and an
+ * Ask answer drops a claim that rests on covering summaries alone.
+ */
+describe('summary-never-sole-evidence · period summaries (Phase 10)', () => {
+  it('4 · the application boundary rejects a source set of summaries / interpretations, and the empty set', async () => {
+    const { validateSources } = await import('@/domain/summaries/provenance');
+    expect(validateSources([])).toEqual({ ok: false, reason: 'empty' });
+    expect(
+      validateSources([
+        { type: 'period_summary', id: '11111111-1111-4111-8111-111111111111' },
+        { type: 'interpretation', id: '22222222-2222-4222-8222-222222222222' },
+      ]),
+    ).toEqual({ ok: false, reason: 'generated_only' });
+    expect(
+      validateSources([
+        { type: 'period_summary', id: '11111111-1111-4111-8111-111111111111' },
+        { type: 'reading', id: '33333333-3333-4333-8333-333333333333' },
+      ]).ok,
+    ).toBe(true);
+  });
+
+  it('5 · the schema and migration carry the non-empty check, and the generator validates before storing', () => {
+    const schema = readFileSync(path.resolve('src/db/schema/summaries.ts'), 'utf8');
+    expect(schema).toMatch(
+      /period_summaries_sources_check[\s\S]*cardinality\([\s\S]*sourceObjectIds[\s\S]*\) > 0/,
+    );
+    const migration = readFileSync(
+      path.resolve('src/db/migrations/0011_summaries_retrospectives.sql'),
+      'utf8',
+    );
+    expect(migration).toMatch(
+      /CONSTRAINT "period_summaries_sources_check" CHECK \(cardinality\("period_summaries"\."source_object_ids"\) > 0\)/,
+    );
+    const generate = readFileSync(path.resolve('src/summaries/generate.ts'), 'utf8');
+    expect(generate).toMatch(/validateSources\(evidence\.sources\)/);
+    expect(generate).toMatch(/if \(!sources\.ok\) return/);
+    // Evidence comes from the history loader (readings + events), never from summaries or interpretations.
+    const evidence = readFileSync(path.resolve('src/summaries/evidence.ts'), 'utf8');
+    expect(evidence).toMatch(/loadHistoryObjects/);
+    expect(evidence).not.toMatch(/periodSummaries|interpretations/);
+  });
+
+  it('6 · a "confirmed fact" in a summary needs confirmed evidence, and an Ask claim never rests on summaries alone', async () => {
+    const { verifySummary } = await import('@/domain/summaries/provenance');
+    const labels = new Map([
+      ['E1', { confirmed: false }],
+      ['E2', { confirmed: true }],
+    ]);
+    const out = verifySummary(
+      {
+        headline: 'h',
+        recurred: [],
+        shifted: [],
+        open: [],
+        confirmed: [
+          { text: 'You moved.', basis: 'confirmed_fact', citations: ['E1'] },
+          { text: 'You logged the move.', basis: 'confirmed_fact', citations: ['E2'] },
+        ],
+      },
+      labels,
+    );
+    expect(out.summary.confirmed.map((c) => c.text)).toEqual(['You logged the move.']);
+    const { verifyAnswer } = await import('@/domain/retrieval/answer');
+    const a = verifyAnswer(
+      {
+        evidence_sufficient: true,
+        conclusion: 'c',
+        claims: [{ text: 'It happened.', citations: ['E3'] }],
+        found: null,
+        narrower_question: null,
+      },
+      new Set(['E1', 'E3']),
+      { summaryLabels: new Set(['E3']) },
+    );
+    expect(a.answer.claims).toEqual([]);
+    expect(a.grounded).toBe(false);
+  });
+});

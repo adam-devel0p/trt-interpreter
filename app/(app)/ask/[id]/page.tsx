@@ -3,6 +3,8 @@ import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import { getSessionClient, requireUser } from '@/auth/session';
 import { getAsk, type AskCitation } from '@/db/queries/asks';
+import { getSummary, type SummaryView } from '@/db/queries/summaries';
+import { periodContaining } from '@/domain/summaries/periods';
 import { loadHistoryObjects } from '@/retrieval/objects';
 import type { AskEvidenceCard } from '@/retrieval/ask';
 import { FormMessage } from '@/ui/components/field';
@@ -32,20 +34,40 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
     readings: citations.filter((c) => c.object_type === 'reading').map((c) => c.object_id),
     events: citations.filter((c) => c.object_type === 'life_event').map((c) => c.object_id),
   });
+  // Phase 10: a cited period summary (compression) is re-read too; a deleted one disappears.
+  const summaries = new Map<string, SummaryView>();
+  for (const c of citations.filter((x) => x.object_type === 'period_summary')) {
+    const s = await getSummary(client, c.object_id);
+    if (s) summaries.set(s.id, s);
+  }
   const claims = ask.claims ?? [];
   const evidence: AskEvidenceCard[] = citations
-    .map((c: AskCitation) => {
+    .map((c: AskCitation): AskEvidenceCard | null => {
+      const why = claims.find((cl) => cl.citations.some((x) => x.label === c.label))?.text ?? null;
       const o = objects.get(c.object_id);
-      if (!o) return null;
+      if (o)
+        return {
+          label: c.label,
+          type: o.type,
+          id: o.id,
+          date: o.date,
+          title: o.title,
+          deck: o.deckName,
+          cards: o.cards.map((x) => x.name),
+          why,
+        };
+      const s = summaries.get(c.object_id);
+      if (!s) return null;
       return {
         label: c.label,
-        type: o.type,
-        id: o.id,
-        date: o.date,
-        title: o.title,
-        deck: o.deckName,
-        cards: o.cards.map((x) => x.name),
-        why: claims.find((cl) => cl.citations.some((x) => x.label === c.label))?.text ?? null,
+        type: 'period_summary',
+        id: s.id,
+        date: s.period_start,
+        title: s.summary,
+        deck: null,
+        cards: [],
+        why,
+        periodKey: s.kind === 'journey' ? null : periodContaining(s.kind, s.period_start).key,
       };
     })
     .filter((x): x is AskEvidenceCard => x !== null);

@@ -7,6 +7,7 @@ import { seedInterpretations } from './seed-demo-interpretations';
 import { seedJourneys } from './seed-demo-journeys';
 import { seedMemory } from './seed-demo-memory';
 import { seedRetrieval } from './seed-demo-retrieval';
+import { seedSummaries } from './seed-demo-summaries';
 
 /**
  * Demo journal generator (docs/IMPLEMENTATION_PLAN.md §3.10). Produces a coherent fictional
@@ -115,6 +116,7 @@ const SEEDERS: Seeder[] = [
   { name: 'journeys', phase: '07', run: seedJourneys },
   { name: 'life events, outcomes, connections', phase: '08', run: seedEvents },
   { name: 'retrieval documents, vectors', phase: '09', run: seedRetrieval },
+  { name: 'summaries, narratives', phase: '10', run: seedSummaries },
 ];
 
 async function main() {

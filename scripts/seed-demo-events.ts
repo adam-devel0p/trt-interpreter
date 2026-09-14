@@ -195,13 +195,20 @@ async function anaActions(
   ) => {
     const readingId = await readingByQuestion(fragment);
     if (!readingId) return;
-    await recordOutcome(client, userId, {
+    const { id } = await recordOutcome(client, userId, {
       readingId,
       predictionId: null,
       lifeEventId: eventIndex === null ? null : byIndex(eventIndex),
       status,
       note,
     });
+    // Phase 10: a person records an outcome when they know — here, the event's day or
+    // three weeks after the reading — so monthly retrospectives have outcomes in them.
+    await platformSql()`
+      update public.outcomes o set user_confirmed_at = least(now(), coalesce(
+        (select (e.occurred_on::timestamp + interval '18 hours') at time zone 'UTC' from public.life_events e where e.id = o.life_event_id),
+        (select r.occurred_at + interval '21 days' from public.readings r where r.id = o.reading_id)))
+      where o.id = ${id}`;
   };
   await record('Take the offer or stay', 'happened', 'Took it. The paperwork held.', 2);
   await record('flat viewing on Friday', 'happened', null, 4);
