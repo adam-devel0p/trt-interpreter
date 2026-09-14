@@ -61,3 +61,21 @@ export const explainCorrelationPayload = z
   })
   .strict();
 export type ExplainCorrelationPayload = z.infer<typeof explainCorrelationPayload>;
+
+/** Phase 09: rebuild one object's retrieval document and embed it. Ids only. */
+export const embedObjectPayload = z
+  .object({
+    objectType: z.enum(['reading', 'life_event']),
+    objectId: z.string().uuid(),
+  })
+  .strict();
+export type EmbedObjectPayload = z.infer<typeof embedObjectPayload>;
+
+/** Phase 09: build missing documents and re-embed stale vectors, bounded; re-enqueues itself. */
+export const backfillEmbeddingsPayload = z
+  .object({
+    userId: z.string().uuid().nullable().default(null),
+    limit: z.number().int().min(1).max(500).default(100),
+  })
+  .strict();
+export type BackfillEmbeddingsPayload = z.infer<typeof backfillEmbeddingsPayload>;

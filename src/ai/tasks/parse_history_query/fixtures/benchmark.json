@@ -1,0 +1,36 @@
+{
+  "name": "benchmark",
+  "description": "The six §6.6 questions and the two adversarial ones, parsed against today = the run date. Checks intent, the time range for relative phrases, life area, named entities and comparison axes.",
+  "cases": [
+    {
+      "question": "How have my relationship readings changed since June?",
+      "intent": "change_over_time",
+      "time_range_start_month": 6,
+      "life_area": "relationships"
+    },
+    {
+      "question": "What cards keep appearing when I ask about leaving my job?",
+      "intent": "recurring_cards",
+      "life_area": "work"
+    },
+    {
+      "question": "Compare my readings about Bali and Thailand.",
+      "intent": "compare",
+      "comparison_axes": ["Bali", "Thailand"]
+    },
+    {
+      "question": "Did any of my old career readings line up with what later happened?",
+      "intent": "outcome_check",
+      "life_area": "work",
+      "time_range": null
+    },
+    {
+      "question": "When did I first start getting themes of independence?",
+      "intent": "first_occurrence",
+      "keywords_any": ["independence"]
+    },
+    { "question": "What questions do I keep asking without resolving?", "intent": "unresolved" },
+    { "question": "What did my readings say about Priya?", "entity_hints_any": ["Priya"] },
+    { "question": "What did I ask about in January?", "time_range_start_month": 1 }
+  ]
+}

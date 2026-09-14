@@ -442,20 +442,43 @@ gained `life_event`.
 
 ## Retrieval & summaries — Phases 09, 10
 
-**`retrieval_documents`** — `id`, `user_id`, `object_type`, `object_id`, `text` (the compact §8.3
-representation), `builder_version`, `built_at`, `content_hash`. One current row per object; rebuilt
-when the object or its extraction changes.
-**`embeddings`** — `id`, `user_id`, `retrieval_document_id`, `object_type`, `object_id`,
-`vector vector(1536)`, `model`, `model_version`, `created_at`. HNSW index, `on delete cascade` from
-the parent object (§19: deleting a reading invalidates its embeddings).
-**`period_summaries`** — `id`, `user_id`, `scope enum('user','journey')`, `journey_id null`,
-`period_start`, `period_end`, `kind enum('weekly','monthly','journey','yearly')`, `summary text`,
-`highlights jsonb`, `source_object_ids uuid[] not null` (empty array rejected by check constraint),
-`model_id`, `prompt_version`, `schema_version`, `created_at`, `dismissed_at`.
+**Built in Phase 09** (`0010_retrieval_ask.sql`, `src/db/schema/retrieval.ts`):
+
+**`retrieval_documents`** — `id`, `user_id`, `object_type` (`reading | life_event |
+period_summary`, check), `object_id`, `text` (the compact §8.3 template, 1–2000 chars by
+check, never the notes), `builder_version`, `content_hash` (over the text; an unchanged hash
+is never re-embedded), `built_at`, `created_at`, `updated_at`. Unique `(object_type,
+object_id)` — one current row per object, rebuilt in place. Written by the `embed_object` /
+`backfill_embeddings` jobs (service role); RLS **select + delete own only** (a session cannot
+insert or rewrite one). Removed with its object twice over: the `readings_retrieval_cascade`
+and `life_events_retrieval_cascade` `AFTER DELETE` triggers (an FK cannot reach a
+polymorphic key) and the purge job's explicit step.
+**`embeddings`** — `id`, `user_id`, `retrieval_document_id` (FK **on delete cascade**),
+`object_type`, `object_id`, `vector vector(1536)`, `model`, `model_version`, `content_hash`
+(the document hash the vector was computed from), `created_at`. Unique per document; HNSW
+index (`vector_cosine_ops`); RLS select + delete own. A vector whose `content_hash` or
+`model` no longer matches is stale and re-embedded by the backfill, so a model change is a
+re-embedding job. Similarity queries go through **`search_history(p jsonb)`** — `SECURITY
+INVOKER`, additionally filtered by `auth.uid()` on every branch, never the index alone.
+**`asks`** — `id`, `user_id`, `question` (the user's words, 1–400), `scope jsonb`
+(`{kind: all | journey | entity | range, …}`), `status` (`pending | complete | failed`),
+`error_class`, `parsed_query jsonb` (the `parse_history_query` output used), `answer text`
+(the conclusion), `claims jsonb` (`[{text, citations: [{object_type, object_id, label}]}]`
+after verification), `citations jsonb` (every cited object once), `evidence_sufficient`,
+`found`, `narrower_question`, `package_object_ids` / `dropped_object_ids` (`[{type, id}]`:
+what the model saw and what the bound left out), `model_id`, `prompt_version`,
+`schema_version`, `latency_ms`, `feedback smallint` (`-1 | 1 | null`, check), `feedback_at`,
+`created_at`, `completed_at`. RLS: select / update / delete own; **insert own only as a
+pending, answerless row** (the pipeline completes it through the service role). The purge
+job scrubs every reference to a deleted object out of the four citation columns; the
+question and answer text stay.
+
+**Phase 10 (planned):** **`period_summaries`** — `id`, `user_id`, `scope enum('user','journey')`,
+`journey_id null`, `period_start`, `period_end`, `kind enum('weekly','monthly','journey','yearly')`,
+`summary text`, `highlights jsonb`, `source_object_ids uuid[] not null` (empty array rejected by
+check constraint), `model_id`, `prompt_version`, `schema_version`, `created_at`, `dismissed_at`.
 Check constraint + test: a summary may never cite another summary as its sole evidence (§19).
-**`asks`** — `id`, `user_id`, `question`, `scope jsonb` (global | journey | entity | date range),
-`answer text`, `citations jsonb` `[{object_type, object_id, snippet_ref}]`,
-`evidence_sufficient boolean`, `model_id`, `prompt_version`, `created_at`, `feedback smallint null`.
+`retrieval_documents.object_type = 'period_summary'` is already admitted for it.
 
 ---
 
@@ -519,7 +542,9 @@ Variants used so far: `profiles` is keyed on `id = auth.uid()` and has no delete
 policies; `reading_note_revisions` is select + delete (trigger-written); `deletion_receipts`
 is select only (job-written); `exports` is select + a constrained insert (the request);
 `extractions` is select + delete (job-written); `themes` reads curated (`user_id is null`) or
-own rows and writes own rows only. Column-level rules that RLS cannot express (old vs new row, e.g. `profiles.plan`) are
+own rows and writes own rows only; `retrieval_documents` and `embeddings` are select + delete
+(job-written; the delete is the "delete AI artifacts" path); `asks` insert is constrained to
+a pending, answerless row. Column-level rules that RLS cannot express (old vs new row, e.g. `profiles.plan`) are
 `BEFORE UPDATE` triggers that check `auth.role()`.
 
 Child tables (e.g. `reading_cards`, `interpretations`) carry a denormalised `user_id` **and** an

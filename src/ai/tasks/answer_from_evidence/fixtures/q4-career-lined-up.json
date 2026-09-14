@@ -1,0 +1,15 @@
+{
+  "name": "q4-career-lined-up",
+  "description": "§6.6 #4. Expect a sufficient answer resting on readings with a recorded outcome or a user-confirmed connection (the agency offer, the talk, the review), stated as the user's records.",
+  "question": "Did any of my old career readings line up with what later happened?",
+  "expect": {
+    "sufficient": true,
+    "cites_any": [
+      "Take the offer or stay at the agency?",
+      "conference talk",
+      "review at the agency"
+    ],
+    "must_not_cite": ["Bali", "Thailand"],
+    "must_mention_any": ["recorded", "confirmed"]
+  }
+}

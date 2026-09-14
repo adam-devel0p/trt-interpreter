@@ -5,7 +5,7 @@ checks were actually performed.
 
 | Suite | Command | Runs where | Covers |
 |---|---|---|---|
-| Unit | `pnpm test` | CI, fast | `src/domain/` pure logic: scoring, resolution, thresholds, fact-status gate, RNG, retrieval-document builder |
+| Unit | `pnpm test` | CI, fast | `src/domain/` pure logic: scoring, resolution, thresholds, fact-status gate, RNG, retrieval-document builder, ranking / bounding / citation verification |
 | Integration | `pnpm test` (tagged) | CI with local Supabase | API handlers, transactions, job handlers, queries, cascade deletes |
 | Authorization / RLS | `pnpm test:rls` | CI with local Supabase | Every user-owned table: user B cannot select/insert/update/delete user A's rows; anon cannot read anything user-owned; reference tables are readable |
 | E2E | `pnpm test:e2e` | CI (Playwright, seeded DB) | The real flows a user performs, plus axe accessibility scans and 390px viewport |
@@ -40,7 +40,7 @@ checks were actually performed.
   - `card-overlap-alone-never-correlates.test.ts` (live since Phase 08: identical spreads on any two dates are never eligible; a shared card plus one weak non-card signal is not enough, two are; the card weight is the smallest and the guard needs two non-card signals, one temporal; the runtime stores only eligible pairs)
   - `rejected-link-not-resuggested.test.ts` (live since Phase 08: an identical re-run after a rejection yields the same fingerprint and is not re-surfaced, a day of drift neither; new evidence needs +0.15 or a user-confirmed overlap that did not exist before, and returns it once; the query layer records the rejection point and the run consults `shouldResurface` and never deletes a rejected row; the database half — reject, re-run unchanged → nothing, hand-link the mention → back once, reject again → gone for good — is `src/correlation/__tests__/correlation.integration.test.ts`)
   - `summary-never-sole-evidence.test.ts` (live since Phase 08: a bundle whose only evidence came from an interpretation or a summary produces no link even inside the stated window; generated evidence adds nothing to a bundle that has the user's words — identical score, signals and fingerprint; the feature loader reads only extractions of the user's words and marks them `user_text`, and the engine filters regardless)
-  - `deleting-reading-purges-derived.test.ts` (live since Phase 05: the purge job has a counter and remover for every registry target, every table with a `reading_id` FK is registered (a `set null` FK is a cleared pointer, not a dependent — Phase 08's `life_events.reading_id`), delete is soft delete + `purge_deleted`, every read path filters `deleted_at`; Phase 08 adds the `life_event` root on the same terms; `…integration.test.ts` soft-deletes a reading carrying every derived artifact — since 08 an outcome and a user link too — runs the job, asserts zero rows in every registry table, the event surviving with its pointer cleared, and a receipt with the counts)
+  - `deleting-reading-purges-derived.test.ts` (live since Phase 05; Phase 09 adds `retrieval_documents` (job + trigger), `embeddings` (cascade) and the `asks` citation scrub to both roots, and the integration half embeds the reading, stores an ask citing it and the survivor, and asserts the vector is gone and the ask keeps only the survivor's citation; the purge job has a counter and remover for every registry target, every table with a `reading_id` FK is registered (a `set null` FK is a cleared pointer, not a dependent — Phase 08's `life_events.reading_id`), delete is soft delete + `purge_deleted`, every read path filters `deleted_at`; Phase 08 adds the `life_event` root on the same terms; `…integration.test.ts` soft-deletes a reading carrying every derived artifact — since 08 an outcome and a user link too — runs the job, asserts zero rows in every registry table, the event surviving with its pointer cleared, and a receipt with the counts)
   - `archive-readable-without-subscription.test.ts` (live since Phase 05: no journal, detail, search, export or delete path references the plan, a subscription, a budget or a paywall; `…integration.test.ts` sets `plan = 'free'`, withdraws consent and proves list, search, detail with stored interpretation, history and export still work — Phase 11 must extend it to exhausted limits)
   - `no-journal-content-in-logs.test.ts`
   - `raw-text-never-overwritten.test.ts` (live since Phase 05: no derived-side module writes `readings` or `reading_cards`, every `modelWrite()` payload is free of user-text columns, the `readings_keep_text` trigger and the revisions policies are in the migration; `…integration.test.ts`: three note edits keep three versions + current, a question edit is kept and bumps `metadata_version`, a raw service-role update still leaves history, derived artifacts leave the words byte-identical, revisions cannot be forged or edited)
@@ -73,6 +73,16 @@ checks were actually performed.
   and `runJobs()` (one cron batch through `/api/jobs/run`). Extraction evals live in
   `src/ai/tasks/extract_reading_metadata/fixtures/` and score entity recall/precision and theme
   sanity (`pnpm eval --dry` for the mock baseline).
+- **Phase 09 fixtures.** `createReadyUser(tag, { ask: true })` turns `ask_my_history` on;
+  `enqueueEmbeddings(userId, objects)` queues the `embed_object` jobs a save would have;
+  `seedJourney(userId, title, readingIds)` builds a user journey for the scoped ask. The
+  retrieval integration suite (`src/retrieval/__tests__/retrieval.integration.test.ts`) uses a
+  spy embedder to assert the outbound payload equals the stored document text, the mock
+  provider's `respondWith()` to force a fabricated citation and an uncited answer, and a
+  1000-reading user (direct inserts) for the bound and the timings. The RLS suite calls
+  `search_history()` as user B with A's ids in the parameters. `pnpm eval --dry` runs the eight
+  benchmark asks against the demo journal (`pnpm demo:seed` first) and fails on any invented
+  card or date.
 - **Tests that need the seed decks or the mock provider live outside `src/domain/` and `src/ai/`**
   (the layering lint applies to test files too): `src/interpretation/__tests__/` holds the
   purity, prompt and repeat-rule tests.

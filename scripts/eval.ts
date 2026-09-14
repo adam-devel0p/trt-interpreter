@@ -27,6 +27,15 @@ import {
   type EventExtractionPayload,
 } from '../src/ai/tasks/extract_event_metadata';
 import * as extractEventVersion from '../src/ai/tasks/extract_event_metadata/version';
+import { buildParseHistoryQueryRequest } from '../src/ai/tasks/parse_history_query';
+import * as parseVersion from '../src/ai/tasks/parse_history_query/version';
+import * as answerVersion from '../src/ai/tasks/answer_from_evidence/version';
+import { getEmbedder } from '../src/ai';
+import { createTokenUserClient } from '../src/db/client';
+import { platformSql } from '../src/db/admin';
+import { askHistory, type AskResult } from '../src/retrieval/ask';
+import { loadHistoryObjects } from '../src/retrieval/objects';
+import type { HistoryQuery } from '../src/domain/retrieval/query';
 import { bandFor, scorePair } from '../src/domain/correlation/score';
 import {
   loadLabeledPairs,
@@ -140,9 +149,63 @@ interface ExplainFixture {
   expect: { must_mention_any: string[]; forbid: string[] };
 }
 
+interface ParseFixture {
+  name: string;
+  description: string;
+  cases: {
+    question: string;
+    intent?: HistoryQuery['intent'];
+    time_range?: null;
+    time_range_start_month?: number;
+    life_area?: string;
+    comparison_axes?: string[];
+    entity_hints_any?: string[];
+    keywords_any?: string[];
+  }[];
+}
+
+interface AskFixture {
+  name: string;
+  description: string;
+  question: string;
+  expect: {
+    sufficient: boolean;
+    cites_any: string[];
+    must_not_cite: string[];
+    must_mention_any: string[];
+  };
+}
+
 const TASKS_DIR = path.resolve('src/ai/tasks');
 const CARD_ID = (i: number) =>
   `00000000-0000-4000-8000-0000000000${(10 + i).toString(16).padStart(2, '0')}`;
+
+/** The demo journal's consenting user, signed in as themselves (RLS applies to every read). */
+async function demoAnaClient(): Promise<{
+  client: ReturnType<typeof createTokenUserClient>;
+  userId: string;
+} | null> {
+  const rows = await platformSql()<
+    { id: string }[]
+  >`select id from auth.users where email = 'demo-ana@tarot.local' limit 1`;
+  const userId = rows[0]?.id;
+  if (!userId) return null;
+  const { createClient } = await import('@supabase/supabase-js');
+  const anon = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+    },
+  );
+  const session = await anon.auth.signInWithPassword({
+    email: 'demo-ana@tarot.local',
+    password: 'demo-password-123',
+  });
+  const token = session.data.session?.access_token;
+  if (!token) return null;
+  return { client: createTokenUserClient(token), userId };
+}
 
 function loadFixtures<T>(task: string): T[] {
   const dir = path.join(TASKS_DIR, task, 'fixtures');
@@ -655,6 +718,261 @@ async function main() {
     const line = `  correlate ${ok ? '✓' : '✗'} labeled-pairs                    precision ${(precision * 100).toFixed(0)}% · recall ${(recall * 100).toFixed(0)}% over ${results.length} pairs${wrongShown.length ? `  WRONGLY SHOWN: ${wrongShown.join(', ')}` : ''}${missed.length ? `  missed: ${missed.join(', ')}` : ''}`;
     console.log(line);
     summary.push(line.trim());
+  }
+
+  // ── parse_history_query (Phase 09) ─────────────────────────────────────────────────────
+  // The parse is hints, so the checks are the fields the pipeline narrows or ranks on.
+  {
+    const parseDir = path.join(TASKS_DIR, 'parse_history_query/fixtures/__baselines__');
+    mkdirSync(parseDir, { recursive: true });
+    const today = new Date().toISOString().slice(0, 10);
+    for (const fx of loadFixtures<ParseFixture>('parse_history_query')) {
+      const results = [];
+      let failed = 0;
+      for (const c of fx.cases) {
+        const r = await runner.runObject({
+          ...buildParseHistoryQueryRequest(
+            { question: c.question, today },
+            { userId: '', askId: 'eval' },
+          ),
+          userId: undefined,
+        });
+        const problems: string[] = [];
+        if (!r.ok) problems.push(`${r.status}/${r.errorClass}`);
+        else {
+          const q = r.value;
+          if (c.intent && q.intent !== c.intent) problems.push(`intent ${q.intent}`);
+          if (c.time_range === null && q.time_range) problems.push('unexpected time range');
+          if (c.time_range_start_month) {
+            const m = q.time_range?.start ? Number(q.time_range.start.slice(5, 7)) : null;
+            if (m !== c.time_range_start_month)
+              problems.push(`time range ${q.time_range?.start ?? 'none'}`);
+          }
+          if (c.life_area && q.life_area !== c.life_area) problems.push(`life area ${q.life_area}`);
+          if (
+            c.comparison_axes &&
+            !c.comparison_axes.every((a) =>
+              q.comparison_axes.some((x) => x.toLowerCase().includes(a.toLowerCase())),
+            )
+          )
+            problems.push(`axes ${q.comparison_axes.join('/')}`);
+          if (
+            c.entity_hints_any &&
+            !c.entity_hints_any.some((e) =>
+              q.entity_hints.some((x) => x.toLowerCase().includes(e.toLowerCase())),
+            )
+          )
+            problems.push(`entities ${q.entity_hints.join('/')}`);
+          if (
+            c.keywords_any &&
+            !c.keywords_any.some((k) => q.keywords.some((x) => x.toLowerCase().includes(k)))
+          )
+            problems.push(`keywords ${q.keywords.join('/')}`);
+        }
+        if (problems.length) failed += 1;
+        results.push({
+          question: c.question,
+          pass: problems.length === 0,
+          problems,
+          output: r.ok ? r.value : null,
+        });
+      }
+      hardFailures += failed;
+      const line = `  parse     ${failed === 0 ? '✓' : '✗'} ${fx.name.padEnd(32)} ${fx.cases.length - failed}/${fx.cases.length} cases${
+        failed
+          ? `  FAILED: ${results
+              .filter((x) => !x.pass)
+              .map((x) => `${x.question} (${x.problems.join('; ')})`)
+              .join(' · ')}`
+          : ''
+      }`;
+      console.log(line);
+      summary.push(line.trim());
+      writeFileSync(
+        path.join(parseDir, `${fx.name}.json`),
+        JSON.stringify(
+          {
+            fixture: fx.name,
+            description: fx.description,
+            provider,
+            prompt_version: parseVersion.PROMPT_VERSION,
+            schema_version: parseVersion.SCHEMA_VERSION,
+            ran_at: new Date().toISOString(),
+            today,
+            results,
+            human_review: { reviewed_by: null, reviewed_at: null, verdict: null, notes: null },
+          },
+          null,
+          2,
+        ),
+      );
+    }
+  }
+
+  // ── answer_from_evidence (Phase 09) — the six benchmark + two adversarial questions ──────
+  // Runs the whole pipeline against the demo journal (demo-ana) as the user, so the checks
+  // are end to end: verified citations, the expected evidence cited, nothing outside the
+  // package, every card and date in the prose present in the cited evidence (fabrication is
+  // a phase blocker), hedged register, and the honest state for the adversarial pair.
+  {
+    const answerDir = path.join(TASKS_DIR, 'answer_from_evidence/fixtures/__baselines__');
+    mkdirSync(answerDir, { recursive: true });
+    const demo = await demoAnaClient();
+    if (!demo) {
+      const line = '  ask       – skipped: demo-ana@tarot.local not found (run `pnpm demo:seed`)';
+      console.log(line);
+      summary.push(line.trim());
+    } else {
+      const latencies: number[] = [];
+      const sectionStarted = new Date();
+      for (const fx of loadFixtures<AskFixture>('answer_from_evidence')) {
+        let result: AskResult | null = null;
+        let failure: string | null = null;
+        for await (const e of askHistory({
+          client: demo.client,
+          userId: demo.userId,
+          question: fx.question,
+          scope: { kind: 'all' },
+          runner,
+          embedder: getEmbedder(),
+        })) {
+          if (e.type === 'complete') result = e.result;
+          if (e.type === 'failed') failure = e.errorClass;
+        }
+        const checks: Record<string, { pass: boolean; detail?: unknown }> = {};
+        let evidenceTitles: string[] = [];
+        if (!result) checks.completed = { pass: false, detail: failure };
+        else {
+          latencies.push(result.latencyMs);
+          const a = result.answer;
+          const objects = await loadHistoryObjects(demo.userId, {
+            readings: result.citations
+              .filter((c) => c.object_type === 'reading')
+              .map((c) => c.object_id),
+            events: result.citations
+              .filter((c) => c.object_type === 'life_event')
+              .map((c) => c.object_id),
+          });
+          const cited = [...objects.values()];
+          evidenceTitles = cited.map((o) => `${o.date} ${o.title ?? '(open reflection)'}`);
+          const prose = [a.conclusion, ...a.claims.map((c) => c.text)].join(' ');
+          checks.completed = { pass: true };
+          checks.sufficiency = {
+            pass: a.evidence_sufficient === fx.expect.sufficient,
+            detail: a.evidence_sufficient,
+          };
+          // Every citation resolved to a live object of the user's (the verifier's guarantee, re-checked).
+          checks.citations_resolve = {
+            pass: result.citations.every((c) => objects.has(c.object_id)),
+            detail: result.citations.length,
+          };
+          checks.claims_cited = {
+            pass:
+              !a.evidence_sufficient ||
+              (a.claims.length > 0 && a.claims.every((c) => c.citations.length > 0)),
+          };
+          checks.cites_expected = {
+            pass:
+              fx.expect.cites_any.length === 0 ||
+              fx.expect.cites_any.some((frag) => cited.some((o) => (o.title ?? '').includes(frag))),
+            detail: evidenceTitles,
+          };
+          checks.never_cites = {
+            pass: !fx.expect.must_not_cite.some((frag) =>
+              cited.some((o) => (o.title ?? '').includes(frag)),
+            ),
+          };
+          checks.mentions_expected = {
+            pass:
+              fx.expect.must_mention_any.length === 0 ||
+              fx.expect.must_mention_any.some((w) => prose.includes(w)),
+          };
+          // Fabrication: a card named in the prose must have been drawn in a cited reading; a
+          // date in the prose must be a cited entry's date.
+          const citedCards = new Set(
+            cited.flatMap((o) => o.cards.map((c) => c.name.toLowerCase())),
+          );
+          const cardMentions = [
+            ...prose.matchAll(
+              /\b((?:ace|two|three|four|five|six|seven|eight|nine|ten|page|knight|queen|king|prince|princess) of (?:cups|wands|swords|pentacles|disks)|the (?:fool|magician|magus|high priestess|priestess|empress|emperor|hierophant|lovers|chariot|hermit|hanged man|devil|tower|star|moon|sun|aeon|world|universe)|wheel of fortune|temperance|justice|adjustment|strength|lust|death|judgement|art|fortune)\b/gi,
+            ),
+          ].map((m) => m[1]!.toLowerCase());
+          const invented = cardMentions.filter((c) => !citedCards.has(c));
+          checks.no_invented_cards = { pass: invented.length === 0, detail: invented };
+          // A cited entry's evidence includes the dates of what it is connected to and of its outcomes.
+          const citedDates = new Set(
+            cited.flatMap((o) => [
+              o.date,
+              ...o.links.map((l) => l.otherDate),
+              ...o.outcomes.map((x) => x.recordedOn),
+            ]),
+          );
+          const badDates = [...prose.matchAll(/\b\d{4}-\d{2}-\d{2}\b/g)]
+            .map((m) => m[0])
+            .filter((d) => !citedDates.has(d));
+          checks.no_invented_dates = { pass: badDates.length === 0, detail: badDates };
+          checks.register = {
+            pass: findRegisterViolations(prose).length === 0,
+            detail: findRegisterViolations(prose),
+          };
+          checks.insufficient_is_honest = {
+            pass:
+              a.evidence_sufficient ||
+              (a.claims.length === 0 && typeof a.found === 'string' && a.found.length > 0),
+          };
+        }
+        const failed = Object.entries(checks)
+          .filter(([, c]) => !c.pass)
+          .map(([k]) => k);
+        hardFailures += failed.length;
+        const line = `  ask       ${failed.length === 0 ? '✓' : '✗'} ${fx.name.padEnd(32)} ${result ? `${result.answer.evidence_sufficient ? 'sufficient' : 'insufficient'} · ${result.citations.length} cited · ${result.packageSize} in package · ${result.latencyMs} ms` : `failed/${failure}`}${failed.length ? `  FAILED: ${failed.join(', ')}` : ''}`;
+        console.log(line);
+        summary.push(line.trim());
+        writeFileSync(
+          path.join(answerDir, `${fx.name}.json`),
+          JSON.stringify(
+            {
+              fixture: fx.name,
+              description: fx.description,
+              provider,
+              model: result?.modelId ?? null,
+              prompt_version: answerVersion.PROMPT_VERSION,
+              schema_version: answerVersion.SCHEMA_VERSION,
+              ran_at: new Date().toISOString(),
+              question: fx.question,
+              parsed: result?.query ?? null,
+              checks,
+              output: result
+                ? {
+                    answer: result.answer,
+                    evidence: evidenceTitles,
+                    package_size: result.packageSize,
+                    dropped: result.droppedCount,
+                    latency_ms: result.latencyMs,
+                  }
+                : null,
+              human_review: { reviewed_by: null, reviewed_at: null, verdict: null, notes: null },
+            },
+            null,
+            2,
+          ),
+        );
+      }
+      if (latencies.length) {
+        const sorted = latencies.slice().sort((a, b) => a - b);
+        const p95 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))];
+        const cost = await platformSql()<
+          { cost: number; tokens_in: number; tokens_out: number; n: number }[]
+        >`
+          select coalesce(sum(cost_micros), 0)::int as cost, coalesce(sum(tokens_in), 0)::int as tokens_in,
+                 coalesce(sum(tokens_out), 0)::int as tokens_out, count(*)::int as n
+          from public.ai_calls where task in ('answer_from_evidence', 'parse_history_query') and created_at >= ${sectionStarted.toISOString()}::timestamptz and user_id = ${demo.userId}`;
+        const c = cost[0]!;
+        const line = `  ask       · latency p95 ${p95} ms over ${latencies.length} asks · ${c.n} model calls · ${c.tokens_in} in / ${c.tokens_out} out tokens · $${(c.cost / 1_000_000 / Math.max(latencies.length, 1)).toFixed(4)} per ask`;
+        console.log(line);
+        summary.push(line.trim());
+      }
+    }
   }
 
   // ── interpret_reading ──────────────────────────────────────────────────────────────────

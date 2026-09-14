@@ -11,6 +11,8 @@ import { createMockProvider, type MockProvider } from './providers/mock';
 import { createOpenAiEmbeddings, type Embedder } from './providers/openai-embeddings';
 import { routingFromEnv, validateRouting } from './registry';
 import { createAiRunner, type AiRunner } from './run';
+import * as answerFromEvidence from './tasks/answer_from_evidence';
+import { mockHistoryAnswer } from './tasks/answer_from_evidence/mock';
 import * as classifySafety from './tasks/classify_safety';
 import { mockSafety } from './tasks/classify_safety/mock';
 import * as explainCorrelation from './tasks/explain_correlation';
@@ -21,6 +23,8 @@ import * as extractReading from './tasks/extract_reading_metadata';
 import { mockExtraction } from './tasks/extract_reading_metadata/mock';
 import * as interpretReading from './tasks/interpret_reading';
 import { mockInterpretation } from './tasks/interpret_reading/mock';
+import * as parseHistoryQuery from './tasks/parse_history_query';
+import { mockHistoryQuery } from './tasks/parse_history_query/mock';
 import * as proposeJourney from './tasks/propose_journey';
 import { mockJourneyProposal } from './tasks/propose_journey/mock';
 import { DbTelemetry, MemoryTelemetry, MultiTelemetry } from './telemetry';
@@ -55,6 +59,14 @@ const VERSIONS: Record<string, { promptVersion: string; schemaVersion: string }>
     promptVersion: explainCorrelation.PROMPT_VERSION,
     schemaVersion: explainCorrelation.SCHEMA_VERSION,
   },
+  parse_history_query: {
+    promptVersion: parseHistoryQuery.PROMPT_VERSION,
+    schemaVersion: parseHistoryQuery.SCHEMA_VERSION,
+  },
+  answer_from_evidence: {
+    promptVersion: answerFromEvidence.PROMPT_VERSION,
+    schemaVersion: answerFromEvidence.SCHEMA_VERSION,
+  },
 };
 
 export function taskVersions(task: string): { promptVersion: string; schemaVersion: string } {
@@ -70,6 +82,8 @@ export function mockFixtures() {
     propose_journey: { default: mockJourneyProposal },
     extract_event_metadata: { default: mockEventExtraction },
     explain_correlation: { default: mockExplanation },
+    parse_history_query: { default: mockHistoryQuery },
+    answer_from_evidence: { default: mockHistoryAnswer },
   };
 }
 
@@ -102,8 +116,8 @@ export function getMockProvider(): MockProvider | undefined {
 }
 
 /**
- * Question embeddings (Phase 04: repeat detection only). With the mock provider the mock's
- * deterministic vectors are used; with the real provider OpenAI is required.
+ * Embeddings (Phase 04: repeat detection; Phase 09: retrieval documents). With the mock
+ * provider the mock's deterministic vectors are used; with the real provider OpenAI is required.
  */
 export function getEmbedder(): Embedder {
   if (embedder) return embedder;
@@ -130,6 +144,15 @@ export function getEmbedder(): Embedder {
     embed: (req: EmbedRequest): Promise<EmbedResult> => mock!.embed(req),
   };
   return embedder;
+}
+
+/**
+ * The embedding model a fresh vector would be produced by — compared against
+ * `embeddings.model` so a model change is a re-embedding job, not a rewrite (§8.3).
+ */
+export function embeddingModelId(): string {
+  const env = serverEnv();
+  return env.AI_PROVIDER === 'anthropic' ? env.AI_EMBEDDING_MODEL : 'mock-embed';
 }
 
 /** Health probe: is the configured provider usable? Makes no call. */

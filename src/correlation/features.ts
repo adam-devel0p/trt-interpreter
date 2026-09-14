@@ -16,6 +16,7 @@ import {
 } from '@/db/schema';
 import type { CorrelationObject, EvidenceEntity, Horizon } from '@/domain/correlation/score';
 import { extractionPayloadSchema } from '@/domain/extraction/schema';
+import { loadEmbeddingsFor } from '@/retrieval/vectors';
 
 /**
  * Evidence bundles for the correlation engine (docs/ALGORITHMS.md §3), built from stored
@@ -23,7 +24,9 @@ import { extractionPayloadSchema } from '@/domain/extraction/schema';
  * here comes from an extraction of the user's own words, so its provenance is `user_text`;
  * nothing an interpretation or a summary produced is ever loaded (guard 2 is enforced twice:
  * here by construction and in the pure engine by filtering). A reading's horizon is the
- * timeframe its extraction found, or — the user's own statement — its revisit date.
+ * timeframe its extraction found, or — the user's own statement — its revisit date. Since
+ * Phase 09 each object carries its retrieval-document vector when one exists, so the engine's
+ * `semantic_similarity` signal is available for embedded pairs (and renormalised out otherwise).
  */
 
 export interface CorrelationFeatureSet {
@@ -84,77 +87,80 @@ export async function loadCorrelationFeatures(
   const objectIds = [...liveReadingIds, ...eventRows.map((e) => e.id)];
   if (objectIds.length === 0) return out;
 
-  const [mentionRows, themeRows, memberRows, cardRows, extractionRows] = await Promise.all([
-    db
-      .select({
-        objectId: entityMentions.objectId,
-        entityId: entityMentions.entityId,
-        resolution: entityMentions.resolution,
-        label: entities.canonicalLabel,
-        userConfirmed: entities.userConfirmed,
-      })
-      .from(entityMentions)
-      .innerJoin(entities, eq(entities.id, entityMentions.entityId))
-      .where(
-        and(
-          inArray(entityMentions.objectId, objectIds),
-          inArray(entityMentions.resolution, ['auto', 'user', 'tentative']),
-          eq(entities.status, 'active'),
+  const [mentionRows, themeRows, memberRows, cardRows, extractionRows, vectors] = await Promise.all(
+    [
+      db
+        .select({
+          objectId: entityMentions.objectId,
+          entityId: entityMentions.entityId,
+          resolution: entityMentions.resolution,
+          label: entities.canonicalLabel,
+          userConfirmed: entities.userConfirmed,
+        })
+        .from(entityMentions)
+        .innerJoin(entities, eq(entities.id, entityMentions.entityId))
+        .where(
+          and(
+            inArray(entityMentions.objectId, objectIds),
+            inArray(entityMentions.resolution, ['auto', 'user', 'tentative']),
+            eq(entities.status, 'active'),
+          ),
         ),
-      ),
-    db
-      .select({
-        objectId: objectThemes.objectId,
-        weight: objectThemes.weight,
-        slug: themes.slug,
-        label: themes.label,
-      })
-      .from(objectThemes)
-      .innerJoin(themes, eq(themes.id, objectThemes.themeId))
-      .where(inArray(objectThemes.objectId, objectIds)),
-    db
-      .select({
-        objectId: journeyMembers.objectId,
-        journeyId: journeyMembers.journeyId,
-        state: journeyMembers.state,
-        title: journeys.title,
-      })
-      .from(journeyMembers)
-      .innerJoin(journeys, eq(journeys.id, journeyMembers.journeyId))
-      .where(
-        and(
-          inArray(journeyMembers.objectId, objectIds),
-          inArray(journeyMembers.state, ['auto', 'confirmed']),
-          isNull(journeys.dismissedAt),
-          isNull(journeys.mergedIntoId),
-          ne(journeys.status, 'closed'),
+      db
+        .select({
+          objectId: objectThemes.objectId,
+          weight: objectThemes.weight,
+          slug: themes.slug,
+          label: themes.label,
+        })
+        .from(objectThemes)
+        .innerJoin(themes, eq(themes.id, objectThemes.themeId))
+        .where(inArray(objectThemes.objectId, objectIds)),
+      db
+        .select({
+          objectId: journeyMembers.objectId,
+          journeyId: journeyMembers.journeyId,
+          state: journeyMembers.state,
+          title: journeys.title,
+        })
+        .from(journeyMembers)
+        .innerJoin(journeys, eq(journeys.id, journeyMembers.journeyId))
+        .where(
+          and(
+            inArray(journeyMembers.objectId, objectIds),
+            inArray(journeyMembers.state, ['auto', 'confirmed']),
+            isNull(journeys.dismissedAt),
+            isNull(journeys.mergedIntoId),
+            ne(journeys.status, 'closed'),
+          ),
         ),
-      ),
-    liveReadingIds.length
-      ? db
-          .select({
-            readingId: readingCards.readingId,
-            cardId: readingCards.cardId,
-            name: cards.name,
-          })
-          .from(readingCards)
-          .innerJoin(cards, eq(cards.id, readingCards.cardId))
-          .where(inArray(readingCards.readingId, liveReadingIds))
-      : Promise.resolve([]),
-    liveReadingIds.length
-      ? db
-          .select({ objectId: extractions.objectId, payload: extractions.payload })
-          .from(extractions)
-          .where(
-            and(
-              eq(extractions.objectType, 'reading'),
-              inArray(extractions.objectId, liveReadingIds),
-              eq(extractions.status, 'complete'),
-              isNull(extractions.supersededBy),
-            ),
-          )
-      : Promise.resolve([]),
-  ]);
+      liveReadingIds.length
+        ? db
+            .select({
+              readingId: readingCards.readingId,
+              cardId: readingCards.cardId,
+              name: cards.name,
+            })
+            .from(readingCards)
+            .innerJoin(cards, eq(cards.id, readingCards.cardId))
+            .where(inArray(readingCards.readingId, liveReadingIds))
+        : Promise.resolve([]),
+      liveReadingIds.length
+        ? db
+            .select({ objectId: extractions.objectId, payload: extractions.payload })
+            .from(extractions)
+            .where(
+              and(
+                eq(extractions.objectType, 'reading'),
+                inArray(extractions.objectId, liveReadingIds),
+                eq(extractions.status, 'complete'),
+                isNull(extractions.supersededBy),
+              ),
+            )
+        : Promise.resolve([]),
+      loadEmbeddingsFor(userId, objectIds),
+    ],
+  );
 
   const entitiesBy = new Map<string, EvidenceEntity[]>();
   for (const m of mentionRows) {
@@ -212,6 +218,7 @@ export async function loadCorrelationFeatures(
       journeys: journeysBy.get(r.id) ?? [],
       cards: cardsBy.get(r.id) ?? [],
       horizon,
+      ...(vectors.has(r.id) ? { embedding: vectors.get(r.id) } : {}),
     });
   }
   for (const e of eventRows) {
@@ -222,6 +229,7 @@ export async function loadCorrelationFeatures(
       entities: entitiesBy.get(e.id) ?? [],
       themes: themesBy.get(e.id) ?? [],
       journeys: journeysBy.get(e.id) ?? [],
+      ...(vectors.has(e.id) ? { embedding: vectors.get(e.id) } : {}),
     });
   }
   return out;

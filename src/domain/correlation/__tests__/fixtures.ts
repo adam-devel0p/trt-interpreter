@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { hashEmbedding } from '../../retrieval/hashEmbedding';
 import type { CorrelationObject, Provenance } from '../score';
 
 /** The hand-labelled pairs in `fixtures/history/correlation/labeled-pairs.json`. */
@@ -10,6 +11,8 @@ export interface LabeledObject {
   journeys: string[];
   horizon?: { start: string; end: string; text: string | null };
   cards?: string[];
+  /** Phase 09: the object's retrieval document; when present both sides carry a vector. */
+  text?: string;
 }
 export interface LabeledPair {
   id: string;
@@ -44,6 +47,7 @@ export function toObject(
     ),
     themes: o.themes.map(([slug, weight, provenance]) => ({ slug, weight, provenance })),
     journeys: o.journeys.map((j) => ({ id: j, state: 'auto' as const })),
+    ...(o.text ? { embedding: hashEmbedding(o.text) } : {}),
     ...(type === 'reading'
       ? { cards: o.cards ?? ['c1', 'c2', 'c3'], horizon: o.horizon ?? null }
       : {}),

@@ -1,0 +1,84 @@
+{
+  "fixture": "adv-empty-period",
+  "description": "Adversarial: a month with no entries. Nothing matches the scope; the answer says so without a model call.",
+  "provider": "mock",
+  "model": null,
+  "prompt_version": "answer_from_evidence/1.0.0",
+  "schema_version": "history_answer/1.0.0",
+  "ran_at": "2026-09-14T06:18:15.987Z",
+  "question": "What did I ask about in January?",
+  "parsed": {
+    "intent": "lookup",
+    "time_range": {
+      "start": "2026-01-01",
+      "end": "2026-01-31"
+    },
+    "life_area": null,
+    "entity_hints": [],
+    "journey_hints": [],
+    "card_hints": [],
+    "comparison_axes": [],
+    "object_types": ["reading", "life_event"],
+    "keywords": []
+  },
+  "checks": {
+    "completed": {
+      "pass": true
+    },
+    "sufficiency": {
+      "pass": true,
+      "detail": false
+    },
+    "citations_resolve": {
+      "pass": true,
+      "detail": 0
+    },
+    "claims_cited": {
+      "pass": true
+    },
+    "cites_expected": {
+      "pass": true,
+      "detail": []
+    },
+    "never_cites": {
+      "pass": true
+    },
+    "mentions_expected": {
+      "pass": true
+    },
+    "no_invented_cards": {
+      "pass": true,
+      "detail": []
+    },
+    "no_invented_dates": {
+      "pass": true,
+      "detail": []
+    },
+    "register": {
+      "pass": true,
+      "detail": []
+    },
+    "insufficient_is_honest": {
+      "pass": true
+    }
+  },
+  "output": {
+    "answer": {
+      "evidence_sufficient": false,
+      "conclusion": "There is not enough evidence in your history to answer this with confidence.",
+      "claims": [],
+      "found": "Nothing in your history matched this scope.",
+      "narrower_question": "What have I asked about most often?"
+    },
+    "evidence": [],
+    "package_size": 0,
+    "dropped": 0,
+    "latency_ms": 77
+  },
+  "human_review": {
+    "reviewed_by": null,
+    "reviewed_at": null,
+    "verdict": null,
+    "notes": null
+  }
+}

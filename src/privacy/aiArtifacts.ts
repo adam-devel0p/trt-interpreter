@@ -20,6 +20,9 @@ import { logger } from '@/observability/logger';
  * Phase 08: `pending` connection suggestions go (with their explanations). Confirmed, maybe
  * and rejected links are the user's decisions — and a rejection is the memory that keeps
  * the same suggestion from coming back — so they stay. Events and outcomes are the user's.
+ * Phase 09: embeddings and retrieval documents go (they are rebuilt by the backfill if AI is
+ * switched on again); so do `asks` — a question put to the AI and its generated answer are a
+ * transcript of the feature, not a journal entry, and the confirmation names them.
  */
 
 export interface AiArtifactTarget {
@@ -43,6 +46,11 @@ export const AI_ARTIFACT_TARGETS: readonly AiArtifactTarget[] = [
   { table: 'journeys', where: [{ column: 'user_confirmed', op: 'eq', value: false }] },
   { table: 'journey_members', where: [{ column: 'state', op: 'in', value: ['auto', 'pending'] }] },
   { table: 'links', where: [{ column: 'state', op: 'eq', value: 'pending' }] },
+  // Phase 09: vectors, the compact texts they were made from, and every question put to the
+  // AI with its answer. Readings, events, outcomes and decisions are untouched.
+  { table: 'embeddings', where: [] },
+  { table: 'retrieval_documents', where: [] },
+  { table: 'asks', where: [] },
 ];
 
 export const AI_ARTIFACT_TABLES = [
@@ -57,6 +65,9 @@ export const AI_ARTIFACT_TABLES = [
   'journeys',
   'journey_members',
   'links',
+  'embeddings',
+  'retrieval_documents',
+  'asks',
 ] as const;
 export type AiArtifactTable = (typeof AI_ARTIFACT_TABLES)[number];
 export type AiArtifactCounts = Record<AiArtifactTable, number>;

@@ -1,0 +1,11 @@
+{
+  "name": "q5-first-independence",
+  "description": "§6.6 #5. Expect the April Bali reading as the first entry tagged Independence, cited, and the later ones after it.",
+  "question": "When did I first start getting themes of independence?",
+  "expect": {
+    "sufficient": true,
+    "cites_any": ["Should I go to Bali in the spring on my own?"],
+    "must_not_cite": ["conference talk", "review at the agency"],
+    "must_mention_any": ["Bali", "April", "2026-04"]
+  }
+}

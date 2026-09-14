@@ -65,6 +65,33 @@ describe('deleting-reading-purges-derived (integration)', () => {
     });
     const keep = await makeReading(user, refs, { question: 'Keep me, Alex' });
     await attachDerived(user, keep, { memory: true });
+    // Phase 09: a retrieval document with its vector, and an ask that cites the reading.
+    const { embedObject } = await import('@/retrieval/backfill');
+    expect((await embedObject('reading', reading.id)).embedding).toBe('embedded');
+    expect((await embedObject('reading', keep.id)).embedding).toBe('embedded');
+    const askRows = await platformSql()<{ id: string }[]>`
+      insert into public.asks (user_id, question, scope, status, answer, claims, citations, package_object_ids, dropped_object_ids)
+      values (${user.id}, 'Which readings mention Alex?', '{"kind":"all"}'::jsonb, 'complete', 'Two do.',
+        ${JSON.stringify([
+          {
+            text: 'Both.',
+            citations: [
+              { object_type: 'reading', object_id: reading.id, label: 'E1' },
+              { object_type: 'reading', object_id: keep.id, label: 'E2' },
+            ],
+          },
+        ])}::jsonb,
+        ${JSON.stringify([
+          { object_type: 'reading', object_id: reading.id, label: 'E1' },
+          { object_type: 'reading', object_id: keep.id, label: 'E2' },
+        ])}::jsonb,
+        ${JSON.stringify([
+          { type: 'reading', id: reading.id },
+          { type: 'reading', id: keep.id },
+        ])}::jsonb,
+        ${JSON.stringify([{ type: 'reading', id: reading.id }])}::jsonb)
+      returning id`;
+    const askId = askRows[0]!.id;
 
     const before = {
       reading_cards: await countRows('reading_cards', 'reading_id', reading.id),
@@ -80,6 +107,9 @@ describe('deleting-reading-purges-derived (integration)', () => {
       journey_members: await countRows('journey_members', 'object_id', reading.id),
       outcomes: await countRows('outcomes', 'reading_id', reading.id),
       links: await countRows('links', 'from_id', reading.id),
+      retrieval_documents: await countRows('retrieval_documents', 'object_id', reading.id),
+      embeddings: await countRows('embeddings', 'object_id', reading.id),
+      asks: 1,
     };
     expect(before).toMatchObject({
       reading_cards: 3,
@@ -96,6 +126,8 @@ describe('deleting-reading-purges-derived (integration)', () => {
     expect(before.journey_members).toBe(1);
     expect(before.outcomes).toBe(1);
     expect(before.links).toBe(1);
+    expect(before.retrieval_documents).toBe(1);
+    expect(before.embeddings).toBe(1);
     // The entities themselves are the user's memory, not the reading's: they survive the purge.
     const entitiesBefore = await countRows('entities', 'user_id', user.id);
 
@@ -125,12 +157,34 @@ describe('deleting-reading-purges-derived (integration)', () => {
       'object_themes',
       'entity_mentions',
       'journey_members',
+      'retrieval_documents',
+      'embeddings',
     ]);
     for (const table of DELETION_REGISTRY.reading.map((t) => t.table)) {
+      if (table === 'asks') continue; // scrubbed, not deleted — checked below
       const column =
         table === 'links' ? 'from_id' : POLYMORPHIC.has(table) ? 'object_id' : 'reading_id';
       expect(await countRows(table, column, reading.id), `${table} after purge`).toBe(0);
     }
+    // The ask survives with every reference to the reading scrubbed; the other citation stays.
+    const [ask] = await platformSql()<
+      {
+        answer: string;
+        claims: unknown;
+        citations: unknown;
+        package_object_ids: unknown;
+        dropped_object_ids: unknown;
+      }[]
+    >`
+      select answer, claims, citations, package_object_ids, dropped_object_ids from public.asks where id = ${askId}`;
+    expect(ask!.answer).toBe('Two do.');
+    expect(JSON.stringify(ask)).not.toContain(reading.id);
+    expect(ask!.citations).toEqual([{ object_type: 'reading', object_id: keep.id, label: 'E2' }]);
+    expect(ask!.claims).toEqual([
+      { text: 'Both.', citations: [{ object_type: 'reading', object_id: keep.id, label: 'E2' }] },
+    ]);
+    expect(ask!.package_object_ids).toEqual([{ type: 'reading', id: keep.id }]);
+    expect(ask!.dropped_object_ids).toEqual([]);
     // The life event is the user's own record and stays; its pointer at the reading clears.
     expect(await countRows('life_events', 'id', event!)).toBe(1);
     expect(await countRows('life_events', 'reading_id', reading.id)).toBe(0);
@@ -153,6 +207,7 @@ describe('deleting-reading-purges-derived (integration)', () => {
     // The other reading is untouched, derived rows included.
     expect(await countRows('interpretations', 'reading_id', keep.id)).toBe(1);
     expect(await countRows('safety_flags', 'object_id', keep.id)).toBe(1);
+    expect(await countRows('embeddings', 'object_id', keep.id)).toBe(1);
     expect(await countRows('extractions', 'object_id', keep.id)).toBe(1);
     expect(await countRows('entity_mentions', 'object_id', keep.id)).toBeGreaterThanOrEqual(1);
     expect(await getReading(user.client, keep.id)).not.toBeNull();

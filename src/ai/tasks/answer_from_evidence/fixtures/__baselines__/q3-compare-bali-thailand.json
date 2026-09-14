@@ -1,0 +1,98 @@
+{
+  "fixture": "q3-compare-bali-thailand",
+  "description": "§6.6 #3. Expect a sufficient comparison citing the Bali and Thailand readings and nothing about the agency.",
+  "provider": "mock",
+  "model": "mock/claude-opus-5",
+  "prompt_version": "answer_from_evidence/1.0.0",
+  "schema_version": "history_answer/1.0.0",
+  "ran_at": "2026-09-14T06:18:16.303Z",
+  "question": "Compare my readings about Bali and Thailand.",
+  "parsed": {
+    "intent": "compare",
+    "time_range": null,
+    "life_area": null,
+    "entity_hints": ["Bali", "Thailand"],
+    "journey_hints": [],
+    "card_hints": [],
+    "comparison_axes": ["Bali", "Thailand"],
+    "object_types": ["reading"],
+    "keywords": []
+  },
+  "checks": {
+    "completed": {
+      "pass": true
+    },
+    "sufficiency": {
+      "pass": true,
+      "detail": true
+    },
+    "citations_resolve": {
+      "pass": true,
+      "detail": 3
+    },
+    "claims_cited": {
+      "pass": true
+    },
+    "cites_expected": {
+      "pass": true,
+      "detail": [
+        "2026-07-12 What would three weeks in Thailand on my own give me?",
+        "2026-05-09 Is a winter in Thailand a better idea than a spring in Bali?",
+        "2026-04-17 Should I go to Bali in the spring on my own?"
+      ]
+    },
+    "never_cites": {
+      "pass": true
+    },
+    "mentions_expected": {
+      "pass": true
+    },
+    "no_invented_cards": {
+      "pass": true,
+      "detail": []
+    },
+    "no_invented_dates": {
+      "pass": true,
+      "detail": []
+    },
+    "register": {
+      "pass": true,
+      "detail": []
+    },
+    "insufficient_is_honest": {
+      "pass": true
+    }
+  },
+  "output": {
+    "answer": {
+      "evidence_sufficient": true,
+      "conclusion": "One way to read this: Bali comes up 3 times, while Thailand comes up 2 times. The themes the journal tagged differ more than the questions do, which may say something about what each place stands for.",
+      "claims": [
+        {
+          "text": "About Bali: 3 entries (2026-04-17, 2026-05-09, 2026-07-12), tagged Independence, Decision, Creativity; cards drawn included King of Pentacles, Seven of Swords, Queen of Wands, Five of Pentacles.",
+          "citations": ["E3", "E2", "E1"]
+        },
+        {
+          "text": "About Thailand: 2 entries (2026-05-09, 2026-07-12), tagged Independence, Family; cards drawn included Five of Pentacles, Knight of Wands, Six of Swords, Page of Pentacles.",
+          "citations": ["E2", "E1"]
+        }
+      ],
+      "found": null,
+      "narrower_question": null
+    },
+    "evidence": [
+      "2026-07-12 What would three weeks in Thailand on my own give me?",
+      "2026-05-09 Is a winter in Thailand a better idea than a spring in Bali?",
+      "2026-04-17 Should I go to Bali in the spring on my own?"
+    ],
+    "package_size": 24,
+    "dropped": 7,
+    "latency_ms": 60
+  },
+  "human_review": {
+    "reviewed_by": null,
+    "reviewed_at": null,
+    "verdict": null,
+    "notes": null
+  }
+}

@@ -44,6 +44,7 @@ import {
 import { SEED_BYTES } from '@/domain/readings/prng';
 import { CUSTOM_SPREAD_MAX_POSITIONS } from '@/domain/readings/thresholds';
 import { enqueue } from '@/jobs/enqueue';
+import { EMBED_AFTER_SAVE_DELAY_MS, enqueueEmbedSafely } from '@/retrieval/enqueue';
 import { runBatch } from '@/jobs/worker';
 import { errorClassOf, logger } from '@/observability/logger';
 
@@ -85,6 +86,10 @@ async function queueExtraction(
       errorClass: errorClassOf(err),
     });
   }
+  // Phase 09: the retrieval document follows, after the extraction has usually landed.
+  await enqueueEmbedSafely('reading', readingId, userId, {
+    delayMs: Math.max(opts.delayMs ?? 0, 0) + EMBED_AFTER_SAVE_DELAY_MS,
+  });
 }
 
 const SAVE_FAILED =

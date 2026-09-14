@@ -63,7 +63,7 @@ stripped for the endpoint — `providers/outputSchema.ts` — and re-checked by 
 runner's abort signal passed through, `output_config.effort = 'medium'` for the `deep` and
 `standard` tiers, never for `fast`; `stop_reason: refusal` → `refusal`, `max_tokens` →
 `invalid_output`; SDK errors mapped to classes, never re-thrown with text), `openai-embeddings.ts`
-(plain `fetch` to `/v1/embeddings`, question text only), `mock.ts` (fixtures may be functions of
+(plain `fetch` to `/v1/embeddings`; receives only what the callers hand it — a question for the repeat check or an ask, a stored retrieval document — never notes), `mock.ts` (fixtures may be functions of
 the request's `mockInput` hints; object fixtures stream as chunked JSON; `failWith('invalid_json')`
 on a stream yields unparseable text; embeddings are a hashed bag-of-words at 1536 dims; the
 reported `modelId` is `mock/<routed id>` so a stored row never claims a real model ran).
@@ -85,16 +85,18 @@ Each task is a directory `src/ai/tasks/<task>/` containing `prompt.ts`, `schema.
 | `propose_entity_candidates` | 06 (folded) | fast | — | Folded into `extract_reading_metadata`'s `entities[]` (one call per save instead of two); resolution is decided in `domain/entities/resolve.ts`. The `TaskId` stays reserved. |
 | `propose_journey` | 07 ✅ | standard | title + rationale + confidence band | Naming only; assignment decided in `domain/journeys`. Runs as the `propose_journey` job after discovery (consent + `journey_autocreate`), never in the request path; a user rename pins the title (`title_source = 'user'`); `low` confidence keeps the placeholder. Context is the minimum (§11): dates, questions, resolved entities from `entityContextForObjects`, theme labels — no notes. `propose_journey/1.0.0` · `journey_proposal/1.0.0` |
 | `explain_correlation` | 08 ✅ | fast | one hedged sentence | Puts the engine's `reasons` into words for an *offered* link; writes the `explanation` column and nothing else (structurally asserted). Register-checked: no numbers, no "predicted / foresaw / confirmed / will", no card talk; a failing sentence is dropped and the deterministic reasons stay. Runs as the `explain_correlation` job the correlation run queues (consent + `correlation_suggestions`). `explain_correlation/1.0.0` · `correlation_explanation/1.0.0` |
-| `parse_history_query` | 09 | fast | intent, time range, entities, journey hints | Step 1 of §8.1 |
-| `answer_from_evidence` | 09 | deep | answer + citations + sufficiency | Citations validated against the package |
+| `parse_history_query` | 09 ✅ | fast | intent, time range, life area, entity / journey / card hints, comparison axes, object types, keywords | Step 1 of §8.1. Hints re-rank; only the time range and content type narrow. The question is the only user text sent. A failure falls back to an empty parse + the deterministic time-phrase resolver. `parse_history_query/1.0.0` · `history_query/1.0.0` |
+| `answer_from_evidence` | 09 ✅ | deep | conclusion + claims with E-label citations + `evidence_sufficient` + `found` + `narrower_question` | Steps 6–7 of §8.1. Receives the bounded package only (≤ 24 objects, ≤ 6000 tokens); every label is verified against it, unknown labels stripped, one repair turn, then degrade to "not enough evidence". Register-checked. `answer_from_evidence/1.0.0` · `history_answer/1.0.0` |
 | `summarize_period` | 10 | standard | summary + highlights + source IDs | Source IDs must be a subset of inputs |
 | `journey_narrative` | 10 | standard | one-sentence header + progression labels | §6.5 narrative header |
-| `build_retrieval_document` | 09 | fast | compact §8.3 text | Deterministic template first, model only to compress |
+| `build_retrieval_document` | 09 (deterministic) | — | compact §8.3 text | The template (`domain/retrieval/document.ts`) is deterministic and no model is called to compress; the `TaskId` names the **embedding** request for a document in `ai_calls` / the mock's call log. A model compression step would slot in here if documents ever needed it. |
 
 **Model routing** (`registry.ts`, overridable per-environment via `AI_MODEL_FAST/STANDARD/DEEP`):
 `fast` → `claude-haiku-4-5` · `standard` → `claude-sonnet-5` · `deep` → `claude-opus-5`.
-Embeddings → `text-embedding-3-small`. Routing is data, asserted by a test that every `TaskId` has a
-tier and every tier has a model.
+Embeddings → `text-embedding-3-small` (`embeddingModelId()` in `src/ai/index.ts` names the model
+a fresh vector would carry; `embeddings.model` is compared against it, so a model change is a
+re-embedding job). Routing is data, asserted by a test that every `TaskId` has a tier and every
+tier has a model.
 
 ## Prompt construction rules (§9.3)
 
@@ -206,6 +208,47 @@ band and the reasons (minimum context, §11), validates the sentence
 joins the reasons into one hedged sentence and adds nothing — which is what the real prompt
 is told to do.
 
+## parse_history_query and answer_from_evidence — the run (Phase 09)
+
+`src/retrieval/ask.ts` (`askHistory`) is one generator per ask, driven by `POST /api/ask`
+(server-sent events) and gated by consent and the `ask_my_history` flag. Order of operations
+is the contract (docs/ALGORITHMS.md §4):
+
+1. an `asks` row is written `pending` as the user **before** any model call;
+2. `parse_history_query` (fast) on the question alone; a failure degrades to the empty parse
+   plus `resolveTimePhrase`;
+3. the question is embedded (the same embedder as retrieval documents; a failure degrades
+   ranking to structure + recency); hints resolve through the user's aliases, journeys and
+   the reference card search; `search_history()` narrows and scores in SQL **as the user**;
+4. rank → augment (linked events, outcomes) → bound (≤ 24 objects, ≤ 6000 tokens, whole
+   objects, dropped ids recorded);
+5. an empty package is answered without a model call; otherwise `answer_from_evidence` (deep)
+   receives the rendered package and nothing else (§11 minimum context) — the user's note is
+   excerpted to 240 characters per object, entities are resolved ones only, links are
+   confirmed / maybe only, interpretations and summaries never appear as facts;
+6. `verifyAnswer` strips unknown labels; an uncited claim or a register violation triggers
+   **one** repair turn (the failed JSON echoed with a content-free hint); still ungrounded →
+   `insufficientAnswer` with what was found;
+7. the row is completed through the service role (answer, claims and citations as object
+   ids, sufficiency, package and dropped ids, model / prompt / schema versions, latency) and
+   only then is the answer yielded. Stages stream before it so the screen can say what is
+   happening; **no answer text streams before verification**. Cancelling ends the run at the
+   next step boundary and marks the row `failed / cancelled`; a call in flight finishes on
+   its own and is discarded.
+
+Evidence grades (spec §19): a `confirmed` connection is the highest-grade evidence, `maybe`
+is cited as maybe, `pending` and `rejected` never appear; outcomes are the user's records and
+are cited by the reading they sit on. The mock parser and answerer (`tasks/*/mock.ts`) are
+rule-based and answer the six §6.6 benchmark questions from the demo journal; the eval
+(`pnpm eval`) runs the whole pipeline against the demo journal and treats an invented card
+or date, an unverified citation or a false "sufficient" as a hard failure.
+
+**Embeddings (Phase 09).** `src/retrieval/embed.ts` sends the stored `retrieval_documents.text`
+and nothing else (asserted byte for byte), consent-gated, in batches of 16, and replaces stale
+vectors (hash or model mismatch). The deterministic document builder is
+`domain/retrieval/document.ts`; the `embed_object` job rebuilds and embeds one object, the
+`backfill_embeddings` job walks a user (or every consenting user) and re-enqueues itself.
+
 ## Write gate
 
 The mechanism behind invariant 7 / §9.2.
@@ -292,6 +335,13 @@ and checks: schema validity, deck-system purity, hedged register (banned-phrase 
 integrity, and refusal-to-invent on deliberately evidence-poor fixtures. `pnpm eval --dry` runs the
 same pipeline against the mock provider (proves the runner, costs nothing). Baselines live in
 `src/ai/tasks/<task>/fixtures/__baselines__/` and are reviewed by a human on change.
+
+Phase 09 fixtures: `parse_history_query/fixtures/benchmark.json` (eight questions: intent,
+time range, life area, entities, axes) and eight `answer_from_evidence` fixtures — the six §6.6
+benchmark questions and two adversarial ones (a person who never appears; a month with no
+entries) — run end to end against the demo journal as `demo-ana` with expected-evidence
+fragments, forbidden citations, sufficiency, invented-card / invented-date scans and the
+register check. The section prints latency p95 and cost per ask from `ai_calls`.
 
 Phase 04 fixtures: four `interpret_reading` readings (RWS three-card with a note, RWS Celtic cross
 open reflection at `deep`, Thoth three-card for an `experienced` reader, Thoth one-card money

@@ -27,6 +27,7 @@ import {
 } from '@/domain/events/types';
 import { OUTCOME_NOTE_MAX, OUTCOME_STATUSES } from '@/domain/outcomes/followUp';
 import { enqueue } from '@/jobs/enqueue';
+import { EMBED_AFTER_SAVE_DELAY_MS, enqueueEmbedSafely } from '@/retrieval/enqueue';
 import { journeysOfObjects, refreshJourneys } from '@/journeys/refresh';
 import { errorClassOf, logger } from '@/observability/logger';
 
@@ -141,6 +142,7 @@ export async function createEventAction(
     }
   }
   await queue('extract_event_metadata', { eventId: id, force: false }, user.id);
+  await enqueueEmbedSafely('life_event', id, user.id, { delayMs: EMBED_AFTER_SAVE_DELAY_MS });
   revalidate(id, parsed.data.reading_id);
   return { ok: true, value: { id, photo } };
 }
@@ -193,6 +195,18 @@ export async function deleteEventAction(eventId: unknown): Promise<ActionResult>
 
 // ── Connections (FR-12, FR-13) ─────────────────────────────────────────────────────────────
 
+/** A decided connection changes both retrieval documents ("Linked: …", Phase 09). */
+async function embedBothSides(
+  link: { from_type: string; from_id: string; to_type: string; to_id: string },
+  userId: string,
+) {
+  for (const [t, i] of [
+    [link.from_type, link.from_id],
+    [link.to_type, link.to_id],
+  ] as const)
+    if (t === 'reading' || t === 'life_event') await enqueueEmbedSafely(t, i, userId);
+}
+
 /** Confirm · Maybe · Unrelated: one tap, one update, undoable. Journeys refresh on confirm. */
 export async function linkAction(
   linkId: unknown,
@@ -206,6 +220,7 @@ export async function linkAction(
     const client = await getSessionClient();
     const link = await actOnLink(client, id.data, a.data);
     logger.info('app.link.acted', { userId: user.id, linkId: id.data, state: a.data });
+    await embedBothSides(link, user.id);
     revalidate(link.to_type === 'life_event' ? link.to_id : undefined, link.from_id);
     return { ok: true, value: { state: a.data } };
   } catch (err) {
@@ -222,6 +237,7 @@ export async function undoLinkActionAction(linkId: unknown): Promise<ActionResul
     const client = await getSessionClient();
     const link = await undoLinkAction(client, id.data);
     logger.info('app.link.undone', { userId: user.id, linkId: id.data });
+    await embedBothSides(link, user.id);
     revalidate(link.to_type === 'life_event' ? link.to_id : undefined, link.from_id);
     return { ok: true, value: undefined };
   } catch (err) {
@@ -295,6 +311,9 @@ export async function recordOutcomeAction(
       { openPredictionIds: open },
     );
     await refreshJourneys(await journeysOfObjects('reading', [input.readingId]));
+    // Phase 09: the reading's document carries its outcome; the event's its origin.
+    await enqueueEmbedSafely('reading', input.readingId, user.id);
+    if (eventId) await enqueueEmbedSafely('life_event', eventId, user.id);
     logger.info('app.outcome.recorded', {
       userId: user.id,
       objectType: 'reading',

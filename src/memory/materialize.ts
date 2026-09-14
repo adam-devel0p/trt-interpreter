@@ -29,6 +29,7 @@ import { modelBorn } from '@/domain/facts/writeGate';
 import { logger } from '@/observability/logger';
 import { materializeJourneysSafely } from '@/journeys/materialize';
 import { enqueueCorrelationSafely } from '@/correlation/run';
+import { enqueueEmbedSafely } from '@/retrieval/enqueue';
 import {
   candidatesForMention,
   loadCandidates,
@@ -199,6 +200,8 @@ export async function materializeObject(
   await materializeJourneysSafely(objectType, objectId);
   // Phase 08: correlation is a queued, model-free job over the rows just written (deduped).
   await enqueueCorrelationSafely(objectType, objectId, userId);
+  // Phase 09: the retrieval document is rebuilt from the rows just written (deduped).
+  await enqueueEmbedSafely(objectType, objectId, userId);
 
   logger.info('memory.materialized', {
     userId,

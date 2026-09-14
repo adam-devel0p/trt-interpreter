@@ -1,0 +1,81 @@
+{
+  "fixture": "adv-person-once",
+  "description": "Adversarial: a person who never appears. The honest answer is not enough evidence, with what was found and no claims.",
+  "provider": "mock",
+  "model": "mock/claude-opus-5",
+  "prompt_version": "answer_from_evidence/1.0.0",
+  "schema_version": "history_answer/1.0.0",
+  "ran_at": "2026-09-14T06:18:16.077Z",
+  "question": "What did my readings say about Priya?",
+  "parsed": {
+    "intent": "lookup",
+    "time_range": null,
+    "life_area": null,
+    "entity_hints": ["Priya"],
+    "journey_hints": [],
+    "card_hints": [],
+    "comparison_axes": [],
+    "object_types": ["reading"],
+    "keywords": []
+  },
+  "checks": {
+    "completed": {
+      "pass": true
+    },
+    "sufficiency": {
+      "pass": true,
+      "detail": false
+    },
+    "citations_resolve": {
+      "pass": true,
+      "detail": 0
+    },
+    "claims_cited": {
+      "pass": true
+    },
+    "cites_expected": {
+      "pass": true,
+      "detail": []
+    },
+    "never_cites": {
+      "pass": true
+    },
+    "mentions_expected": {
+      "pass": true
+    },
+    "no_invented_cards": {
+      "pass": true,
+      "detail": []
+    },
+    "no_invented_dates": {
+      "pass": true,
+      "detail": []
+    },
+    "register": {
+      "pass": true,
+      "detail": []
+    },
+    "insufficient_is_honest": {
+      "pass": true
+    }
+  },
+  "output": {
+    "answer": {
+      "evidence_sufficient": false,
+      "conclusion": "There is not enough in your history to answer this about Priya with any confidence.",
+      "claims": [],
+      "found": "Found 24 entries in this scope, but none mention Priya.",
+      "narrower_question": "What have I asked about most often?"
+    },
+    "evidence": [],
+    "package_size": 24,
+    "dropped": 7,
+    "latency_ms": 85
+  },
+  "human_review": {
+    "reviewed_by": null,
+    "reviewed_at": null,
+    "verdict": null,
+    "notes": null
+  }
+}

@@ -27,7 +27,9 @@ export type LogNamespace =
   | 'memory'
   | 'journeys'
   | 'correlation'
-  | 'events';
+  | 'events'
+  | 'retrieval'
+  | 'ask';
 export type LogEvent = `${LogNamespace}.${string}`;
 
 /** The complete set of props a log line may carry. Extend deliberately; never add prose fields. */
@@ -64,6 +66,12 @@ export interface LogProps {
   /** A short machine reason (`stronger_new_evidence`), never prose. */
   reason?: string;
   state?: string;
+  /** Ask: the id of the asks row; a stage name; package sizes (counts, never content). */
+  askId?: string;
+  stage?: string;
+  packageSize?: number;
+  dropped?: number;
+  tokens?: number;
   flag?: string;
   enabled?: boolean;
   migration?: string;
@@ -115,6 +123,11 @@ const ALLOWED_KEYS: ReadonlySet<string> = new Set<keyof LogProps>([
   'jobKind',
   'journeyId',
   'linkId',
+  'askId',
+  'stage',
+  'packageSize',
+  'dropped',
+  'tokens',
   'offered',
   'reason',
   'state',

@@ -20,8 +20,9 @@ covered by `resolve.test.ts` and the three `fixtures/history/` arcs.
 2. Trigram similarity (`pg_trgm`, computed by Postgres in `memory/candidates.ts`) ≥ 0.45 on alias
    or canonical label.
 3. Embedding cosine ≥ 0.75 between the mention's context sentence and the entity's context
-   summary — *the scoring hook exists (`embeddingSimilarity`); the embedding column and call land
-   with retrieval in Phase 09.*
+   summary — *the scoring hook exists (`embeddingSimilarity`); Phase 09 embeds retrieval
+   documents per object, not per entity, so this channel stays unfilled until an entity
+   context vector exists (deferred).*
 4. Structural priors: same Journey membership (07), recent co-occurrence, matching `entity_kind`,
    active role match (`role='partner'` for "my girlfriend"). Every active entity of the user is a
    structural candidate; scoring sorts them out.
@@ -132,8 +133,9 @@ affinity = 0.35·entity_overlap        // overlap coefficient vs the journey's c
   files a reading; theme slugs with weights from `object_themes ⋈ themes`; the question as
   written (tokenised, stopwords dropped, lightly stemmed); the date.
 - **Unavailable signals are renormalised out**, as in §1: `semantic_similarity` needs
-  vectors on both sides and is absent until Phase 09, so today the four remaining weights
-  are rescaled over 0.75. Thresholds keep their meaning now and later.
+  vectors on both sides (the object's retrieval-document vector and the journey's centroid,
+  attached by `journeys/features.ts` since Phase 09); when either is missing the four
+  remaining weights are rescaled over 0.75. Thresholds keep their meaning either way.
 - **Entity overlap** is the overlap coefficient (`|R ∩ core| / min(|R|, |core|)`) against the
   journey's *core* — entities mentioned by at least half of its members
   (`CORE_ENTITY_SHARE = 0.5`). A plain Jaccard filed readings that name two people wrongly
@@ -226,10 +228,11 @@ score = 0.30·journey_overlap        // strongest structural signal
 The weights are used exactly as written (they sum to 1.05); the score is always
 **normalised over the signals that have data**, so only the ratios matter. A signal without
 data is unavailable, not zero (the Phase 06/07 rule): `journey_overlap` when either side is
-in no journey, `semantic_similarity` until Phase 09, `timeframe_fit` when the reading
+in no journey, `semantic_similarity` when either side has no retrieval-document vector
+(attached by `correlation/features.ts` since Phase 09), `timeframe_fit` when the reading
 states no horizon, `card_symbol_overlap` when either side has no cards (every reading ↔
-event pair). Reading ↔ event today therefore scores over
-`0.30 + 0.25 + 0.10 + 0.10 + 0.05` at most.
+event pair). Reading ↔ event with vectors on both sides scores over
+`0.30 + 0.25 + 0.20 + 0.10 + 0.10 + 0.05`; without, over `0.30 + 0.25 + 0.10 + 0.10 + 0.05`.
 
 **Signal definitions as built** (each pinned by `__tests__/score.test.ts`):
 - `entity_overlap` = Σ shared weight / max(1, min(resolved count A, resolved count B)),
@@ -317,36 +320,79 @@ into a sentence; it writes the `explanation` column and nothing else.
 
 ## 4. Hybrid retrieval (§8.1)
 
-Never vector-only.
+Never vector-only. **Built in Phase 09** — `src/domain/retrieval/` (pure: document builder,
+query and answer schemas, ranking, bounding, citation verification), `src/retrieval/` (the
+loaders, the SQL search, the pipeline), `search_history()` in `0010_retrieval_ask.sql`.
 
 ```
-1. PARSE      parse_history_query → {intent, time_range, life_area, entity_hints[],
-                                     journey_hints[], card_hints[], comparison_axes[]}
-              Entity hints resolve through entity_aliases, including cross-deck card aliases
-              so "Strength" matches Thoth Lust (FR-03C).
-2. NARROW     structured SQL by user_id + (journey | entity | date range | content type | card).
-              Hard cap 400 candidates, ordered by recency when over cap.
-3. RANK       cosine over retrieval-document embeddings, re-scored:
+1. PARSE      parse_history_query (fast tier) → {intent, time_range, life_area, entity_hints[],
+                                     journey_hints[], card_hints[], comparison_axes[],
+                                     object_types[], keywords[]}
+              A parse failure falls back to an empty parse plus the deterministic time-phrase
+              resolver (`resolveTimePhrase`: "since June", "in January", "last three months",
+              "this summer"). Entity hints resolve through the user's entity_aliases and
+              canonical labels; journey hints through journey titles; card hints through the
+              reference card search (aliases, cross-deck: "Strength" finds Thoth "Lust", FR-03C).
+2. NARROW     search_history(p) as the user (SECURITY INVOKER + auth.uid()): hard filters are
+              the caller's scope (journey members ∪ their confirmed/maybe-linked objects; an
+              entity's resolved mentions; a date range), the parsed time range and the content
+              type. Hints are *counted*, never filtered on. Cap 400; over the cap, objects that
+              satisfy more hints come first, then the most recent (the doc's "recency when
+              over cap" with the structured hits ahead of it). Soft-deleted objects never
+              appear; tentative mentions never count; only confirmed links count as links.
+3. RANK       cosine over retrieval-document embeddings (computed in SQL for the narrowed set),
+              re-scored in `domain/retrieval/rank.ts`:
               final = 0.60·semantic + 0.20·structural_match + 0.15·recency + 0.05·confirmed_link_density
-4. AUGMENT    pull in: linked life events, outcomes for cited readings, user-confirmed links,
-              and any covering period summaries (summaries compress, they do not replace evidence).
-5. BOUND      ≤ 24 objects and ≤ 6000 tokens of evidence. Drop lowest-ranked whole objects;
-              never truncate an object mid-way. Record what was dropped in ai_calls.object_refs.
-6. ANSWER     answer_from_evidence with citation-required schema.
-7. VERIFY     every citation ID must be in the package — unknown IDs are stripped and the answer is
-              regenerated once; if claims remain uncited, degrade to "not enough evidence".
+              An unavailable signal (no vector on either side, no hint of any kind) is left out
+              and the weights renormalised — the codebase's rule for missing data. Structural
+              match is the mean over the hint kinds present (entities, journeys, cards, life
+              area, keywords). Recency is exp(−age/365 days), inverted for a "first
+              occurrence" question. Three confirmed links saturate link density. Ties break
+              by recency then id (packages are reproducible).
+4. AUGMENT    each anchor (top 48) is followed by the objects it is connected to — confirmed /
+              maybe links, the event an outcome points at — so a cited reading never travels
+              without the record that makes it evidence. Inside a journey scope nothing outside
+              the candidate set is added. Covering period summaries: Phase 10 (the object
+              type is admitted; the hook is `packageFrom()`).
+5. BOUND      ≤ 24 objects and ≤ 6000 estimated tokens (4 chars/token). A strict rank prefix:
+              the first object that does not fit ends the package, so nothing lower-ranked ever
+              displaces something higher-ranked, and nothing is truncated. Labels are E1…En
+              with no gaps; dropped ids are recorded in `asks.dropped_object_ids` and in
+              `ai_calls.object_refs` as `dropped_<type>`.
+6. ANSWER     answer_from_evidence (deep tier) with a citation-required schema: conclusion,
+              claims[{text, citations[E-labels]}], evidence_sufficient, found, narrower_question.
+              An empty package is answered without a model call ("nothing in your history
+              matched this scope").
+7. VERIFY     every label must be in the package — unknown labels are stripped; a claim left
+              uncited, a "sufficient" answer with no cited claim, or a register violation
+              (`domain/interpretation/register.ts`) means one regeneration with a content-free
+              repair hint; if still ungrounded the answer degrades to "not enough evidence" with
+              what *was* found. Nothing unverified reaches the screen: the run streams stages,
+              not text.
 ```
 
-**Retrieval documents (§8.3).** Deterministic template, not model prose:
-`"{journey}. {question_or_description}. Themes: {…}. Cards: {deck-native names}. Entities: {canonical
-labels}. Possibility: {…}. Timeframe: {…}. Outcome: {…}."`
-Rebuilt whenever the object, its extraction, or its confirmed links change; `content_hash` prevents
-redundant re-embedding. Embedding the compact document rather than long AI prose is what keeps
-retrieval precise and cheap at thousands of entries per user (§13 scalability).
+**Retrieval documents (§8.3).** Deterministic template, not model prose
+(`domain/retrieval/document.ts`, `retrieval_document/1.0.0`):
+`"{journeys}. {question | event sentence | open reflection}. Event: {type}. Life area: {…}.
+Themes: {≤6}. Cards ({deck}): {deck-native names, ≤10}. Entities: {canonical labels of
+auto/user mentions, ≤6}. Possibility: {≤2}. Timeframe: {…}. Outcome: {the user's record}.
+Linked: {confirmed connections, ≤2}."` Never the notes. Capped at 700 characters by dropping
+whole trailing segments, never the object's own words. Rebuilt from the write paths that
+change what it says — save / edit (90 s after, so the extraction usually lands first), every
+materialisation (extraction, correction), a connection decision (both sides), an outcome —
+through the deduped `embed_object` job; `content_hash` prevents redundant re-embedding.
+Embedding the compact document rather than long AI prose is what keeps retrieval precise and
+cheap at thousands of entries per user (§13 scalability): 1000 objects search in ~120 ms.
+
+**Semantic similarity elsewhere.** The same vectors feed `semantic_similarity` in
+correlation (§3, weight 0.20) and journey affinity (§2, 0.25): the feature loaders attach an
+object's vector when one exists and the engines renormalise it out otherwise.
 
 **Insufficient evidence is a first-class answer** (§6.6, §19). The schema has
 `evidence_sufficient: boolean`; when false the UI shows what *was* found and offers a narrower
-question, rather than inventing a pattern.
+question, rather than inventing a pattern. Measured on the demo journal (mock provider): the six
+benchmark questions answer with verified citations, the two adversarial ones degrade honestly,
+zero fabricated cards or dates (`pnpm eval`).
 
 ---
 

@@ -1,0 +1,100 @@
+{
+  "fixture": "q5-first-independence",
+  "description": "§6.6 #5. Expect the April Bali reading as the first entry tagged Independence, cited, and the later ones after it.",
+  "provider": "mock",
+  "model": "mock/claude-opus-5",
+  "prompt_version": "answer_from_evidence/1.0.0",
+  "schema_version": "history_answer/1.0.0",
+  "ran_at": "2026-09-14T06:18:16.423Z",
+  "question": "When did I first start getting themes of independence?",
+  "parsed": {
+    "intent": "first_occurrence",
+    "time_range": null,
+    "life_area": "self",
+    "entity_hints": [],
+    "journey_hints": [],
+    "card_hints": [],
+    "comparison_axes": [],
+    "object_types": ["reading", "life_event"],
+    "keywords": ["independence"]
+  },
+  "checks": {
+    "completed": {
+      "pass": true
+    },
+    "sufficiency": {
+      "pass": true,
+      "detail": true
+    },
+    "citations_resolve": {
+      "pass": true,
+      "detail": 4
+    },
+    "claims_cited": {
+      "pass": true
+    },
+    "cites_expected": {
+      "pass": true,
+      "detail": [
+        "2026-07-24 Am I ready to make decisions on my own terms?",
+        "2026-07-12 What would three weeks in Thailand on my own give me?",
+        "2026-05-09 Is a winter in Thailand a better idea than a spring in Bali?",
+        "2026-04-17 Should I go to Bali in the spring on my own?"
+      ]
+    },
+    "never_cites": {
+      "pass": true
+    },
+    "mentions_expected": {
+      "pass": true
+    },
+    "no_invented_cards": {
+      "pass": true,
+      "detail": []
+    },
+    "no_invented_dates": {
+      "pass": true,
+      "detail": []
+    },
+    "register": {
+      "pass": true,
+      "detail": []
+    },
+    "insufficient_is_honest": {
+      "pass": true
+    }
+  },
+  "output": {
+    "answer": {
+      "evidence_sufficient": true,
+      "conclusion": "The first time Independence shows up in your journal is 2026-04-17, with “Should I go to Bali in the spring on my own?”; it recurs 3 times after that.",
+      "claims": [
+        {
+          "text": "The earliest entry tagged with Independence is 2026-04-17 “Should I go to Bali in the spring on my own?”.",
+          "citations": ["E1"]
+        },
+        {
+          "text": "It came back on 2026-05-09, 2026-07-12, 2026-07-24.",
+          "citations": ["E4", "E3", "E2"]
+        }
+      ],
+      "found": null,
+      "narrower_question": null
+    },
+    "evidence": [
+      "2026-07-24 Am I ready to make decisions on my own terms?",
+      "2026-07-12 What would three weeks in Thailand on my own give me?",
+      "2026-05-09 Is a winter in Thailand a better idea than a spring in Bali?",
+      "2026-04-17 Should I go to Bali in the spring on my own?"
+    ],
+    "package_size": 24,
+    "dropped": 18,
+    "latency_ms": 50
+  },
+  "human_review": {
+    "reviewed_by": null,
+    "reviewed_at": null,
+    "verdict": null,
+    "notes": null
+  }
+}

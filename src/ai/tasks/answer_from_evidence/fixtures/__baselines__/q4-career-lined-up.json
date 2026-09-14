@@ -1,0 +1,108 @@
+{
+  "fixture": "q4-career-lined-up",
+  "description": "§6.6 #4. Expect a sufficient answer resting on readings with a recorded outcome or a user-confirmed connection (the agency offer, the talk, the review), stated as the user's records.",
+  "provider": "mock",
+  "model": "mock/claude-opus-5",
+  "prompt_version": "answer_from_evidence/1.0.0",
+  "schema_version": "history_answer/1.0.0",
+  "ran_at": "2026-09-14T06:18:16.366Z",
+  "question": "Did any of my old career readings line up with what later happened?",
+  "parsed": {
+    "intent": "outcome_check",
+    "time_range": null,
+    "life_area": "work",
+    "entity_hints": [],
+    "journey_hints": [],
+    "card_hints": [],
+    "comparison_axes": [],
+    "object_types": ["reading", "life_event"],
+    "keywords": ["career"]
+  },
+  "checks": {
+    "completed": {
+      "pass": true
+    },
+    "sufficiency": {
+      "pass": true,
+      "detail": true
+    },
+    "citations_resolve": {
+      "pass": true,
+      "detail": 4
+    },
+    "claims_cited": {
+      "pass": true
+    },
+    "cites_expected": {
+      "pass": true,
+      "detail": [
+        "2026-08-14 Should I say yes to the conference talk the agency offered?",
+        "2026-04-26 Take the offer or stay at the agency?",
+        "2026-09-08 What should I focus on before the review at the agency?",
+        "2026-04-05 Should I apply for the design lead role at the agency?"
+      ]
+    },
+    "never_cites": {
+      "pass": true
+    },
+    "mentions_expected": {
+      "pass": true
+    },
+    "no_invented_cards": {
+      "pass": true,
+      "detail": []
+    },
+    "no_invented_dates": {
+      "pass": true,
+      "detail": []
+    },
+    "register": {
+      "pass": true,
+      "detail": []
+    },
+    "insufficient_is_honest": {
+      "pass": true
+    }
+  },
+  "output": {
+    "answer": {
+      "evidence_sufficient": true,
+      "conclusion": "Of 8 readings on this, 4 have something you later recorded against them. Whether that counts as lining up is yours to judge — what follows is only what you recorded.",
+      "claims": [
+        {
+          "text": "2026-04-05 “Should I apply for the design lead role at the agency?” — you confirmed a connection to 2026-04-07 “Applied for the design lead role at the agency.”.",
+          "citations": ["E9"]
+        },
+        {
+          "text": "2026-04-26 “Take the offer or stay at the agency?” — you recorded it as happened (“Took it. The paperwork held.”); you confirmed a connection to 2026-04-29 “I accepted the offer from the agency today.”.",
+          "citations": ["E6"]
+        },
+        {
+          "text": "2026-08-14 “Should I say yes to the conference talk the agency offered?” — you recorded it as happened (“Said yes before I could talk myself out of it.”); you confirmed a connection to 2026-08-17 “Said yes to the conference talk the agency offered.”.",
+          "citations": ["E2"]
+        },
+        {
+          "text": "2026-09-08 “What should I focus on before the review at the agency?” — you confirmed a connection to 2026-09-12 “The review at the agency went better than I feared.”.",
+          "citations": ["E4"]
+        }
+      ],
+      "found": null,
+      "narrower_question": null
+    },
+    "evidence": [
+      "2026-08-14 Should I say yes to the conference talk the agency offered?",
+      "2026-04-26 Take the offer or stay at the agency?",
+      "2026-09-08 What should I focus on before the review at the agency?",
+      "2026-04-05 Should I apply for the design lead role at the agency?"
+    ],
+    "package_size": 24,
+    "dropped": 18,
+    "latency_ms": 55
+  },
+  "human_review": {
+    "reviewed_by": null,
+    "reviewed_at": null,
+    "verdict": null,
+    "notes": null
+  }
+}

@@ -69,6 +69,8 @@ export async function createReadyUser(
     extraction?: boolean;
     journeys?: boolean;
     correlation?: boolean;
+    /** Phase 09: Ask My History. */
+    ask?: boolean;
   } = {},
 ) {
   const { createClient } = await import('@supabase/supabase-js');
@@ -117,6 +119,16 @@ export async function createReadyUser(
       },
       { onConflict: 'user_id,flag' },
     );
+    if (flag.error) throw new Error(`flag upsert failed: ${flag.error.message}`);
+  }
+  // Phase 09: Ask My History too.
+  if (opts.ask) {
+    const flag = await admin
+      .from('user_flags')
+      .upsert(
+        { user_id: data.user.id, flag: 'ask_my_history', enabled: true, set_by: 'rollout' },
+        { onConflict: 'user_id,flag' },
+      );
     if (flag.error) throw new Error(`flag upsert failed: ${flag.error.message}`);
   }
   // Phase 07: journeys are flag-gated the same way.
@@ -263,4 +275,61 @@ export async function enqueueExtractions(userId: string, readingIds: string[]): 
     })),
   );
   if (error) throw new Error(`enqueue failed: ${error.message}`);
+}
+
+/**
+ * Queue the retrieval-document rebuild + embedding the save action would have queued for
+ * readings inserted directly (Phase 09 specs seed history, then let the cron embed it).
+ */
+export async function enqueueEmbeddings(
+  userId: string,
+  objects: { type: 'reading' | 'life_event'; id: string }[],
+): Promise<void> {
+  const admin = await adminClient();
+  const { error } = await admin.from('jobs').insert(
+    objects.map((o) => ({
+      kind: 'embed_object',
+      payload: { objectType: o.type, objectId: o.id },
+      user_id: userId,
+      max_attempts: 5,
+    })),
+  );
+  if (error) throw new Error(`enqueue failed: ${error.message}`);
+}
+
+/** A user-built journey holding the given readings (service role, test setup only). */
+export async function seedJourney(
+  userId: string,
+  title: string,
+  readingIds: string[],
+): Promise<string> {
+  const admin = await adminClient();
+  const j = await admin
+    .from('journeys')
+    .insert({
+      user_id: userId,
+      title,
+      status: 'active',
+      confidence: 1,
+      created_by: 'user',
+      user_confirmed: true,
+    })
+    .select('id')
+    .single();
+  if (j.error) throw new Error(`seed journey failed: ${j.error.message}`);
+  const journeyId = (j.data as { id: string }).id;
+  const m = await admin.from('journey_members').insert(
+    readingIds.map((id) => ({
+      user_id: userId,
+      journey_id: journeyId,
+      object_type: 'reading',
+      object_id: id,
+      state: 'confirmed',
+      confidence: 1,
+      created_by: 'user',
+      reasons: [],
+    })),
+  );
+  if (m.error) throw new Error(`seed members failed: ${m.error.message}`);
+  return journeyId;
 }

@@ -1,0 +1,112 @@
+{
+  "fixture": "q2-cards-leaving-job",
+  "description": "§6.6 #2. Expect a sufficient answer naming cards that actually recur across the agency / leaving readings, each card mentioned present in a cited reading.",
+  "provider": "mock",
+  "model": "mock/claude-opus-5",
+  "prompt_version": "answer_from_evidence/1.0.0",
+  "schema_version": "history_answer/1.0.0",
+  "ran_at": "2026-09-14T06:18:16.234Z",
+  "question": "What cards keep appearing when I ask about leaving my job?",
+  "parsed": {
+    "intent": "recurring_cards",
+    "time_range": null,
+    "life_area": "work",
+    "entity_hints": [],
+    "journey_hints": ["leaving my job"],
+    "card_hints": [],
+    "comparison_axes": [],
+    "object_types": ["reading"],
+    "keywords": ["leaving"]
+  },
+  "checks": {
+    "completed": {
+      "pass": true
+    },
+    "sufficiency": {
+      "pass": true,
+      "detail": true
+    },
+    "citations_resolve": {
+      "pass": true,
+      "detail": 6
+    },
+    "claims_cited": {
+      "pass": true
+    },
+    "cites_expected": {
+      "pass": true,
+      "detail": [
+        "2026-08-14 Should I say yes to the conference talk the agency offered?",
+        "2026-04-26 Take the offer or stay at the agency?",
+        "2026-08-12 Is leaving the agency the same story as leaving the flat?",
+        "2026-07-24 Am I ready to make decisions on my own terms?",
+        "2026-06-10 What am I not seeing about the new team?",
+        "2026-04-05 Should I apply for the design lead role at the agency?"
+      ]
+    },
+    "never_cites": {
+      "pass": true
+    },
+    "mentions_expected": {
+      "pass": true
+    },
+    "no_invented_cards": {
+      "pass": true,
+      "detail": []
+    },
+    "no_invented_dates": {
+      "pass": true,
+      "detail": []
+    },
+    "register": {
+      "pass": true,
+      "detail": []
+    },
+    "insufficient_is_honest": {
+      "pass": true
+    }
+  },
+  "output": {
+    "answer": {
+      "evidence_sufficient": true,
+      "conclusion": "Across 7 readings on this, Eight of Cups, Nine of Wands, Temperance keep coming back. A card that recurs may point to a question you are still circling rather than to any outcome.",
+      "claims": [
+        {
+          "text": "Eight of Cups appeared 3 times, on 2026-04-05, 2026-06-10, 2026-08-14.",
+          "citations": ["E11", "E7", "E4"]
+        },
+        {
+          "text": "Nine of Wands appeared 3 times, on 2026-04-26, 2026-06-10, 2026-08-12.",
+          "citations": ["E9", "E7", "E6"]
+        },
+        {
+          "text": "Temperance appeared 2 times, on 2026-04-26, 2026-08-12.",
+          "citations": ["E9", "E6"]
+        },
+        {
+          "text": "Four of Swords appeared 2 times, on 2026-07-24, 2026-08-14.",
+          "citations": ["E1", "E4"]
+        }
+      ],
+      "found": null,
+      "narrower_question": null
+    },
+    "evidence": [
+      "2026-08-14 Should I say yes to the conference talk the agency offered?",
+      "2026-04-26 Take the offer or stay at the agency?",
+      "2026-08-12 Is leaving the agency the same story as leaving the flat?",
+      "2026-07-24 Am I ready to make decisions on my own terms?",
+      "2026-06-10 What am I not seeing about the new team?",
+      "2026-04-05 Should I apply for the design lead role at the agency?"
+    ],
+    "package_size": 24,
+    "dropped": 7,
+    "latency_ms": 66
+  },
+  "human_review": {
+    "reviewed_by": null,
+    "reviewed_at": null,
+    "verdict": null,
+    "notes": null
+  }
+}

@@ -78,6 +78,21 @@ registry table with no counter fails the `deleting-reading-purges-derived` unit 
 table with a `reading_id` FK missing from the registry fails it too (a `set null` FK is a
 cleared pointer, not a dependent).
 
+**Phase 09:** retrieval. `retrieval_documents` (keyed by `(object_type, object_id)`) join both
+the `reading` and `life_event` roots `via: 'job'` — and die with their object by database
+trigger as well (`readings_retrieval_cascade`, `life_events_retrieval_cascade`), so a hard
+delete by any path removes them; `embeddings` cascade from their document by FK. `asks` join
+both roots `via: 'job'` as a **citation scrub**: the purge removes every reference to the
+object from `citations`, `claims[].citations`, `package_object_ids` and `dropped_object_ids`
+and verifies none remain; the question and the answer text stay (the user asked it; a
+verified answer names no content of the entry). All three cascade from the user. "Delete AI
+artifacts" also removes every embedding, every retrieval document and every ask (a question
+put to the AI and its generated answer are a transcript of the feature, not a journal entry;
+the confirmation names them). What the embedding provider receives is the stored
+`retrieval_documents.text` and nothing else — the question or event sentence, derived
+labels, deck-native card names, canonical entity labels, the user's own outcome in a few
+words — never the notes; a test asserts the outbound payload equals the stored text.
+
 **Summary handling.** A summary whose `source_object_ids` lose a member is not silently left standing:
 the deleted ID is removed, and if the remaining set is empty or below 2 the summary is deleted;
 otherwise it is flagged `stale` and regenerated on next view. A summary never survives as the only
@@ -97,7 +112,7 @@ retention and provider processing are described in plain language on the privacy
 
 ## Export (FR-22)
 
-- **v1 (Phase 05, built; 1.1.0 in Phase 06):** JSON — stable IDs and relationships preserved, so a user can leave
+- **v1 (Phase 05, built; 1.4.0 since Phase 09):** JSON — stable IDs and relationships preserved, so a user can leave
   without losing the graph (§13 data portability). `manifest.json` (`export/1.1.0`, timestamp,
   per-file counts) + `profile.json`, `readings.json` (cards nested), `note_revisions.json`,
   `interpretations.json` (every generation, versions, `superseded_by`, the user's feedback words),
@@ -110,7 +125,11 @@ retention and provider processing are described in plain language on the privacy
   (curated rows referenced + the user's own), `object_themes.json`, `entities.json` (aliases and
   roles nested, merged rows kept), `entity_mentions.json`, `predictions.json` (always
   `POSSIBILITY`, no probability) with links `extraction_of`, `override_on`, `theme_on`,
-  `theme_is`, `mention_in`, `mention_of`, `prediction_of`, `merged_into`. Never `ai_calls`. Contract in `src/domain/export/schema.ts`
+  `theme_is`, `mention_in`, `mention_of`, `prediction_of`, `merged_into`; Phase 08's
+  `life_events.json`, `event_media.json`, `outcomes.json`, `connections.json`; Phase 09's
+  `asks.json` (every question, the composed answer, its claims and citations as object ids,
+  sufficiency, versions, feedback) with `ask_cites` links. Retrieval documents and vectors are
+  derived and rebuildable and stay out. Never `ai_calls`. Contract in `src/domain/export/schema.ts`
   (`validateExport()`); builder in `src/export/build.ts`; the `export_user_data` job reads the
   user id from the `exports` row, uploads to the private `exports` bucket, sets a 7-day
   `expires_at` and sweeps that user's expired archives. Delivered by

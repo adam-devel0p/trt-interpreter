@@ -4,6 +4,7 @@ import { platformDb } from '@/db/admin';
 import { entities, entityMentions, lifeEvents, objectThemes, readings, themes } from '@/db/schema';
 import type { ObjectFeatures } from '@/domain/journeys/affinity';
 import { CONTEXT_RESOLUTIONS } from '@/memory/context';
+import { loadEmbeddingsFor } from '@/retrieval/vectors';
 
 /**
  * Feature loading for journey affinity (docs/ALGORITHMS.md §2). Builds the pure
@@ -12,6 +13,8 @@ import { CONTEXT_RESOLUTIONS } from '@/memory/context';
  * trips as a 3-member one. Entities come from `auto` and `user` mentions only (the same list
  * prompts may use, `src/memory/context.ts`): a tentative link never files a reading.
  * Phase 08: life events are objects of the same shape (no question; the date is their day).
+ * Phase 09: each object carries its retrieval-document vector when one exists, so the
+ * `semantic_similarity` term of the affinity is available (renormalised out otherwise).
  */
 
 export interface FeatureSet {
@@ -87,7 +90,7 @@ export async function loadObjectFeatures(
   const objectIds = [...readingRows.map((r) => r.id), ...eventRows.map((e) => e.id)];
   if (objectIds.length === 0) return EMPTY();
 
-  const [mentionRows, themeRows] = await Promise.all([
+  const [mentionRows, themeRows, vectors] = await Promise.all([
     db
       .select({
         objectId: entityMentions.objectId,
@@ -114,6 +117,7 @@ export async function loadObjectFeatures(
       .from(objectThemes)
       .innerJoin(themes, eq(themes.id, objectThemes.themeId))
       .where(inArray(objectThemes.objectId, objectIds)),
+    loadEmbeddingsFor(userId, objectIds),
   ]);
 
   const entityIds = new Map<string, string[]>();
@@ -144,6 +148,7 @@ export async function loadObjectFeatures(
       entityIds: entityIds.get(r.id) ?? [],
       themes: themeList.get(r.id) ?? [],
       question: r.isOpenReflection ? null : r.question,
+      ...(vectors.has(r.id) ? { embedding: vectors.get(r.id) } : {}),
     });
   }
   for (const e of eventRows) {
@@ -154,6 +159,7 @@ export async function loadObjectFeatures(
       entityIds: entityIds.get(e.id) ?? [],
       themes: themeList.get(e.id) ?? [],
       question: null,
+      ...(vectors.has(e.id) ? { embedding: vectors.get(e.id) } : {}),
     });
   }
   return { features, entityLabels, themeLabels, themeIds };

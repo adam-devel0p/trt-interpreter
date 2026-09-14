@@ -286,6 +286,12 @@ const THEME_RULES: { slug: string; label: string; category: Theme['category']; r
     category: 'practical',
     re: /\b(workshop|creative|writing|making|project)\b/i,
   },
+  {
+    slug: 'independence',
+    label: 'Independence',
+    category: 'situational',
+    re: /\b(independence|independent|on my own|my own terms|by myself|freedom|self-reliance)\b/i,
+  },
 ];
 
 const AREA_BY_THEME: Record<string, string> = {

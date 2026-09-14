@@ -31,6 +31,14 @@
  * bytes in the `event-media` bucket are removed by the job first), `links` (either side) and
  * `outcomes` (the user's record on the reading stays; its `life_event_id` is set null). The
  * `reading` root gains `outcomes` (cascade) and `links` (job, either side).
+ * Phase 09: retrieval. `retrieval_documents` are keyed by `(object_type, object_id)` and die
+ * with their object twice over — a database trigger on `readings` / `life_events` and the
+ * purge job's explicit step (which verifies zero); `embeddings` cascade from their document
+ * by FK. `asks` keep citations as object ids: the purge job scrubs every reference to the
+ * deleted object out of `citations`, `claims`, `package_object_ids` and
+ * `dropped_object_ids` (the question and the answer text stay — an answer about an entry
+ * that is gone still names no content of it, and the user asked it). All three cascade
+ * from the user.
  * The `purge_deleted` job (`src/privacy/purge.ts`) is driven by the `reading` and
  * `life_event` roots of this registry and a test asserts its receipt names every table listed.
  */
@@ -75,6 +83,21 @@ export const DELETION_REGISTRY: Record<RootType, readonly CascadeTarget[]> = {
       via: 'job',
       note: 'either side; keyed by (from_type, from_id) / (to_type, to_id)',
     },
+    {
+      table: 'retrieval_documents',
+      via: 'job',
+      note: 'keyed by (object_type, object_id); also removed by the readings_retrieval_cascade trigger',
+    },
+    {
+      table: 'embeddings',
+      via: 'cascade',
+      note: 'FK retrieval_documents.id on delete cascade — vectors die with the document',
+    },
+    {
+      table: 'asks',
+      via: 'job',
+      note: 'citation scrub: every reference to the object is removed from citations, claims and package ids',
+    },
   ],
   life_event: [
     {
@@ -97,6 +120,13 @@ export const DELETION_REGISTRY: Record<RootType, readonly CascadeTarget[]> = {
       via: 'cascade',
       note: 'FK life_events.id on delete set null — the outcome is the user’s record on the reading and stays',
     },
+    {
+      table: 'retrieval_documents',
+      via: 'job',
+      note: 'keyed by (object_type, object_id); also removed by the life_events_retrieval_cascade trigger',
+    },
+    { table: 'embeddings', via: 'cascade', note: 'FK retrieval_documents.id on delete cascade' },
+    { table: 'asks', via: 'job', note: 'citation scrub, as for readings' },
   ],
   journey: [
     { table: 'journey_members', via: 'cascade', note: 'FK journeys.id on delete cascade' },
@@ -181,6 +211,9 @@ export const DELETION_REGISTRY: Record<RootType, readonly CascadeTarget[]> = {
     },
     { table: 'outcomes', via: 'cascade', note: 'user-recorded facts' },
     { table: 'links', via: 'cascade', note: 'scores, signals and reasons; ids only' },
+    { table: 'retrieval_documents', via: 'cascade', note: 'compact template text; never notes' },
+    { table: 'embeddings', via: 'cascade', note: 'vectors and model ids' },
+    { table: 'asks', via: 'cascade', note: 'the user’s questions, answers and citations' },
   ],
 };
 

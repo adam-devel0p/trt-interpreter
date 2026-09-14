@@ -1,0 +1,114 @@
+{
+  "fixture": "q6-unresolved",
+  "description": "§6.6 #6. Expect open readings grouped by what repeats (Maya, the agency), each cited; no reading with a recorded outcome presented as open.",
+  "provider": "mock",
+  "model": "mock/claude-opus-5",
+  "prompt_version": "answer_from_evidence/1.0.0",
+  "schema_version": "history_answer/1.0.0",
+  "ran_at": "2026-09-14T06:18:16.476Z",
+  "question": "What questions do I keep asking without resolving?",
+  "parsed": {
+    "intent": "unresolved",
+    "time_range": null,
+    "life_area": null,
+    "entity_hints": [],
+    "journey_hints": [],
+    "card_hints": [],
+    "comparison_axes": [],
+    "object_types": ["reading", "life_event"],
+    "keywords": []
+  },
+  "checks": {
+    "completed": {
+      "pass": true
+    },
+    "sufficiency": {
+      "pass": true,
+      "detail": true
+    },
+    "citations_resolve": {
+      "pass": true,
+      "detail": 7
+    },
+    "claims_cited": {
+      "pass": true
+    },
+    "cites_expected": {
+      "pass": true,
+      "detail": [
+        "2026-08-12 Is leaving the agency the same story as leaving the flat?",
+        "2026-07-24 Am I ready to make decisions on my own terms?",
+        "2026-07-12 What would three weeks in Thailand on my own give me?",
+        "2026-09-11 Will the new routine stick?",
+        "2026-08-25 How are things really with M.?",
+        "2026-06-10 What am I not seeing about the new team?",
+        "2026-05-17 What is the move to Leeds asking of me?"
+      ]
+    },
+    "never_cites": {
+      "pass": true
+    },
+    "mentions_expected": {
+      "pass": true
+    },
+    "no_invented_cards": {
+      "pass": true,
+      "detail": []
+    },
+    "no_invented_dates": {
+      "pass": true,
+      "detail": []
+    },
+    "register": {
+      "pass": true,
+      "detail": []
+    },
+    "insufficient_is_honest": {
+      "pass": true
+    }
+  },
+  "output": {
+    "answer": {
+      "evidence_sufficient": true,
+      "conclusion": "12 readings are still open. The ones that repeat cluster around Maya, Change — a question you may be asking the cards instead of settling.",
+      "claims": [
+        {
+          "text": "Maya: asked 3 times without an outcome recorded (2026-05-17, 2026-07-24, 2026-08-25).",
+          "citations": ["E6", "E9", "E23"]
+        },
+        {
+          "text": "Change: asked 3 times without an outcome recorded (2026-05-17, 2026-06-10, 2026-09-11).",
+          "citations": ["E6", "E11", "E16"]
+        },
+        {
+          "text": "Uncertainty: asked 3 times without an outcome recorded (2026-06-10, 2026-08-12, 2026-08-25).",
+          "citations": ["E11", "E24", "E23"]
+        },
+        {
+          "text": "Independence: asked 2 times without an outcome recorded (2026-07-12, 2026-07-24).",
+          "citations": ["E13", "E9"]
+        }
+      ],
+      "found": null,
+      "narrower_question": null
+    },
+    "evidence": [
+      "2026-08-12 Is leaving the agency the same story as leaving the flat?",
+      "2026-07-24 Am I ready to make decisions on my own terms?",
+      "2026-07-12 What would three weeks in Thailand on my own give me?",
+      "2026-09-11 Will the new routine stick?",
+      "2026-08-25 How are things really with M.?",
+      "2026-06-10 What am I not seeing about the new team?",
+      "2026-05-17 What is the move to Leeds asking of me?"
+    ],
+    "package_size": 24,
+    "dropped": 18,
+    "latency_ms": 48
+  },
+  "human_review": {
+    "reviewed_by": null,
+    "reviewed_at": null,
+    "verdict": null,
+    "notes": null
+  }
+}

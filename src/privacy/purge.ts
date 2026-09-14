@@ -76,7 +76,46 @@ export const READING_DEPENDENT_COUNTERS: Record<string, Counter> = {
     countWhere(
       sql`select count(*)::int as n from public.links where (from_type = 'reading' and from_id = ${id}) or (to_type = 'reading' and to_id = ${id})`,
     ),
+  // Phase 09
+  retrieval_documents: (id) =>
+    countWhere(
+      sql`select count(*)::int as n from public.retrieval_documents where object_type = 'reading' and object_id = ${id}`,
+    ),
+  embeddings: (id) =>
+    countWhere(
+      sql`select count(*)::int as n from public.embeddings where object_type = 'reading' and object_id = ${id}`,
+    ),
+  asks: (id) => countAskReferences(id),
 };
+
+/** Asks that still reference an object anywhere in their citation columns (Phase 09). */
+function countAskReferences(id: string): Promise<number> {
+  return countWhere(
+    sql`select count(*)::int as n from public.asks
+        where (coalesce(citations::text, '') || coalesce(claims::text, '') || coalesce(package_object_ids::text, '') || coalesce(dropped_object_ids::text, '')) like ${`%${id}%`}`,
+  );
+}
+
+/**
+ * Scrub every reference to an object out of the asks that cite it (§19): the citation, the
+ * claim's citation, the package and dropped lists. The question and the answer text stay —
+ * they are the user's ask and a verified answer that names no content of the object.
+ */
+async function scrubAskReferences(id: string): Promise<void> {
+  await platformDb().execute(sql`
+    update public.asks set
+      citations = case when citations is null then null else
+        (select coalesce(jsonb_agg(c), '[]'::jsonb) from jsonb_array_elements(citations) c where c->>'object_id' <> ${id}) end,
+      claims = case when claims is null then null else
+        (select coalesce(jsonb_agg(jsonb_set(cl, '{citations}',
+            (select coalesce(jsonb_agg(x), '[]'::jsonb) from jsonb_array_elements(coalesce(cl->'citations', '[]'::jsonb)) x where x->>'object_id' <> ${id}))), '[]'::jsonb)
+         from jsonb_array_elements(claims) cl) end,
+      package_object_ids = case when package_object_ids is null then null else
+        (select coalesce(jsonb_agg(x), '[]'::jsonb) from jsonb_array_elements(package_object_ids) x where x->>'id' <> ${id}) end,
+      dropped_object_ids = case when dropped_object_ids is null then null else
+        (select coalesce(jsonb_agg(x), '[]'::jsonb) from jsonb_array_elements(dropped_object_ids) x where x->>'id' <> ${id}) end
+    where (coalesce(citations::text, '') || coalesce(claims::text, '') || coalesce(package_object_ids::text, '') || coalesce(dropped_object_ids::text, '')) like ${`%${id}%`}`);
+}
 
 /** Explicit steps for registry targets that no FK reaches (`via: 'job'`). */
 const READING_JOB_REMOVERS: Record<string, Remover> = {
@@ -115,6 +154,12 @@ const READING_JOB_REMOVERS: Record<string, Remover> = {
       sql`delete from public.links where (from_type = 'reading' and from_id = ${id}) or (to_type = 'reading' and to_id = ${id})`,
     );
   },
+  retrieval_documents: async (id) => {
+    await platformDb().execute(
+      sql`delete from public.retrieval_documents where object_type = 'reading' and object_id = ${id}`,
+    );
+  },
+  asks: scrubAskReferences,
 };
 
 // ── Life events (Phase 08) ─────────────────────────────────────────────────────────────────
@@ -138,6 +183,9 @@ export const EVENT_DEPENDENT_COUNTERS: Record<string, Counter> = {
     ),
   outcomes: (id) =>
     countWhere(sql`select count(*)::int as n from public.outcomes where life_event_id = ${id}`),
+  retrieval_documents: byObject('retrieval_documents'),
+  embeddings: byObject('embeddings'),
+  asks: (id) => countAskReferences(id),
 };
 
 const deleteByObject = (table: string) => async (id: string) => {
@@ -166,6 +214,8 @@ const EVENT_JOB_REMOVERS: Record<string, Remover> = {
       sql`delete from public.links where (from_type = 'life_event' and from_id = ${id}) or (to_type = 'life_event' and to_id = ${id})`,
     );
   },
+  retrieval_documents: deleteByObject('retrieval_documents'),
+  asks: scrubAskReferences,
 };
 
 export function eventRegistryTables(): string[] {

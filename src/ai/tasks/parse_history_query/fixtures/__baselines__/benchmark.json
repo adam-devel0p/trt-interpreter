@@ -1,0 +1,151 @@
+{
+  "fixture": "benchmark",
+  "description": "The six §6.6 questions and the two adversarial ones, parsed against today = the run date. Checks intent, the time range for relative phrases, life area, named entities and comparison axes.",
+  "provider": "mock",
+  "prompt_version": "parse_history_query/1.0.0",
+  "schema_version": "history_query/1.0.0",
+  "ran_at": "2026-09-14T06:18:15.770Z",
+  "today": "2026-09-14",
+  "results": [
+    {
+      "question": "How have my relationship readings changed since June?",
+      "pass": true,
+      "problems": [],
+      "output": {
+        "intent": "change_over_time",
+        "time_range": {
+          "start": "2026-06-01",
+          "end": null
+        },
+        "life_area": "relationships",
+        "entity_hints": [],
+        "journey_hints": [],
+        "card_hints": [],
+        "comparison_axes": [],
+        "object_types": ["reading"],
+        "keywords": ["relationship"]
+      }
+    },
+    {
+      "question": "What cards keep appearing when I ask about leaving my job?",
+      "pass": true,
+      "problems": [],
+      "output": {
+        "intent": "recurring_cards",
+        "time_range": null,
+        "life_area": "work",
+        "entity_hints": [],
+        "journey_hints": ["leaving my job"],
+        "card_hints": [],
+        "comparison_axes": [],
+        "object_types": ["reading"],
+        "keywords": ["leaving"]
+      }
+    },
+    {
+      "question": "Compare my readings about Bali and Thailand.",
+      "pass": true,
+      "problems": [],
+      "output": {
+        "intent": "compare",
+        "time_range": null,
+        "life_area": null,
+        "entity_hints": ["Bali", "Thailand"],
+        "journey_hints": [],
+        "card_hints": [],
+        "comparison_axes": ["Bali", "Thailand"],
+        "object_types": ["reading"],
+        "keywords": []
+      }
+    },
+    {
+      "question": "Did any of my old career readings line up with what later happened?",
+      "pass": true,
+      "problems": [],
+      "output": {
+        "intent": "outcome_check",
+        "time_range": null,
+        "life_area": "work",
+        "entity_hints": [],
+        "journey_hints": [],
+        "card_hints": [],
+        "comparison_axes": [],
+        "object_types": ["reading", "life_event"],
+        "keywords": ["career"]
+      }
+    },
+    {
+      "question": "When did I first start getting themes of independence?",
+      "pass": true,
+      "problems": [],
+      "output": {
+        "intent": "first_occurrence",
+        "time_range": null,
+        "life_area": "self",
+        "entity_hints": [],
+        "journey_hints": [],
+        "card_hints": [],
+        "comparison_axes": [],
+        "object_types": ["reading", "life_event"],
+        "keywords": ["independence"]
+      }
+    },
+    {
+      "question": "What questions do I keep asking without resolving?",
+      "pass": true,
+      "problems": [],
+      "output": {
+        "intent": "unresolved",
+        "time_range": null,
+        "life_area": null,
+        "entity_hints": [],
+        "journey_hints": [],
+        "card_hints": [],
+        "comparison_axes": [],
+        "object_types": ["reading", "life_event"],
+        "keywords": []
+      }
+    },
+    {
+      "question": "What did my readings say about Priya?",
+      "pass": true,
+      "problems": [],
+      "output": {
+        "intent": "lookup",
+        "time_range": null,
+        "life_area": null,
+        "entity_hints": ["Priya"],
+        "journey_hints": [],
+        "card_hints": [],
+        "comparison_axes": [],
+        "object_types": ["reading"],
+        "keywords": []
+      }
+    },
+    {
+      "question": "What did I ask about in January?",
+      "pass": true,
+      "problems": [],
+      "output": {
+        "intent": "lookup",
+        "time_range": {
+          "start": "2026-01-01",
+          "end": "2026-01-31"
+        },
+        "life_area": null,
+        "entity_hints": [],
+        "journey_hints": [],
+        "card_hints": [],
+        "comparison_axes": [],
+        "object_types": ["reading", "life_event"],
+        "keywords": []
+      }
+    }
+  ],
+  "human_review": {
+    "reviewed_by": null,
+    "reviewed_at": null,
+    "verdict": null,
+    "notes": null
+  }
+}

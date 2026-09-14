@@ -3,7 +3,9 @@ import type { JobHandler } from '../types';
 import { exportUserData } from './export-user-data';
 import { noopEcho } from './noop-echo';
 import {
+  backfillEmbeddingsPayload,
   correlateObjectPayload,
+  embedObjectPayload,
   explainCorrelationPayload,
   extractEventPayload,
   extractReadingPayload,
@@ -16,7 +18,7 @@ import { purgeDeleted } from './purge-deleted';
  * Handler registry. Phase 05 added `purge_deleted` and `export_user_data`; Phase 06 adds
  * `extract_reading_metadata` and `reprocess_extractions`; Phase 07 `propose_journey`; Phase 08
  * `extract_event_metadata`, `correlate_object` (model-free, but it enqueues) and
- * `explain_correlation`. The AI-backed handlers are loaded lazily: their payload schemas live in `./payloads` so `enqueue()` can validate without the
+ * `explain_correlation`; Phase 09 `embed_object` and `backfill_embeddings`. The AI-backed handlers are loaded lazily: their payload schemas live in `./payloads` so `enqueue()` can validate without the
  * model layer on the import graph, and the worker only loads the module when it claims a job
  * of that kind. A job whose kind is not registered is marked dead immediately.
  */
@@ -62,6 +64,16 @@ const entries: HandlerEntry[] = [
     kind: 'explain_correlation',
     schema: explainCorrelationPayload,
     load: async () => (await import('./explain-correlation')).explainCorrelation as JobHandler,
+  },
+  {
+    kind: 'embed_object',
+    schema: embedObjectPayload,
+    load: async () => (await import('./embed-object')).embedObjectJob as JobHandler,
+  },
+  {
+    kind: 'backfill_embeddings',
+    schema: backfillEmbeddingsPayload,
+    load: async () => (await import('./backfill-embeddings')).backfillEmbeddingsJob as JobHandler,
   },
   {
     kind: 'reprocess_extractions',

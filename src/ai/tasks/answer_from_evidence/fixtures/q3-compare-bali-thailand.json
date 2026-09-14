@@ -1,0 +1,11 @@
+{
+  "name": "q3-compare-bali-thailand",
+  "description": "§6.6 #3. Expect a sufficient comparison citing the Bali and Thailand readings and nothing about the agency.",
+  "question": "Compare my readings about Bali and Thailand.",
+  "expect": {
+    "sufficient": true,
+    "cites_any": ["Bali in the spring", "Thailand"],
+    "must_not_cite": ["agency", "Maya need from me"],
+    "must_mention_any": ["Bali"]
+  }
+}

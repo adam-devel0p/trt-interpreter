@@ -286,7 +286,7 @@ describe('export (integration)', () => {
     ).toBe(true);
     expect(links.some((l) => l.kind === 'outcome_event' && l.to.id === eventId)).toBe(true);
     expect(links.some((l) => l.kind === 'connection_to' && l.to.id === eventId)).toBe(true);
-    expect(manifest.schema_version).toBe('export/1.3.0');
+    expect(manifest.schema_version).toBe('export/1.4.0');
     expect(JSON.stringify(files)).not.toContain(gone.id);
     expect(JSON.stringify(files)).not.toContain('Deleted before export');
     expect(JSON.stringify(files)).not.toMatch(/ai_calls/);

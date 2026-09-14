@@ -133,6 +133,12 @@ export function DeleteAiArtifactsControl({ counts }: { counts: AiArtifactCounts 
           ? ` and ${plural(counts.journeys, 'automatically gathered journey')} (with ${plural(counts.journey_members, 'suggested membership')})`
           : '') +
         (counts.links > 0 ? ` and ${plural(counts.links, 'suggested connection')}` : '') +
+        (counts.embeddings + counts.retrieval_documents > 0
+          ? ` and ${plural(counts.embeddings, 'search vector')}`
+          : '') +
+        (counts.asks > 0
+          ? ` and ${plural(counts.asks, 'question you asked your history, with its answer', 'questions you asked your history, with their answers')}`
+          : '') +
         ' will be removed. Every reading, card and note you wrote stays exactly as it is, and so do your own corrections. This cannot be undone.';
   return (
     <div className="flex flex-col items-end gap-2">

@@ -1,0 +1,105 @@
+{
+  "fixture": "q1-relationships-since-june",
+  "description": "§6.6 #1. Expect a sufficient answer that cites the relationship readings from June onward (Maya, J., M.) and none of the agency readings.",
+  "provider": "mock",
+  "model": "mock/claude-opus-5",
+  "prompt_version": "answer_from_evidence/1.0.0",
+  "schema_version": "history_answer/1.0.0",
+  "ran_at": "2026-09-14T06:18:16.160Z",
+  "question": "How have my relationship readings changed since June?",
+  "parsed": {
+    "intent": "change_over_time",
+    "time_range": {
+      "start": "2026-06-01",
+      "end": null
+    },
+    "life_area": "relationships",
+    "entity_hints": [],
+    "journey_hints": [],
+    "card_hints": [],
+    "comparison_axes": [],
+    "object_types": ["reading"],
+    "keywords": ["relationship"]
+  },
+  "checks": {
+    "completed": {
+      "pass": true
+    },
+    "sufficiency": {
+      "pass": true,
+      "detail": true
+    },
+    "citations_resolve": {
+      "pass": true,
+      "detail": 3
+    },
+    "claims_cited": {
+      "pass": true
+    },
+    "cites_expected": {
+      "pass": true,
+      "detail": [
+        "2026-06-06 What does Maya need from me right now?",
+        "2026-06-22 How do I keep the friendship with J. alive from a distance?",
+        "2026-08-25 How are things really with M.?"
+      ]
+    },
+    "never_cites": {
+      "pass": true
+    },
+    "mentions_expected": {
+      "pass": true
+    },
+    "no_invented_cards": {
+      "pass": true,
+      "detail": []
+    },
+    "no_invented_dates": {
+      "pass": true,
+      "detail": []
+    },
+    "register": {
+      "pass": true,
+      "detail": []
+    },
+    "insufficient_is_honest": {
+      "pass": true
+    }
+  },
+  "output": {
+    "answer": {
+      "evidence_sufficient": true,
+      "conclusion": "Between 2026-06-06 and 2026-08-25 you came back to this 3 times. The tags moved toward Uncertainty, which may suggest the question itself changed shape.",
+      "claims": [
+        {
+          "text": "Earlier (2026-06-06, 2026-06-22): “What does Maya need from me right now?”; “How do I keep the friendship with J. alive from a distance?” — tagged Distance, Communication.",
+          "citations": ["E3", "E2"]
+        },
+        {
+          "text": "More recently (2026-08-25): “How are things really with M.?” — tagged Uncertainty.",
+          "citations": ["E1"]
+        },
+        {
+          "text": "You recorded what happened on 2 of these (2026-06-06, 2026-06-22).",
+          "citations": ["E3", "E2"]
+        }
+      ],
+      "found": null,
+      "narrower_question": null
+    },
+    "evidence": [
+      "2026-06-06 What does Maya need from me right now?",
+      "2026-06-22 How do I keep the friendship with J. alive from a distance?",
+      "2026-08-25 How are things really with M.?"
+    ],
+    "package_size": 18,
+    "dropped": 0,
+    "latency_ms": 69
+  },
+  "human_review": {
+    "reviewed_by": null,
+    "reviewed_at": null,
+    "verdict": null,
+    "notes": null
+  }
+}

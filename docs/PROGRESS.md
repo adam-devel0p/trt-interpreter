@@ -2,27 +2,25 @@
 
 The first thing to read in any new session. Update it at the end of every phase.
 
-**Current state:** Phase 08 complete — the reading-to-reality loop closes. A life event is one
-sentence and a date, saved as a `CONFIRMED_FACT` before any AI (`life_events`, text immutable
-by trigger; photo in a private bucket behind owner-scoped signed URLs); the cron extracts it
-(`extract_event_metadata`, same tables as readings), files it into journeys by assignment,
-and runs the model-free correlation engine (`src/domain/correlation/`, `src/correlation/`)
-against the readings around it — and the other way round after a reading's extraction.
-Deviations from ALGORITHMS §3, each forced by the demo read and pinned by labelled pairs:
-weights normalised over the *available* signals; one of the two required signals must be
-temporal; "Likely" also needs the window or about a month; entity overlap normalises by
-resolved count; the revisit date is a horizon; generated text is never evidence. At most
-three offers per object, each with signals, sentence reasons, a fingerprint and — consent
-permitting — one hedged `explain_correlation` sentence that writes nothing else. Confirm /
-Maybe / Unrelated with undo; a rejection remembers its evidence (§19). Outcomes are the
-user's alone (`recorded_by = 'user'` by check), append-only, syncing follow-up and clearing
-the revisit; Home shows overdue revisits. The journey timeline interleaves events and
-outcomes and both remaining sections are filled. Purge (`life_event` root), export
-(`export/1.3.0`) and delete-AI-artifacts cover the four tables. Labelled precision 1.00 /
-recall 0.86; 0 wrong-and-confident on the 21 demo connections read by hand. Full gate green
-(122 e2e). Owner-side deferrals: the two real-model evals, the "5 real events" judgement
-with real extraction, then `FLAG_CORRELATION_SUGGESTIONS`.
-**Next phase:** [Phase 09 — Retrieval + Ask My History](phases/phase-09-retrieval-ask.md)
+**Current state:** Phase 09 complete — the §17 MVP experience is complete and testable end
+to end. Every live reading and event carries a compact retrieval document
+(`domain/retrieval/document.ts`, never the notes) and a vector of exactly that text, rebuilt
+through the deduped `embed_object` job from the write paths that change it and backfilled by
+`backfill_embeddings`. Hybrid retrieval runs all seven §8.1 steps: `parse_history_query`
+(hints only), `search_history()` (SECURITY INVOKER + `auth.uid()`, scope filters, cap 400
+hits-first), the 0.60/0.20/0.15/0.05 re-rank with unavailable signals renormalised out,
+augmentation with linked events and outcomes, a strict-prefix bound of 24 objects / 6000
+tokens with dropped ids recorded, `answer_from_evidence` with E-label citations, and a
+verifier that strips unknown labels, repairs once and otherwise degrades to "not enough
+evidence" — stages stream, answer text never does before verification. The Ask screen has
+the §6.6 examples and scope chips; "Ask about this journey" is live and journey-only;
+stored asks reopen with zero calls; the same vectors feed correlation and journey affinity.
+Purge (trigger + job; asks scrubbed), export (`export/1.4.0`) and delete-AI-artifacts cover
+the three tables. Demo: 42 documents; the six benchmark and two adversarial questions pass
+with zero fabrication; `search_history` 124 ms at 1000 objects. Full gate green (124 e2e).
+Owner-side deferrals: the two real-model evals and their baselines, real p95 / $ per ask,
+then `FLAG_ASK_MY_HISTORY`; **run the §22 study before Phase 10**.
+**Next phase:** [Phase 10 — Summaries + retrospectives](phases/phase-10-summaries-retrospectives.md) — after the §22 validation study
 
 ## Phase status
 
@@ -37,7 +35,7 @@ with real extraction, then `FLAG_CORRELATION_SUGGESTIONS`.
 | 06 | [Structured memory](phases/phase-06-structured-memory.md) | ⚠️ complete with deferrals | [report](phases/completed/phase-06-report.md) | 2026-09-13 · real-model extraction eval + flag default need provider keys (owner) |
 | 07 | [Journeys](phases/phase-07-journeys.md) | ⚠️ complete with deferrals | [report](phases/completed/phase-07-report.md) | 2026-09-13 · comprehension check + real-model naming eval are owner tasks |
 | 08 | [Events, outcomes, correlation](phases/phase-08-events-outcomes.md) | ⚠️ complete with deferrals | [report](phases/completed/phase-08-report.md) | 2026-09-14 · real-model evals + the real-extraction event judgement are owner tasks |
-| 09 | [Retrieval + Ask My History](phases/phase-09-retrieval-ask.md) | ⬜ not started | — | ← MVP complete; run §22 study |
+| 09 | [Retrieval + Ask My History](phases/phase-09-retrieval-ask.md) | ⚠️ complete with deferrals | [report](phases/completed/phase-09-report.md) | 2026-09-14 · ← MVP complete; real-model evals are owner tasks; **run the §22 study** |
 | 10 | [Summaries + retrospectives](phases/phase-10-summaries-retrospectives.md) | ⬜ not started | — | |
 | 11 | [Monetization + retention](phases/phase-11-monetization-retention.md) | ⬜ not started | — | |
 | 12 | [Hardening + beta](phases/phase-12-hardening-beta.md) | ⬜ not started | — | |
@@ -109,12 +107,22 @@ Add anything a phase discovered but could not settle. Remove when resolved.
 - The two soft-deleted demo rows stay soft-deleted: nothing enqueues the `purge_deleted` sweep
   (`{readingId: null}`) yet — a cron entry or `pnpm jobs:sweep` is a Phase 12 ops item. Since
   08 the same sweep covers soft-deleted life events.
-- **The mock extractor bounds what can correlate.** No shared entity → no suggestion; theme-
-  and-proximity pairs cannot reach 0.55 without Phase 09's semantic signal. With the real
-  model, repeat the labelled-pair eval and the demo read; `LIKELY_TEMPORAL_MIN` and the
-  temporal guard (`domain/correlation/thresholds.ts`) are the first dials.
-- **Journey overlap dominates correlation today** (0.30 of an available 0.80) — contained by
-  the temporal guard and the "Likely" condition until 09 dilutes it.
+- **The mock extractor bounds what can correlate.** No shared entity → no suggestion. Since
+  09 the semantic signal is available when both sides carry a vector, but with the mock's
+  hashed bag-of-words the theme-only labelled pair reaches 0.43 (semantic 0.58) — below
+  0.55 while `entity_overlap` counts as available-at-zero. With the real model, repeat the
+  labelled-pair eval and the demo read; `LIKELY_TEMPORAL_MIN`, the temporal guard and that
+  entity-overlap rule (`domain/correlation/thresholds.ts`, `score.ts`) are the first dials.
+- **Journey overlap dominates correlation** (0.30 of an available 0.80 without vectors,
+  0.30 of 1.00 with) — contained by the temporal guard and the "Likely" condition.
+- **The mock parser and answerer are English rule scaffolding** (as the extractors). The
+  eval's fabrication checks (invented cards / dates, unverified citations, false
+  "sufficient") are what to read on the first real-model run.
+- **`search_history` scores similarity over the narrowed per-user set, not through the HNSW
+  index** (124 ms at 1000 objects). Fine at per-user scale; the index is there for a
+  global-then-filter plan if a journal ever holds tens of thousands.
+- **Nothing schedules `backfill_embeddings {userId: null}`** (the re-embed after a model
+  change); a cron entry / `pnpm jobs:backfill` is a Phase 12 ops item with the purge sweep.
 - The 0009 migration file was extended (receipt-scope ALTER) after it was applied locally;
   the ALTER was applied by hand on the dev database. Fresh databases get it from the file.
 
@@ -144,7 +152,7 @@ Phases append here when they defer something, so nothing is lost between session
 | ~~Entity / journey filters in the journal~~ | 05 | 06 ✅ / 07 ✅ | `entity=` in 06, `journey=` in 07 (`EXISTS` on `journey_members`, state ≠ removed) |
 | ~~Extractions~~ + summaries in "Delete AI artifacts" and in the export | 05 | 06 ✅ / 10 | extractions, themes, mentions, predictions, entities in both (export/1.1.0); summaries in 10 |
 | Real-model `pnpm eval` for `extract_reading_metadata`, human read of the four baselines, then `FLAG_AI_EXTRACTION=true` | 06 | owner (any time) | no provider key; mock baseline recorded (recall 100 %, precision 88 %) |
-| Embedding channel for entity candidates (`embeddingSimilarity`) | 06 | 09 | needs entity context vectors; hook + threshold exist |
+| Embedding channel for entity candidates (`embeddingSimilarity`) | 06 → 09 | when resolution needs it | vectors are per object (09), not per entity; hook + threshold exist |
 | ~~Journey overlap signal in resolution~~ | 06 | 07 ✅ | `loadJourneyLinks()`; null (not zero) when either side is in no journey; arcs pass under three variants |
 | Re-score `links` on merge / split; prediction retraction on reprocess | 06 → 08 | 12 | the next `correlate_object` run re-scores a pair (decided rows keep their state); no merge/split hook yet |
 | Per-reading lock against overlapping extraction jobs | 06 | 12 | dedupe covers `queued` only |
@@ -157,14 +165,19 @@ Phases append here when they defer something, so nothing is lost between session
 | `rng.deck_id` on a digital reading whose deck was changed in edit | 05 | when `rng` is surfaced | the draw record stays as the audit of the original draw |
 | Comprehension check of the Journey screen with an unfamiliar person (§22), answer recorded verbatim in the 07 report | 07 | owner (any time) | no second person in the session |
 | Real-model `pnpm eval` for `propose_journey`, human read of the three baselines, then `FLAG_JOURNEY_AUTOCREATE=true` | 07 | owner (any time) | no provider key; mock baselines recorded |
-| `semantic_similarity` (0.25 weight) in journey affinity | 07 | 09 | needs retrieval-document vectors; renormalised out meanwhile |
+| ~~`semantic_similarity` (0.25 weight) in journey affinity~~ | 07 | 09 ✅ | `journeys/features.ts` attaches retrieval-document vectors |
 | ~~Events, outcomes, connections on the Journey screen; polymorphic-member RLS for `life_event` rows~~ | 07 | 08 ✅ | timeline interleaves; both sections filled; four policies tightened |
-| `journey_narrative` header; scoped "Ask about this journey" | 07 | 10 / 09 | deterministic header and a disabled button until then |
+| `journey_narrative` header; ~~scoped "Ask about this journey"~~ | 07 | 10 / 09 ✅ | deterministic header until 10; the journey ask is live behind `ask_my_history` |
 | `MemberControls` / `SuggestedJourneyCard` / `JourneyPanel` in `/dev/ui` | 07 | 12 | islands bound to actions |
 | Re-evaluate existing memberships after many corrections; journey scroll instrumentation at 100+ | 07 | 12 | one-tap remove is the correction path; 100-member read is 5 queries |
 | Real-model `pnpm eval` for `extract_event_metadata` and `explain_correlation`, human read of the five baselines, then `FLAG_CORRELATION_SUGGESTIONS=true` | 08 | owner (any time) | no provider key; mock baselines recorded; labelled precision 1.00 |
 | Log 5 real-ish events against real extraction and judge every proposal (§22 trust check) | 08 | owner | done on the demo journal with the mock (0 wrong-and-confident of 21) |
 | `reading ↔ reading` correlation surfaced; model-proposed `INFERRED_EVENT` rows with a confirm step | 08 | when a surface asks | the pure engine and the constraints exist |
-| `semantic_similarity` (0.20) in correlation | 08 | 09 | renormalised out; the theme-only labelled pair is the recall it recovers |
+| ~~`semantic_similarity` (0.20) in correlation~~ | 08 | 09 ✅ | `correlation/features.ts` attaches vectors; the theme-only pair still misses with mock vectors (0.43) — decide on the real-model read |
 | Push / email delivery of due revisits | 08 | 11 | in-app cards only |
 | Compact connection cards on the journey page; `ConnectionReview` / `OutcomePanel` / `EventForm` in `/dev/ui`; a "re-check connections" action; per-object lock for correlation runs | 08 | 12 | |
+| Real-model `pnpm eval` for `parse_history_query` and `answer_from_evidence`, human read of the nine baselines, real p95 / $ per ask, then `FLAG_ASK_MY_HISTORY=true` | 09 | owner (any time) | no provider key; mock baselines recorded; zero fabrication on the mock |
+| **§22 validation study** (10–20 users) on the complete MVP experience | 09 | owner, before 10 | a study, not code |
+| `build_retrieval_document` as a model compression step; entity-context vectors | 09 | if ever needed | the deterministic template is 60–330 chars on the demo |
+| Covering period summaries in the evidence package | 09 | 10 | `object_type = 'period_summary'` admitted; `packageFrom()` is the hook |
+| `pnpm jobs:backfill` / cron for `backfill_embeddings`; delete control on the stored-ask page; `AskComposer` / `AnswerView` in `/dev/ui`; request abort threaded into the runner | 09 | 12 | |

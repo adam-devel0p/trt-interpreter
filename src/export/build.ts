@@ -16,6 +16,7 @@ import {
   eventMedia,
   extractions,
   lifeEvents,
+  asks,
   links as linkRows,
   outcomes,
   interpretations,
@@ -307,6 +308,12 @@ export async function buildExportArchive(
       liveObject({ objectType: l.fromType, objectId: l.fromId }) &&
       liveObject({ objectType: l.toType, objectId: l.toId }),
   );
+
+  const historyAskRows = await db
+    .select()
+    .from(asks)
+    .where(eq(asks.userId, userId))
+    .orderBy(asks.createdAt, asks.id);
 
   const cardsByReading = new Map<string, typeof cardRows>();
   for (const c of cardRows) {
@@ -734,6 +741,33 @@ export async function buildExportArchive(
         updated_at: isoReq(l.updatedAt),
       };
     }),
+    'asks.json': historyAskRows.map((a) => {
+      type Cit = { object_type: string; object_id: string; label: string };
+      const live = (c: Cit) => liveObject({ objectType: c.object_type, objectId: c.object_id });
+      const citations = ((a.citations as Cit[] | null) ?? []).filter(live);
+      for (const c of citations) link('ask_cites', ['ask', a.id], [c.object_type, c.object_id]);
+      const claims = (a.claims as { text: string; citations: Cit[] }[] | null)?.map((cl) => ({
+        text: cl.text,
+        citations: (cl.citations ?? []).filter(live),
+      }));
+      return {
+        id: a.id,
+        question: a.question,
+        scope: a.scope,
+        status: a.status as 'pending' | 'complete' | 'failed',
+        answer: a.answer,
+        claims: claims ?? null,
+        evidence_sufficient: a.evidenceSufficient,
+        found: a.found,
+        narrower_question: a.narrowerQuestion,
+        model_id: a.modelId,
+        prompt_version: a.promptVersion,
+        schema_version: a.schemaVersion,
+        feedback: a.feedback,
+        created_at: isoReq(a.createdAt),
+        completed_at: iso(a.completedAt),
+      };
+    }),
     'links.json': links,
   };
 
@@ -758,6 +792,7 @@ export async function buildExportArchive(
       'Readings you deleted are not included.',
       'extractions.json, entities.json, entity_mentions.json, object_themes.json and predictions.json are derived by the app and can be regenerated; metadata_overrides.json holds your corrections to them.',
       'journeys.json and journey_members.json are gathered by the app from those; a journey you accepted, renamed or built carries user_confirmed = true.',
+      'asks.json holds every question you put to your history with the answer the app composed and the entries it cited; answers are generated text, not records.',
       'life_events.json and outcomes.json are your own words and records (CONFIRMED_FACT). connections.json holds the app’s scored suggestions between readings and events with their reasons; state says what you decided. event_media.json lists photo paths; the bytes are not in this archive.',
     ],
   } satisfies ExportManifest);

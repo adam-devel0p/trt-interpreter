@@ -34,9 +34,20 @@ describe('deleting-reading-purges-derived', () => {
       'entity_mentions',
       'journey_members',
       'links',
+      'retrieval_documents',
+      'asks',
     ]);
     const purgeSrc = read('src/privacy/purge.ts');
-    for (const t of jobTargets) expect(purgeSrc).toMatch(new RegExp(`delete from public\\.${t}`));
+    for (const t of jobTargets.filter((t) => t !== 'asks'))
+      expect(purgeSrc).toMatch(new RegExp(`delete from public\\.${t}`));
+    // Phase 09: an ask is not deleted with a reading — its references are scrubbed (§19).
+    expect(purgeSrc).toMatch(
+      /update public\.asks set[\s\S]*citations[\s\S]*claims[\s\S]*package_object_ids[\s\S]*dropped_object_ids/,
+    );
+    // The database cascades the document too, whichever path deletes the row.
+    expect(read('src/db/migrations/0010_retrieval_ask.sql')).toMatch(
+      /readings_retrieval_cascade AFTER DELETE ON public\.readings/,
+    );
   });
 
   it('2 · every table that references readings.id is a registered dependent', () => {
@@ -47,6 +58,7 @@ describe('deleting-reading-purges-derived', () => {
       '0007_structured_memory',
       '0008_journeys',
       '0009_events_outcomes',
+      '0010_retrieval_ask',
     ]
       .map((m) => read(`src/db/migrations/${m}.sql`))
       .join('\n');
@@ -117,9 +129,14 @@ describe('deleting-reading-purges-derived', () => {
       'entity_mentions',
       'journey_members',
       'links',
+      'retrieval_documents',
+      'asks',
     ]);
     const purgeSrc = read('src/privacy/purge.ts');
-    expect(purgeSrc).toMatch(/removeEventMedia\(/); // bytes go before rows
+    expect(purgeSrc).toMatch(/removeEventMedia\(/);
+    expect(read('src/db/migrations/0010_retrieval_ask.sql')).toMatch(
+      /life_events_retrieval_cascade AFTER DELETE ON public\.life_events/,
+    ); // bytes go before rows
     expect(purgeSrc).toMatch(
       /where \(from_type = 'life_event' and from_id = \$\{id\}\) or \(to_type = 'life_event' and to_id = \$\{id\}\)/,
     );

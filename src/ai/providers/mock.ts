@@ -2,6 +2,7 @@
  * Deterministic mock provider. Canned responses keyed by task + fixture name, plus fault
  * injection so every branch of run.ts is testable without a network.
  */
+import { EMBEDDING_DIMENSIONS, hashEmbedding } from '@/domain/retrieval/hashEmbedding';
 import { AiProviderError, isProviderError, type AiProvider } from '../provider';
 import type {
   EmbedRequest,
@@ -69,25 +70,15 @@ function meta(modelId: string, latencyMs: number, repaired = false): ResultMeta 
   };
 }
 
-export const MOCK_EMBEDDING_DIMENSIONS = 1536;
+export const MOCK_EMBEDDING_DIMENSIONS = EMBEDDING_DIMENSIONS;
 
 /**
- * Deterministic hashed bag-of-words embedding, unit length, same dimensionality as the real
- * model. Identical questions score 1.0, paraphrases share most words, unrelated questions score
- * low — enough for the repeat-question rule to be tested without a network.
+ * Deterministic hashed bag-of-words embedding (`domain/retrieval/hashEmbedding.ts`), same
+ * dimensionality as the real model. Identical texts score 1.0, paraphrases share most words,
+ * unrelated texts score low — enough for the repeat rule and retrieval ranking to be tested
+ * without a network.
  */
-export function mockEmbedding(text: string): number[] {
-  const v = new Array<number>(MOCK_EMBEDDING_DIMENSIONS).fill(0);
-  const words = text.toLowerCase().match(/[\p{L}\p{N}']+/gu) ?? [];
-  for (const w of words) {
-    let h = 2166136261;
-    for (let i = 0; i < w.length; i++) h = Math.imul(h ^ w.charCodeAt(i), 16777619);
-    const idx = Math.abs(h) % MOCK_EMBEDDING_DIMENSIONS;
-    v[idx] = (v[idx] ?? 0) + 1;
-  }
-  const norm = Math.sqrt(v.reduce((s, x) => s + x * x, 0)) || 1;
-  return v.map((x) => x / norm);
-}
+export const mockEmbedding = hashEmbedding;
 
 /** Rejects only when the caller aborts (run.ts's timeout), like a hung network call. */
 function hangUntilAborted(signal: AbortSignal): Promise<never> {

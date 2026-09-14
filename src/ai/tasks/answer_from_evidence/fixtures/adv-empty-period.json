@@ -1,0 +1,6 @@
+{
+  "name": "adv-empty-period",
+  "description": "Adversarial: a month with no entries. Nothing matches the scope; the answer says so without a model call.",
+  "question": "What did I ask about in January?",
+  "expect": { "sufficient": false, "cites_any": [], "must_not_cite": [], "must_mention_any": [] }
+}

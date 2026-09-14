@@ -6,6 +6,7 @@ import { seedEvents } from './seed-demo-events';
 import { seedInterpretations } from './seed-demo-interpretations';
 import { seedJourneys } from './seed-demo-journeys';
 import { seedMemory } from './seed-demo-memory';
+import { seedRetrieval } from './seed-demo-retrieval';
 
 /**
  * Demo journal generator (docs/IMPLEMENTATION_PLAN.md §3.10). Produces a coherent fictional
@@ -16,7 +17,8 @@ import { seedMemory } from './seed-demo-memory';
  *
  *   Phase 01 → users + profiles          Phase 03 → readings + cards
  *   Phase 06 → extractions, entities     Phase 07 → journeys
- *   Phase 08 → life events, outcomes, links   Phase 10 → summaries
+ *   Phase 08 → life events, outcomes, links   Phase 09 → retrieval documents, vectors
+ *   Phase 10 → summaries
  */
 export interface SeedContext {
   months: number;
@@ -112,6 +114,7 @@ const SEEDERS: Seeder[] = [
   { name: 'structured memory', phase: '06', run: seedMemory },
   { name: 'journeys', phase: '07', run: seedJourneys },
   { name: 'life events, outcomes, connections', phase: '08', run: seedEvents },
+  { name: 'retrieval documents, vectors', phase: '09', run: seedRetrieval },
 ];
 
 async function main() {

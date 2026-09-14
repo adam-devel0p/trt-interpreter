@@ -10,8 +10,10 @@ import { z } from 'zod';
  * 1.1.0 (Phase 06): extractions, overrides, themes, entities, mentions, predictions joined.
  * 1.2.0 (Phase 07): journeys (with progression steps nested) and journey members.
  * 1.3.0 (Phase 08): life events, event media (paths), outcomes and connections (scored links).
+ * 1.4.0 (Phase 09): asks — every question put to the history with its verified answer and
+ * citations. Retrieval documents and vectors are derived and rebuildable, so they stay out.
  */
-export const EXPORT_SCHEMA_VERSION = 'export/1.3.0';
+export const EXPORT_SCHEMA_VERSION = 'export/1.4.0';
 
 export const EXPORT_FILES = [
   'profile.json',
@@ -37,6 +39,7 @@ export const EXPORT_FILES = [
   'event_media.json',
   'outcomes.json',
   'connections.json',
+  'asks.json',
   'links.json',
 ] as const;
 export type ExportFile = (typeof EXPORT_FILES)[number];
@@ -481,6 +484,38 @@ export const exportConnectionSchema = z
   })
   .strict();
 
+/** One question put to the history (Phase 09). Citations are object ids the answer rested on. */
+export const exportAskSchema = z
+  .object({
+    id: uuid,
+    question: z.string(),
+    scope: z.unknown(),
+    status: z.enum(['pending', 'complete', 'failed']),
+    answer: z.string().nullable(),
+    claims: z
+      .array(
+        z
+          .object({
+            text: z.string(),
+            citations: z.array(
+              z.object({ object_type: z.string(), object_id: uuid, label: z.string() }).strict(),
+            ),
+          })
+          .strict(),
+      )
+      .nullable(),
+    evidence_sufficient: z.boolean().nullable(),
+    found: z.string().nullable(),
+    narrower_question: z.string().nullable(),
+    model_id: z.string().nullable(),
+    prompt_version: z.string().nullable(),
+    schema_version: z.string().nullable(),
+    feedback: z.number().int().nullable(),
+    created_at: iso,
+    completed_at: iso.nullable(),
+  })
+  .strict();
+
 export const LINK_KINDS = [
   'reading_uses_spread',
   'reading_uses_deck',
@@ -513,6 +548,8 @@ export const LINK_KINDS = [
   'outcome_event',
   'connection_from',
   'connection_to',
+  // Phase 09
+  'ask_cites',
 ] as const;
 
 export const exportLinkSchema = z
@@ -548,6 +585,7 @@ export const EXPORT_FILE_SCHEMAS = {
   'event_media.json': z.array(exportEventMediaSchema),
   'outcomes.json': z.array(exportOutcomeSchema),
   'connections.json': z.array(exportConnectionSchema),
+  'asks.json': z.array(exportAskSchema),
   'links.json': z.array(exportLinkSchema),
 } as const satisfies Record<ExportFile, z.ZodType>;
 

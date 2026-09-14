@@ -1,0 +1,6 @@
+{
+  "name": "adv-person-once",
+  "description": "Adversarial: a person who never appears. The honest answer is not enough evidence, with what was found and no claims.",
+  "question": "What did my readings say about Priya?",
+  "expect": { "sufficient": false, "cites_any": [], "must_not_cite": [], "must_mention_any": [] }
+}

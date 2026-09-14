@@ -1,7 +1,8 @@
 /**
- * Minimal embeddings adapter (question similarity only in Phase 04; generalised in Phase 09).
- * Only the text handed to it is sent — the callers pass the question alone, never notes. Plain
- * `fetch`; no SDK. Same content-free error classes as every other provider.
+ * Minimal embeddings adapter (question similarity in Phase 04; retrieval documents and Ask
+ * questions since Phase 09). Only the text handed to it is sent — a question, or the stored
+ * compact retrieval document — never notes. Plain `fetch`; no SDK. Same content-free error
+ * classes as every other provider.
  */
 import { costMicros } from '../pricing';
 import { AiProviderError } from '../provider';

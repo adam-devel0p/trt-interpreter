@@ -1,0 +1,15 @@
+{
+  "name": "q2-cards-leaving-job",
+  "description": "§6.6 #2. Expect a sufficient answer naming cards that actually recur across the agency / leaving readings, each card mentioned present in a cited reading.",
+  "question": "What cards keep appearing when I ask about leaving my job?",
+  "expect": {
+    "sufficient": true,
+    "cites_any": [
+      "Take the offer or stay at the agency?",
+      "Is leaving the agency the same story as leaving the flat?",
+      "design lead role"
+    ],
+    "must_not_cite": ["Maya need from me", "autumn hold for my health"],
+    "must_mention_any": ["of", "The"]
+  }
+}

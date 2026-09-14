@@ -22,6 +22,7 @@ import { recurringSymbols } from '@/domain/journeys/symbols';
 import { buildTimeline, isOpenLoop, type TimelineEntry } from '@/domain/journeys/timeline';
 import { Button } from '@/ui/components/button';
 import { JourneyTimeline } from '@/ui/components/journey-timeline';
+import { flag } from '@/flags';
 import { LocalTime } from '@/ui/components/local-time';
 import { PageHeader } from '@/ui/components/page-header';
 import { RecurringSymbols } from '@/ui/components/recurring-symbols';
@@ -53,9 +54,12 @@ export const dynamic = 'force-dynamic';
 export default async function JourneyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!z.string().uuid().safeParse(id).success) notFound();
-  await requireUser();
+  const user = await requireUser();
   const client = await getSessionClient();
-  const detail = await getJourney(client, id);
+  const [detail, askEnabled] = await Promise.all([
+    getJourney(client, id),
+    flag('ask_my_history', { userId: user.id }),
+  ]);
   if (!detail) notFound();
   const { journey, members, pending, events, pendingEvents, progression } = detail;
 
@@ -426,11 +430,18 @@ export default async function JourneyPage({ params }: { params: Promise<{ id: st
       </Section>
 
       <Section id="ask" title="Ask about this journey">
-        <Button variant="secondary" disabled aria-disabled="true">
-          Ask about this journey · coming soon
-        </Button>
+        {askEnabled ? (
+          <Button variant="secondary" asChild>
+            <Link href={`/ask?journey=${journey.id}`}>Ask about this journey</Link>
+          </Button>
+        ) : (
+          <Button variant="secondary" disabled aria-disabled="true">
+            Ask about this journey · not switched on yet
+          </Button>
+        )}
         <p className="mt-2 text-sm text-fg-muted">
-          Questions answered from these readings only, with the entries cited.
+          Questions answered from this journey’s readings, events and connections only, with the
+          entries cited.
         </p>
       </Section>
 

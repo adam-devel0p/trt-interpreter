@@ -1,0 +1,15 @@
+{
+  "name": "q1-relationships-since-june",
+  "description": "§6.6 #1. Expect a sufficient answer that cites the relationship readings from June onward (Maya, J., M.) and none of the agency readings.",
+  "question": "How have my relationship readings changed since June?",
+  "expect": {
+    "sufficient": true,
+    "cites_any": [
+      "What does Maya need from me right now?",
+      "How are things really with M.?",
+      "friendship with J."
+    ],
+    "must_not_cite": ["design lead role", "conference talk"],
+    "must_mention_any": ["Maya", "M.", "J."]
+  }
+}

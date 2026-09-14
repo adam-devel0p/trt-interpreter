@@ -1,0 +1,15 @@
+{
+  "name": "q6-unresolved",
+  "description": "§6.6 #6. Expect open readings grouped by what repeats (Maya, the agency), each cited; no reading with a recorded outcome presented as open.",
+  "question": "What questions do I keep asking without resolving?",
+  "expect": {
+    "sufficient": true,
+    "cites_any": [
+      "How are things really with M.?",
+      "What does Maya need from me right now?",
+      "Will the new routine stick?"
+    ],
+    "must_not_cite": ["Take the offer or stay at the agency?"],
+    "must_mention_any": ["open", "without", "unresolved", "still"]
+  }
+}

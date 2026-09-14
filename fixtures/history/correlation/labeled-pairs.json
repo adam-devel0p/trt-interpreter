@@ -105,7 +105,7 @@
     {
       "id": "health-theme-only-close",
       "related": true,
-      "note": "Theme and horizon only, no entities: a fair 'possible' at most.",
+      "note": "Theme and horizon only, no entities: a fair \"possible\" at most. Phase 09: with retrieval-document vectors on both sides (text), semantic similarity is the signal that lifts it.",
       "reading": {
         "at": "2026-07-30",
         "entities": [],
@@ -118,13 +118,15 @@
           "start": "2026-07-30",
           "end": "2026-08-31",
           "text": "this month"
-        }
+        },
+        "text": "What does the autumn hold for my health. Life area: Health. Themes: Health, Stability. Cards (Rider–Waite–Smith): Temperance, Nine of Pentacles, The Star. Timeframe: this month."
       },
       "event": {
         "at": "2026-08-27",
         "entities": [],
         "themes": [["health", 0.8]],
-        "journeys": []
+        "journeys": [],
+        "text": "Saw the doctor about the sleep problems. Event: Health. Life area: Health. Themes: Health."
       }
     },
     {

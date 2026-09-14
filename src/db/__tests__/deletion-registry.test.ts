@@ -43,6 +43,9 @@ describe('deletion registry', () => {
         'event_media',
         'outcomes',
         'links',
+        'retrieval_documents',
+        'embeddings',
+        'asks',
       ]),
     );
     // Simulate a new user-owned table that nobody registered.
