@@ -30,10 +30,11 @@ export interface CandidateSet {
   journeysExist: boolean;
 }
 
-/** Growable journeys (not dismissed, merged or closed) per entity, and per reading. */
+/** Growable journeys (not dismissed, merged or closed) per entity, and per member object. */
 export async function loadJourneyLinks(userId: string): Promise<{
   byEntity: Map<string, string[]>;
-  byReading: Map<string, string[]>;
+  /** Keyed by object id (readings and, since Phase 08, life events). */
+  byObject: Map<string, string[]>;
   exists: boolean;
 }> {
   const db = platformDb();
@@ -59,22 +60,21 @@ export async function loadJourneyLinks(userId: string): Promise<{
         isNull(journeys.dismissedAt),
         isNull(journeys.mergedIntoId),
         ne(journeys.status, 'closed'),
-        eq(journeyMembers.objectType, 'reading'),
         inArray(journeyMembers.state, ['auto', 'confirmed']),
       ),
     );
   const byEntity = new Map<string, string[]>();
-  const byReading = new Map<string, string[]>();
+  const byObject = new Map<string, string[]>();
   for (const r of rows) {
-    const rl = byReading.get(r.objectId) ?? [];
+    const rl = byObject.get(r.objectId) ?? [];
     if (!rl.includes(r.journeyId)) rl.push(r.journeyId);
-    byReading.set(r.objectId, rl);
+    byObject.set(r.objectId, rl);
     if (!r.entityId) continue;
     const el = byEntity.get(r.entityId) ?? [];
     if (!el.includes(r.journeyId)) el.push(r.journeyId);
     byEntity.set(r.entityId, el);
   }
-  return { byEntity, byReading, exists: rows.length > 0 };
+  return { byEntity, byObject, exists: rows.length > 0 };
 }
 
 export async function loadCandidates(userId: string): Promise<CandidateSet> {

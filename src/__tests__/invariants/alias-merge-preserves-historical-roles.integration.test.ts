@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { closeAdmin } from '@/db/admin';
+import { closeAdmin, platformSql } from '@/db/admin';
 import {
   addAlias,
   addRole,
@@ -47,6 +47,9 @@ describe('alias-merge-preserves-historical-roles (integration)', () => {
     await addRole(user.client, user.id, old.id, 'partner', '2024-01-01');
     const oldDetail = (await getEntity(user.client, old.id))!;
     await closeRole(user.client, oldDetail.roles[0]!.id, '2024-12-31');
+    // The old Alex belongs to 2024. Without this both candidates tie on every signal and
+    // the sub-millisecond order of their creation decides where "Alex" resolves.
+    await platformSql()`update entities set last_seen_at = '2024-12-31T12:00:00Z' where id = ${old.id}`;
     const current = await createEntity(user.client, user.id, {
       label: 'Alex Rivera',
       kind: 'person',

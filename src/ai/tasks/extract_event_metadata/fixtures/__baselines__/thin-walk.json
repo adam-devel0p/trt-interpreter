@@ -1,0 +1,73 @@
+{
+  "fixture": "thin-walk",
+  "description": "A thin event with no people or places. Expect no invented entities, a health or other type, and an empty or near-empty theme list rather than padding.",
+  "provider": "mock",
+  "model": "mock/claude-sonnet-5",
+  "prompt_version": "extract_event_metadata/1.0.0",
+  "schema_version": "event_extraction/1.0.0",
+  "ran_at": "2026-09-14T00:10:17.635Z",
+  "checks": {
+    "schema": {
+      "pass": true
+    },
+    "entity_recall": {
+      "pass": true,
+      "detail": {
+        "expected": [],
+        "got": []
+      }
+    },
+    "no_forbidden_mentions": {
+      "pass": true
+    },
+    "event_type": {
+      "pass": true,
+      "detail": "health"
+    },
+    "importance": {
+      "pass": true,
+      "detail": 2
+    },
+    "themes": {
+      "pass": true,
+      "detail": []
+    },
+    "no_possibilities": {
+      "pass": true,
+      "detail": 0
+    },
+    "no_timeframe": {
+      "pass": true
+    },
+    "no_probability": {
+      "pass": true
+    }
+  },
+  "output": {
+    "life_area": null,
+    "entities": [],
+    "themes": [],
+    "event_mentions": [
+      {
+        "text": "Went for a long walk to clear my head.",
+        "when": null
+      }
+    ],
+    "goals": [],
+    "fears": [],
+    "decisions": [],
+    "timeframe": null,
+    "possibilities": [],
+    "emotional_tone": null,
+    "journey_candidates": [],
+    "safety_flags": [],
+    "event_type": "health",
+    "importance": 2
+  },
+  "human_review": {
+    "reviewed_by": null,
+    "reviewed_at": null,
+    "verdict": null,
+    "notes": null
+  }
+}

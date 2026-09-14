@@ -36,12 +36,13 @@ export type ActionResult<T = undefined> = { ok: true; value: T } | { ok: false; 
 const FAILED = "That didn't go through. Nothing changed — try again.";
 const uuid = z.string().uuid();
 
-function done(journeyIds: string[], readingId?: string) {
+function done(journeyIds: string[], readingId?: string, eventId?: string) {
   revalidatePath('/journey');
   revalidatePath('/home');
   revalidatePath('/journal');
   for (const id of journeyIds) revalidatePath(`/journey/${id}`);
   if (readingId) revalidatePath(`/reading/${readingId}`);
+  if (eventId) revalidatePath(`/event/${eventId}`);
 }
 
 async function run<T = undefined>(
@@ -49,7 +50,7 @@ async function run<T = undefined>(
   fn: (
     client: Awaited<ReturnType<typeof getSessionClient>>,
     userId: string,
-  ) => Promise<{ value?: T; journeyIds: string[]; readingId?: string }>,
+  ) => Promise<{ value?: T; journeyIds: string[]; readingId?: string; eventId?: string }>,
 ): Promise<ActionResult<T>> {
   const user = await requireUser();
   try {
@@ -58,9 +59,9 @@ async function run<T = undefined>(
     logger.info(`app.journey.${event}`, {
       userId: user.id,
       journeyId: out.journeyIds[0],
-      objectId: out.readingId,
+      objectId: out.readingId ?? out.eventId,
     });
-    done(out.journeyIds, out.readingId);
+    done(out.journeyIds, out.readingId, out.eventId);
     return { ok: true, value: out.value as T };
   } catch (err) {
     logger.warn(`app.journey.${event}_failed`, { userId: user.id, errorClass: errorClassOf(err) });
@@ -128,28 +129,36 @@ export async function deleteJourneyAction(journeyId: unknown): Promise<ActionRes
 export async function createJourneyAction(
   value: unknown,
   readingIds: unknown = [],
+  eventIds: unknown = [],
 ): Promise<ActionResult<{ id: string }>> {
   const t = title.safeParse(value);
   const ids = z.array(uuid).max(200).safeParse(readingIds);
+  const eids = z.array(uuid).max(200).safeParse(eventIds);
   if (!t.success)
     return { ok: false, message: `Give it a name (up to ${JOURNEY_TITLE_MAX} characters).` };
-  if (!ids.success) return { ok: false, message: FAILED };
+  if (!ids.success || !eids.success) return { ok: false, message: FAILED };
   return run<{ id: string }>('created', async (c, userId) => {
-    const id = await createJourney(c, userId, t.data, ids.data);
-    return { value: { id }, journeyIds: [id], readingId: ids.data[0] };
+    const id = await createJourney(c, userId, t.data, ids.data, eids.data);
+    return { value: { id }, journeyIds: [id], readingId: ids.data[0], eventId: eids.data[0] };
   });
 }
 
 export async function addReadingToJourneyAction(
   journeyId: unknown,
   readingId: unknown,
+  objectType: unknown = 'reading',
 ): Promise<ActionResult> {
   const j = uuid.safeParse(journeyId);
   const r = uuid.safeParse(readingId);
-  if (!j.success || !r.success) return { ok: false, message: FAILED };
+  const t = z.enum(['reading', 'life_event']).safeParse(objectType);
+  if (!j.success || !r.success || !t.success) return { ok: false, message: FAILED };
   return run('member_added', async (c, userId) => {
-    await addReadingToJourney(c, userId, j.data, r.data);
-    return { journeyIds: [j.data], readingId: r.data };
+    await addReadingToJourney(c, userId, j.data, r.data, t.data);
+    return {
+      journeyIds: [j.data],
+      readingId: t.data === 'reading' ? r.data : undefined,
+      eventId: t.data === 'life_event' ? r.data : undefined,
+    };
   });
 }
 

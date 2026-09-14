@@ -23,10 +23,13 @@ import {
  */
 export function JourneyPanel({
   readingId,
+  objectType = 'reading',
   memberships,
   options,
 }: {
+  /** The member object's id — a reading, or (Phase 08) a life event. */
   readingId: string;
+  objectType?: 'reading' | 'life_event';
   memberships: ReadingJourneyMembership[];
   options: { id: string; title: string }[];
 }) {
@@ -191,12 +194,12 @@ export function JourneyPanel({
             </li>
           ) : null}
         </ul>
-      ) : (
+      ) : asked.length === 0 ? (
         <p className="text-sm text-fg-muted">
-          Not part of a journey. Related readings gather on their own over time — or add this one
+          Not part of a journey. Related entries gather on their own over time — or add this one
           now.
         </p>
-      )}
+      ) : null}
       {adding ? (
         <form
           className="flex flex-col gap-2 rounded-card bg-surface px-4 py-3 hairline"
@@ -204,13 +207,16 @@ export function JourneyPanel({
             e.preventDefault();
             if (target === '__new')
               act(
-                () => createJourneyAction(newTitle, [readingId]),
+                () =>
+                  objectType === 'reading'
+                    ? createJourneyAction(newTitle, [readingId])
+                    : createJourneyAction(newTitle, [], [readingId]),
                 'Journey started.',
                 () => setAdding(false),
               );
             else if (target)
               act(
-                () => addReadingToJourneyAction(target, readingId),
+                () => addReadingToJourneyAction(target, readingId, objectType),
                 'Added.',
                 () => setAdding(false),
               );

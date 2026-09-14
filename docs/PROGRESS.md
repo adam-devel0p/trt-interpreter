@@ -2,30 +2,27 @@
 
 The first thing to read in any new session. Update it at the end of every phase.
 
-**Current state:** Phase 07 complete — journeys form themselves from evidence. After a
-reading's memory is materialised, a model-free step (`src/journeys/`, pure scoring in
-`src/domain/journeys/`) files it into active journeys at affinity ≥ 0.70, asks "Part of *X*?"
-inline at 0.50–0.70, and clusters what is still unfiled: ≥ 3 readings across ≥ 14 days sharing
-a resolved entity or a theme pair become an `active` journey, weaker shapes one dismissible
-`suggested` card (dismissal remembered for good). Deviations from the written formula, each
-forced by the fixture arc and documented in ALGORITHMS §2: entity overlap is the overlap
-coefficient against a majority *core*, theme overlap is directional, a suggestion floor of 0.25
-exists, only active/dormant journeys gather by assignment, and the entity resolver's journey
-signal is unavailable (not zero) when either side is in no journey. Naming is the consent- and
-flag-gated `propose_journey` job (`journey_proposal/1.0.0`); a rename pins the title. The
-Journey detail has all eight §6.5 sections from stored rows: honest header, interleaved
-timeline built on a `TimelineEntry` union (events/outcomes slot in), evidence-backed theme
-progression (`source_object_ids` non-empty by check), deck-native recurring symbols (Lust ≠
-Strength, Disks ≠ Pentacles), open loops, placeholders, disabled Ask; management: accept,
-dismiss, rename, close/reopen, merge with undo (`apply_journey_merge` / `undo_journey_merge`),
-split, delete, add, keep, remove with undo. Reading detail shows memberships with confidence
-treatment; Home shows the one suggestion; the journal filters by journey; purge, export
-(`export/1.2.0`) and delete-AI-artifacts cover the three tables. Demo: a mixed-deck *Me and
-Maya*, an RWS-only *The agency and ambition* with open loops and pending questions, three weak
-suggestions — all produced by the real pipeline. Full gate green (118 e2e). Owner-side
-deferrals: the comprehension check with an unfamiliar person, the real-model naming eval, then
-`FLAG_JOURNEY_AUTOCREATE`.
-**Next phase:** [Phase 08 — Events, outcomes, correlation](phases/phase-08-events-outcomes.md)
+**Current state:** Phase 08 complete — the reading-to-reality loop closes. A life event is one
+sentence and a date, saved as a `CONFIRMED_FACT` before any AI (`life_events`, text immutable
+by trigger; photo in a private bucket behind owner-scoped signed URLs); the cron extracts it
+(`extract_event_metadata`, same tables as readings), files it into journeys by assignment,
+and runs the model-free correlation engine (`src/domain/correlation/`, `src/correlation/`)
+against the readings around it — and the other way round after a reading's extraction.
+Deviations from ALGORITHMS §3, each forced by the demo read and pinned by labelled pairs:
+weights normalised over the *available* signals; one of the two required signals must be
+temporal; "Likely" also needs the window or about a month; entity overlap normalises by
+resolved count; the revisit date is a horizon; generated text is never evidence. At most
+three offers per object, each with signals, sentence reasons, a fingerprint and — consent
+permitting — one hedged `explain_correlation` sentence that writes nothing else. Confirm /
+Maybe / Unrelated with undo; a rejection remembers its evidence (§19). Outcomes are the
+user's alone (`recorded_by = 'user'` by check), append-only, syncing follow-up and clearing
+the revisit; Home shows overdue revisits. The journey timeline interleaves events and
+outcomes and both remaining sections are filled. Purge (`life_event` root), export
+(`export/1.3.0`) and delete-AI-artifacts cover the four tables. Labelled precision 1.00 /
+recall 0.86; 0 wrong-and-confident on the 21 demo connections read by hand. Full gate green
+(122 e2e). Owner-side deferrals: the two real-model evals, the "5 real events" judgement
+with real extraction, then `FLAG_CORRELATION_SUGGESTIONS`.
+**Next phase:** [Phase 09 — Retrieval + Ask My History](phases/phase-09-retrieval-ask.md)
 
 ## Phase status
 
@@ -39,7 +36,7 @@ deferrals: the comprehension check with an unfamiliar person, the real-model nam
 | 05 | [Journal, search, export](phases/phase-05-journal-search.md) | ✅ complete | [report](phases/completed/phase-05-report.md) | 2026-09-13 · ← shippable journal; `removeUserStorage()` ready for 12's account job |
 | 06 | [Structured memory](phases/phase-06-structured-memory.md) | ⚠️ complete with deferrals | [report](phases/completed/phase-06-report.md) | 2026-09-13 · real-model extraction eval + flag default need provider keys (owner) |
 | 07 | [Journeys](phases/phase-07-journeys.md) | ⚠️ complete with deferrals | [report](phases/completed/phase-07-report.md) | 2026-09-13 · comprehension check + real-model naming eval are owner tasks |
-| 08 | [Events, outcomes, correlation](phases/phase-08-events-outcomes.md) | ⬜ not started | — | |
+| 08 | [Events, outcomes, correlation](phases/phase-08-events-outcomes.md) | ⚠️ complete with deferrals | [report](phases/completed/phase-08-report.md) | 2026-09-14 · real-model evals + the real-extraction event judgement are owner tasks |
 | 09 | [Retrieval + Ask My History](phases/phase-09-retrieval-ask.md) | ⬜ not started | — | ← MVP complete; run §22 study |
 | 10 | [Summaries + retrospectives](phases/phase-10-summaries-retrospectives.md) | ⬜ not started | — | |
 | 11 | [Monetization + retention](phases/phase-11-monetization-retention.md) | ⬜ not started | — | |
@@ -62,9 +59,9 @@ Each must be unskipped by the phase shown and never weakened afterwards. See
 | `deleting-reading-purges-derived` | 05 | ✅ |
 | `archive-readable-without-subscription` | 05 | ✅ (Phase 11 must extend it to exhausted limits) |
 | `alias-merge-preserves-historical-roles` | 06 | ✅ |
-| `card-overlap-alone-never-correlates` | 08 | ⬜ |
-| `rejected-link-not-resuggested` | 08 | ⬜ |
-| `summary-never-sole-evidence` | 08 | ⬜ |
+| `card-overlap-alone-never-correlates` | 08 | ✅ |
+| `rejected-link-not-resuggested` | 08 | ✅ |
+| `summary-never-sole-evidence` | 08 | ✅ |
 | `no-journal-content-in-logs` | 11 | ⬜ |
 
 ## Open questions carried forward
@@ -110,7 +107,16 @@ Add anything a phase discovered but could not settle. Remove when resolved.
 - Existing memberships are never re-scored by later corrections (by design); the one-tap remove
   is the correction path. A "re-evaluate memberships" job is a possible Phase 12 item.
 - The two soft-deleted demo rows stay soft-deleted: nothing enqueues the `purge_deleted` sweep
-  (`{readingId: null}`) yet — a cron entry or `pnpm jobs:sweep` is a Phase 12 ops item.
+  (`{readingId: null}`) yet — a cron entry or `pnpm jobs:sweep` is a Phase 12 ops item. Since
+  08 the same sweep covers soft-deleted life events.
+- **The mock extractor bounds what can correlate.** No shared entity → no suggestion; theme-
+  and-proximity pairs cannot reach 0.55 without Phase 09's semantic signal. With the real
+  model, repeat the labelled-pair eval and the demo read; `LIKELY_TEMPORAL_MIN` and the
+  temporal guard (`domain/correlation/thresholds.ts`) are the first dials.
+- **Journey overlap dominates correlation today** (0.30 of an available 0.80) — contained by
+  the temporal guard and the "Likely" condition until 09 dilutes it.
+- The 0009 migration file was extended (receipt-scope ALTER) after it was applied locally;
+  the ALTER was applied by hand on the dev database. Fresh databases get it from the file.
 
 ## Deferred items backlog
 
@@ -140,10 +146,10 @@ Phases append here when they defer something, so nothing is lost between session
 | Real-model `pnpm eval` for `extract_reading_metadata`, human read of the four baselines, then `FLAG_AI_EXTRACTION=true` | 06 | owner (any time) | no provider key; mock baseline recorded (recall 100 %, precision 88 %) |
 | Embedding channel for entity candidates (`embeddingSimilarity`) | 06 | 09 | needs entity context vectors; hook + threshold exist |
 | ~~Journey overlap signal in resolution~~ | 06 | 07 ✅ | `loadJourneyLinks()`; null (not zero) when either side is in no journey; arcs pass under three variants |
-| Re-score `links` on merge / split; prediction retraction on reprocess | 06 | 08 | no links / outcomes yet; ids kept stable |
+| Re-score `links` on merge / split; prediction retraction on reprocess | 06 → 08 | 12 | the next `correlate_object` run re-scores a pair (decided rows keep their state); no merge/split hook yet |
 | Per-reading lock against overlapping extraction jobs | 06 | 12 | dedupe covers `queued` only |
 | `MemoryPanel` / entity controls in `/dev/ui` | 06 | 12 | islands bound to actions; `InferredChip` is in the gallery |
-| Confirmed links in `links.json` | 05 | 08 | `LINK_KINDS` |
+| ~~Confirmed links in `links.json`~~ | 05 | 08 ✅ | `connections.json` + `connection_from/to`, `event_about_reading`, `outcome_*`, `media_of` (export/1.3.0) |
 | Markdown / PDF export | 05 | 12 | v2 by design |
 | Account-deletion storage sweep (`removeUserStorage()` exists, tested) | 05 | 12 | called by the test harness now; the account job must call it |
 | `purge_deleted` sweep scheduling (`{readingId: null}`) | 05 | 12 | cron entry / script; today only per-reading jobs are enqueued |
@@ -152,7 +158,13 @@ Phases append here when they defer something, so nothing is lost between session
 | Comprehension check of the Journey screen with an unfamiliar person (§22), answer recorded verbatim in the 07 report | 07 | owner (any time) | no second person in the session |
 | Real-model `pnpm eval` for `propose_journey`, human read of the three baselines, then `FLAG_JOURNEY_AUTOCREATE=true` | 07 | owner (any time) | no provider key; mock baselines recorded |
 | `semantic_similarity` (0.25 weight) in journey affinity | 07 | 09 | needs retrieval-document vectors; renormalised out meanwhile |
-| Events, outcomes, connections on the Journey screen; polymorphic-member RLS for `life_event` rows | 07 | 08 | `TimelineEntry` union and placeholders ready |
+| ~~Events, outcomes, connections on the Journey screen; polymorphic-member RLS for `life_event` rows~~ | 07 | 08 ✅ | timeline interleaves; both sections filled; four policies tightened |
 | `journey_narrative` header; scoped "Ask about this journey" | 07 | 10 / 09 | deterministic header and a disabled button until then |
 | `MemberControls` / `SuggestedJourneyCard` / `JourneyPanel` in `/dev/ui` | 07 | 12 | islands bound to actions |
 | Re-evaluate existing memberships after many corrections; journey scroll instrumentation at 100+ | 07 | 12 | one-tap remove is the correction path; 100-member read is 5 queries |
+| Real-model `pnpm eval` for `extract_event_metadata` and `explain_correlation`, human read of the five baselines, then `FLAG_CORRELATION_SUGGESTIONS=true` | 08 | owner (any time) | no provider key; mock baselines recorded; labelled precision 1.00 |
+| Log 5 real-ish events against real extraction and judge every proposal (§22 trust check) | 08 | owner | done on the demo journal with the mock (0 wrong-and-confident of 21) |
+| `reading ↔ reading` correlation surfaced; model-proposed `INFERRED_EVENT` rows with a confirm step | 08 | when a surface asks | the pure engine and the constraints exist |
+| `semantic_similarity` (0.20) in correlation | 08 | 09 | renormalised out; the theme-only labelled pair is the recall it recovers |
+| Push / email delivery of due revisits | 08 | 11 | in-app cards only |
+| Compact connection cards on the journey page; `ConnectionReview` / `OutcomePanel` / `EventForm` in `/dev/ui`; a "re-check connections" action; per-object lock for correlation runs | 08 | 12 | |

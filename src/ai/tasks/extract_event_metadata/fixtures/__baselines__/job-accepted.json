@@ -1,0 +1,109 @@
+{
+  "fixture": "job-accepted",
+  "description": "A one-sentence work event naming an employer. Expect the organisation as a mention, a work type, high importance, no possibilities, no timeframe.",
+  "provider": "mock",
+  "model": "mock/claude-sonnet-5",
+  "prompt_version": "extract_event_metadata/1.0.0",
+  "schema_version": "event_extraction/1.0.0",
+  "ran_at": "2026-09-14T00:10:17.596Z",
+  "checks": {
+    "schema": {
+      "pass": true
+    },
+    "entity_recall": {
+      "pass": true,
+      "detail": {
+        "expected": ["agency|organization", "sam|person"],
+        "got": ["agency|organization", "sam|person"]
+      }
+    },
+    "no_forbidden_mentions": {
+      "pass": true
+    },
+    "event_type": {
+      "pass": true,
+      "detail": "work"
+    },
+    "importance": {
+      "pass": true,
+      "detail": 5
+    },
+    "themes": {
+      "pass": true,
+      "detail": ["Decision", "Ambition", "Communication"]
+    },
+    "no_possibilities": {
+      "pass": true,
+      "detail": 0
+    },
+    "no_timeframe": {
+      "pass": true
+    },
+    "no_probability": {
+      "pass": true
+    }
+  },
+  "output": {
+    "life_area": null,
+    "entities": [
+      {
+        "mention": "the agency",
+        "kind": "organization",
+        "confidence": 0.7,
+        "relation": "employer",
+        "context": "I accepted the job at the agency today."
+      },
+      {
+        "mention": "Sam",
+        "kind": "person",
+        "confidence": 0.6,
+        "relation": null,
+        "context": "Told Sam over dinner."
+      }
+    ],
+    "themes": [
+      {
+        "label": "Decision",
+        "category": "situational",
+        "weight": 0.65
+      },
+      {
+        "label": "Ambition",
+        "category": "practical",
+        "weight": 0.65
+      },
+      {
+        "label": "Communication",
+        "category": "relational",
+        "weight": 0.65
+      }
+    ],
+    "event_mentions": [
+      {
+        "text": "I accepted the job at the agency today.",
+        "when": null
+      }
+    ],
+    "goals": [],
+    "fears": [],
+    "decisions": [],
+    "timeframe": null,
+    "possibilities": [],
+    "emotional_tone": null,
+    "journey_candidates": [
+      {
+        "title": "Work at the agency",
+        "confidence": 0.5
+      }
+    ],
+    "safety_flags": [],
+    "event_type": "work",
+    "importance": 5
+  },
+  "human_review": {
+    "reviewed_by": null,
+    "reviewed_at": null,
+    "verdict": null,
+    "notes": null
+  }
+}

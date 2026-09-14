@@ -7,6 +7,7 @@ import {
   entityMentions,
   entityRoles,
   extractions,
+  lifeEvents,
   metadataOverrides,
   objectThemes,
   predictions,
@@ -23,10 +24,11 @@ import {
   type EffectiveMetadata,
   type Override,
 } from '@/domain/extraction/overrides';
-import { extractionPayloadSchema } from '@/domain/extraction/schema';
+import { eventExtractionPayloadSchema, extractionPayloadSchema } from '@/domain/extraction/schema';
 import { modelBorn } from '@/domain/facts/writeGate';
 import { logger } from '@/observability/logger';
 import { materializeJourneysSafely } from '@/journeys/materialize';
+import { enqueueCorrelationSafely } from '@/correlation/run';
 import {
   candidatesForMention,
   loadCandidates,
@@ -51,8 +53,12 @@ import {
  *   - at most one open disambiguation per reading (§4.1).
  */
 
+export type MemoryObjectType = 'reading' | 'life_event';
+
 export interface MaterializeResult {
   readingId: string;
+  objectType: MemoryObjectType;
+  objectId: string;
   skipped?: 'missing' | 'deleted' | 'no_extraction';
   themes: number;
   mentions: number;
@@ -101,50 +107,109 @@ export async function materializeReading(
   readingId: string,
   opts: MaterializeOptions = {},
 ): Promise<MaterializeResult> {
+  return materializeObject('reading', readingId, opts);
+}
+
+/** Phase 08: a life event's extraction lands in the same tables, keyed by `life_event`. */
+export async function materializeEvent(
+  eventId: string,
+  opts: MaterializeOptions = {},
+): Promise<MaterializeResult> {
+  return materializeObject('life_event', eventId, opts);
+}
+
+async function loadObject(
+  objectType: MemoryObjectType,
+  objectId: string,
+): Promise<{ userId: string; occurredAt: Date; deletedAt: Date | null } | null> {
   const db = platformDb();
+  if (objectType === 'reading') {
+    const [r] = await db
+      .select({
+        userId: readings.userId,
+        occurredAt: readings.occurredAt,
+        deletedAt: readings.deletedAt,
+      })
+      .from(readings)
+      .where(eq(readings.id, objectId))
+      .limit(1);
+    return r ?? null;
+  }
+  const [e] = await db
+    .select({
+      userId: lifeEvents.userId,
+      occurredOn: lifeEvents.occurredOn,
+      deletedAt: lifeEvents.deletedAt,
+    })
+    .from(lifeEvents)
+    .where(eq(lifeEvents.id, objectId))
+    .limit(1);
+  // A date, not an instant: midday UTC keeps it on the same calendar day everywhere.
+  return e ? { ...e, occurredAt: new Date(`${e.occurredOn}T12:00:00Z`) } : null;
+}
+
+export async function materializeObject(
+  objectType: MemoryObjectType,
+  objectId: string,
+  opts: MaterializeOptions = {},
+): Promise<MaterializeResult> {
   const empty: MaterializeResult = {
-    readingId,
+    readingId: objectId,
+    objectType,
+    objectId,
     themes: 0,
     mentions: 0,
     entitiesCreated: 0,
     predictions: 0,
     asked: false,
   };
-  const [reading] = await db
-    .select({
-      id: readings.id,
-      userId: readings.userId,
-      occurredAt: readings.occurredAt,
-      deletedAt: readings.deletedAt,
-    })
-    .from(readings)
-    .where(eq(readings.id, readingId))
-    .limit(1);
-  if (!reading) return { ...empty, skipped: 'missing' };
-  if (reading.deletedAt) return { ...empty, skipped: 'deleted' };
-  const extraction = opts.extraction ?? (await currentExtraction('reading', readingId));
+  const object = await loadObject(objectType, objectId);
+  if (!object) return { ...empty, skipped: 'missing' };
+  if (object.deletedAt) return { ...empty, skipped: 'deleted' };
+  const extraction = opts.extraction ?? (await currentExtraction(objectType, objectId));
   if (!extraction) return { ...empty, skipped: 'no_extraction' };
-  const payload = extractionPayloadSchema.parse(extraction.payload);
-  const overrides = await loadOverrides('reading', readingId);
+  const eventPayload =
+    objectType === 'life_event' ? eventExtractionPayloadSchema.parse(extraction.payload) : null;
+  const payload = eventPayload ?? extractionPayloadSchema.parse(extraction.payload);
+  const overrides = await loadOverrides(objectType, objectId);
   const eff = applyOverrides(payload, overrides);
-  const userId = reading.userId;
-  const at = reading.occurredAt.toISOString();
+  const userId = object.userId;
+  const at = object.occurredAt.toISOString();
 
-  const themeCount = await materializeThemes(userId, readingId, extraction.id, eff);
-  const ent = await materializeEntities(userId, readingId, extraction.id, at, eff);
-  const predictionCount = await materializePredictions(userId, readingId, extraction.id, eff);
+  const themeCount = await materializeThemes(userId, objectType, objectId, extraction.id, eff);
+  const ent = await materializeEntities(userId, objectType, objectId, extraction.id, at, eff);
+  const predictionCount =
+    objectType === 'reading'
+      ? await materializePredictions(userId, objectId, extraction.id, eff)
+      : 0;
+  if (eventPayload) {
+    // Promoted columns (queried and filtered): the payload stays the source of truth.
+    await platformDb()
+      .update(lifeEvents)
+      .set({
+        eventType: eventPayload.event_type,
+        importance: eventPayload.importance,
+        emotionalTone: eff.emotionalTone,
+        lifeArea: eff.lifeArea.value,
+      })
+      .where(eq(lifeEvents.id, objectId));
+  }
   // Phase 07: assignment and discovery run on the resolved mentions and themes just written.
   // Derived from derived — a failure here is logged and never fails the extraction.
-  await materializeJourneysSafely(readingId);
+  await materializeJourneysSafely(objectType, objectId);
+  // Phase 08: correlation is a queued, model-free job over the rows just written (deduped).
+  await enqueueCorrelationSafely(objectType, objectId, userId);
 
   logger.info('memory.materialized', {
     userId,
-    objectType: 'reading',
-    objectId: readingId,
+    objectType,
+    objectId,
     count: ent.mentions,
   });
   return {
-    readingId,
+    readingId: objectId,
+    objectType,
+    objectId,
     themes: themeCount,
     mentions: ent.mentions,
     entitiesCreated: ent.created,
@@ -186,7 +251,8 @@ async function ensureTheme(
 
 async function materializeThemes(
   userId: string,
-  readingId: string,
+  objectType: MemoryObjectType,
+  objectId: string,
   extractionId: string,
   eff: EffectiveMetadata,
 ): Promise<number> {
@@ -196,14 +262,14 @@ async function materializeThemes(
   const existing = await db
     .select({ id: objectThemes.id, themeId: objectThemes.themeId })
     .from(objectThemes)
-    .where(and(eq(objectThemes.objectType, 'reading'), eq(objectThemes.objectId, readingId)));
+    .where(and(eq(objectThemes.objectType, objectType), eq(objectThemes.objectId, objectId)));
   const stale = existing.filter((e) => !desired.has(e.themeId)).map((e) => e.id);
   if (stale.length) await db.delete(objectThemes).where(inArray(objectThemes.id, stale));
   for (const [themeId, t] of desired) {
     const row = {
       user_id: userId,
-      object_type: 'reading',
-      object_id: readingId,
+      object_type: objectType,
+      object_id: objectId,
       theme_id: themeId,
       weight: t.weight.toFixed(3),
       source: t.source,
@@ -215,8 +281,8 @@ async function materializeThemes(
       .insert(objectThemes)
       .values({
         userId,
-        objectType: 'reading',
-        objectId: readingId,
+        objectType,
+        objectId,
         themeId,
         weight: row.weight,
         source: t.source,
@@ -278,17 +344,19 @@ async function roleRowsOf(entityId: string) {
 
 async function materializeEntities(
   userId: string,
-  readingId: string,
+  objectType: MemoryObjectType,
+  objectId: string,
   extractionId: string,
   at: string,
   eff: EffectiveMetadata,
 ): Promise<{ mentions: number; created: number; asked: boolean }> {
   const db = platformDb();
-  const evidence = { type: 'reading', id: readingId };
+  const readingId = objectId;
+  const evidence = { type: objectType, id: objectId };
   const existing = await db
     .select()
     .from(entityMentions)
-    .where(and(eq(entityMentions.objectType, 'reading'), eq(entityMentions.objectId, readingId)));
+    .where(and(eq(entityMentions.objectType, objectType), eq(entityMentions.objectId, objectId)));
   const byNorm = new Map(existing.map((m) => [m.mentionNormalized, m]));
   const wanted = new Set(eff.entities.map((e) => e.normalized));
 
@@ -300,8 +368,8 @@ async function materializeEntities(
   if (stale.length) await db.delete(entityMentions).where(inArray(entityMentions.id, stale));
 
   let candidates: CandidateSet = await loadCandidates(userId);
-  // Journey signal (ALGORITHMS §1): the journeys this reading already sits in.
-  const journeyIds = (await loadJourneyLinks(userId)).byReading.get(readingId) ?? [];
+  // Journey signal (ALGORITHMS §1): the journeys this object already sits in.
+  const journeyIds = (await loadJourneyLinks(userId)).byObject.get(objectId) ?? [];
   let created = 0;
   let asks = existing.filter(
     (m) => m.resolution !== 'user' && wanted.has(m.mentionNormalized) && m.askCandidates?.length,
@@ -324,8 +392,8 @@ async function materializeEntities(
         .values({
           userId,
           entityId: target.id,
-          objectType: 'reading',
-          objectId: readingId,
+          objectType,
+          objectId,
           mentionText: e.mention,
           mentionNormalized: e.normalized,
           confidence: '1.000',
@@ -486,8 +554,8 @@ async function materializeEntities(
     const mentionRow = modelBorn({
       userId,
       entityId,
-      objectType: 'reading',
-      objectId: readingId,
+      objectType,
+      objectId,
       mentionText: mut.mention.text,
       mentionNormalized: mut.mention.normalized,
       confidence: mut.mention.confidence.toFixed(3),

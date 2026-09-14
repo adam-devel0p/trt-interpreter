@@ -35,8 +35,12 @@ import { readings } from './readings';
  */
 
 const owned = (t: { userId: AnyPgColumn }) => sql`${t.userId} = ${authUid}`;
+/**
+ * Polymorphic parent check: the reading or (Phase 08) life event a row hangs off must be the
+ * caller's. `life_events` is named directly (its module imports this one).
+ */
 const ownsReading = (t: { objectType: AnyPgColumn; objectId: AnyPgColumn }) =>
-  sql`(${t.objectType} <> 'reading' or exists (select 1 from ${readings} r where r.id = ${t.objectId} and r.user_id = ${authUid}))`;
+  sql`((${t.objectType} = 'reading' and exists (select 1 from ${readings} r where r.id = ${t.objectId} and r.user_id = ${authUid})) or (${t.objectType} = 'life_event' and exists (select 1 from life_events e where e.id = ${t.objectId} and e.user_id = ${authUid})))`;
 
 /**
  * Append-only extraction runs (§7.2, FR-08). A `pending` row is written before any model

@@ -18,6 +18,22 @@ re-embedding on change, deletion of derived vectors.
 
 ## Tasks
 
+From Phase 08 (see [completed/phase-08-report.md](completed/phase-08-report.md) §13):
+- **Semantic similarity slots in:** `CorrelationObject.embedding` (`src/domain/correlation/score.ts`)
+  and `ObjectFeatures.embedding` (journey affinity) are already on the types; `scorePair` and
+  `scoreAffinity` use cosine when both sides carry one. Fill them from retrieval documents; the
+  theme-only labelled pair (`fixtures/history/correlation/labeled-pairs.json`,
+  `health-theme-only-close`) should start to pass — then re-read the demo journal and revisit
+  `LIKELY_TEMPORAL_MIN` and the temporal half of guard 1 in `domain/correlation/thresholds.ts`.
+- **Retrieval documents for events:** `life_events.description + note`, the promoted
+  `event_type` / `life_area` and the extraction payload; `object_type = 'life_event'` is admitted
+  by every derived table already.
+- **Evidence grades for Ask:** `links.state = 'confirmed'` is the highest-grade evidence, `maybe`
+  may be cited as such, `pending` and `rejected` never; `outcomes` are `CONFIRMED_FACT` and
+  citeable by id; `listLinksForObjects()` (`src/db/queries/events.ts`) gives a journey's
+  connections, `listOutcomesForReadings()` its outcomes.
+- **"Ask about this journey"** is a disabled button on `app/(app)/journey/[id]/page.tsx`.
+
 ### 1. Schema
 `retrieval_documents`, `embeddings`, `asks` per [../DATA_MODEL.md](../DATA_MODEL.md#retrieval--summaries--phases-09-10).
 HNSW index on `embeddings.vector`. Cascade from parent objects so deletion kills vectors (§19).

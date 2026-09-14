@@ -140,7 +140,7 @@ export async function storeInterpretation(user: TestUser, reading: ReadingView) 
 export async function attachDerived(
   user: TestUser,
   reading: ReadingView,
-  opts: { memory?: boolean; journey?: boolean } = {},
+  opts: { memory?: boolean; journey?: boolean; event?: boolean } = {},
 ) {
   const interpretation = await storeInterpretation(user, reading);
   const flag = await recordSafetyFlag(user.client, {
@@ -181,5 +181,24 @@ export async function attachDerived(
     journey = await createJourney(user.client, user.id, 'Test journey', [reading.id]);
     await refreshJourney(journey);
   }
-  return { interpretation, flag, extraction, journey };
+  // Phase 08: a life event logged about the reading (a user-confirmed link) and an outcome
+  // pointing at it — the reading's side of the reading-to-reality loop.
+  let event: string | null = null;
+  if (opts.event) {
+    const { createEvent, recordOutcome } = await import('@/db/queries/events');
+    event = await createEvent(user.client, user.id, {
+      description: 'It happened, with Alex.',
+      occurred_on: new Date().toISOString().slice(0, 10),
+      note: null,
+      reading_id: reading.id,
+    });
+    await recordOutcome(user.client, user.id, {
+      readingId: reading.id,
+      predictionId: null,
+      lifeEventId: event,
+      status: 'happened',
+      note: null,
+    });
+  }
+  return { interpretation, flag, extraction, journey, event };
 }

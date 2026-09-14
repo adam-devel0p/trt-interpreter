@@ -1,0 +1,15 @@
+{
+  "name": "thin-walk",
+  "description": "A thin event with no people or places. Expect no invented entities, a health or other type, and an empty or near-empty theme list rather than padding.",
+  "description_text": "Went for a long walk to clear my head.",
+  "note": null,
+  "occurred_on": "2026-08-02",
+  "expect": {
+    "event_type": null,
+    "importance_min": 1,
+    "entities": [],
+    "forbidden_mentions": ["I", "my head"],
+    "themes_any": [],
+    "possibilities_max": 0
+  }
+}

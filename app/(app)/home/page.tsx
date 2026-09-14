@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { FIRST_READING_PATH } from '@/auth/routes';
 import { getSessionClient, requireUser } from '@/auth/session';
+import { listDueRevisits } from '@/db/queries/events';
 import { nextSuggestedJourney } from '@/db/queries/journeys';
 import { listReadings } from '@/db/queries/readings';
 import { SuggestedJourneyCard } from '../journey/suggested-card';
@@ -20,9 +21,10 @@ export const dynamic = 'force-dynamic';
 export default async function Page() {
   await requireUser();
   const client = await getSessionClient();
-  const [open, suggested] = await Promise.all([
+  const [open, suggested, due] = await Promise.all([
     listReadings(client, { limit: 1, followUp: 'unresolved' }).then((r) => r[0]),
     nextSuggestedJourney(client),
+    listDueRevisits(client, { limit: 2 }),
   ]);
   return (
     <>
@@ -31,10 +33,45 @@ export default async function Page() {
         <Button asChild size="lg" className="w-full">
           <Link href={FIRST_READING_PATH}>Start a reading</Link>
         </Button>
-        <Button asChild variant="ghost" size="sm" className="self-start">
-          <Link href="/decks">Browse the decks</Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="secondary" size="sm">
+            <Link href="/event/new">Something happened</Link>
+          </Button>
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/decks">Browse the decks</Link>
+          </Button>
+        </div>
       </div>
+      {due.length ? (
+        <section aria-labelledby="revisit-heading" className="mb-8" data-testid="due-revisits">
+          <h2 id="revisit-heading" className="mb-3 font-serif text-xl">
+            You asked to come back to this
+          </h2>
+          <ul className="flex flex-col gap-2">
+            {due.map((r) => (
+              <li key={r.id}>
+                <Link
+                  href={`/reading/${r.id}#follow-up-h`}
+                  data-deck={r.deck.system}
+                  className="block rounded-card border-l-2 border-accent bg-surface px-4 py-3 hairline hover:bg-surface-2"
+                >
+                  <p className="text-xs font-medium tracking-wide text-fg-muted uppercase">
+                    <LocalTime iso={r.occurred_at} dateOnly />
+                    <span className="tracking-normal normal-case"> · {r.deck.name}</span>
+                  </p>
+                  <p className="mt-1 font-serif text-lg leading-snug">
+                    {r.is_open_reflection ? 'Open reflection' : r.question}
+                  </p>
+                  <p className="mt-1 text-sm text-fg-muted">
+                    You asked about this {daysAgo(r.occurred_at)} — what happened? Say so when you
+                    know; no rush.
+                  </p>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       <section aria-labelledby="unresolved-heading" className="mb-8">
         <h2 id="unresolved-heading" className="mb-3 font-serif text-xl">
           Still open
@@ -83,4 +120,13 @@ export default async function Page() {
       </section>
     </>
   );
+}
+
+/** "30 days ago", "about two months ago" — content-anchored, never a count of missed days. */
+function daysAgo(iso: string): string {
+  const days = Math.round((Date.now() - Date.parse(iso)) / 86_400_000);
+  if (days <= 1) return 'yesterday';
+  if (days < 45) return `${days} days ago`;
+  const months = Math.round(days / 30);
+  return months <= 1 ? 'about a month ago' : `about ${months} months ago`;
 }

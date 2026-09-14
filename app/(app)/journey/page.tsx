@@ -78,8 +78,11 @@ function JourneyList({ items }: { items: JourneyListItem[] }) {
           >
             <p className="font-serif text-lg leading-snug">{j.title}</p>
             <p className="mt-1 text-sm text-fg-muted">
-              {j.member_count} {j.member_count === 1 ? 'reading' : 'readings'} · since{' '}
-              <LocalTime iso={j.started_at} dateOnly />
+              {j.member_count} {j.member_count === 1 ? 'reading' : 'readings'}
+              {j.event_count
+                ? ` · ${j.event_count} ${j.event_count === 1 ? 'life event' : 'life events'}`
+                : ''}{' '}
+              · since <LocalTime iso={j.started_at} dateOnly />
               {j.status === 'dormant' ? ' · quiet lately' : ''}
               {j.status === 'closed' ? ' · closed' : ''}
               {j.pending_count ? ` · ${j.pending_count} to look at` : ''}

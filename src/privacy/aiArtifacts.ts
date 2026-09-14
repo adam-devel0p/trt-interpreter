@@ -17,6 +17,9 @@ import { logger } from '@/observability/logger';
  * Phase 07: journeys the user never touched (`user_confirmed = false`) go with their
  * members and progression; `auto` / `pending` members of kept journeys go too (their
  * evidence is being deleted). Accepted, renamed or hand-built journeys stay.
+ * Phase 08: `pending` connection suggestions go (with their explanations). Confirmed, maybe
+ * and rejected links are the user's decisions — and a rejection is the memory that keeps
+ * the same suggestion from coming back — so they stay. Events and outcomes are the user's.
  */
 
 export interface AiArtifactTarget {
@@ -39,6 +42,7 @@ export const AI_ARTIFACT_TARGETS: readonly AiArtifactTarget[] = [
   { table: 'entities', where: [{ column: 'user_confirmed', op: 'eq', value: false }] },
   { table: 'journeys', where: [{ column: 'user_confirmed', op: 'eq', value: false }] },
   { table: 'journey_members', where: [{ column: 'state', op: 'in', value: ['auto', 'pending'] }] },
+  { table: 'links', where: [{ column: 'state', op: 'eq', value: 'pending' }] },
 ];
 
 export const AI_ARTIFACT_TABLES = [
@@ -52,6 +56,7 @@ export const AI_ARTIFACT_TABLES = [
   'entities',
   'journeys',
   'journey_members',
+  'links',
 ] as const;
 export type AiArtifactTable = (typeof AI_ARTIFACT_TABLES)[number];
 export type AiArtifactCounts = Record<AiArtifactTable, number>;

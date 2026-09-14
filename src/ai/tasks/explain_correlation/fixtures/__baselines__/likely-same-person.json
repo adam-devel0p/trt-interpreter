@@ -1,0 +1,37 @@
+{
+  "fixture": "likely-same-person",
+  "description": "A reading about a job offer at the agency and, three weeks later inside its stated window, the event of accepting the job. Expect a hedged one- or two-sentence explanation that names the shared reason and adds nothing.",
+  "provider": "mock",
+  "model": "mock/claude-haiku-4-5",
+  "prompt_version": "explain_correlation/1.0.0",
+  "schema_version": "correlation_explanation/1.0.0",
+  "ran_at": "2026-09-14T00:10:17.654Z",
+  "checks": {
+    "schema": {
+      "pass": true
+    },
+    "register": {
+      "pass": true,
+      "detail": []
+    },
+    "names_evidence": {
+      "pass": true,
+      "detail": "This event looks likely to be connected to the reading: both mention the agency, related themes: Decision and Ambition, the reading’s “next month” window covers this date, and they happened about three weeks apart."
+    },
+    "no_forbidden": {
+      "pass": true
+    },
+    "hedged": {
+      "pass": true
+    }
+  },
+  "output": {
+    "explanation": "This event looks likely to be connected to the reading: both mention the agency, related themes: Decision and Ambition, the reading’s “next month” window covers this date, and they happened about three weeks apart."
+  },
+  "human_review": {
+    "reviewed_by": null,
+    "reviewed_at": null,
+    "verdict": null,
+    "notes": null
+  }
+}

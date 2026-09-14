@@ -1,6 +1,14 @@
 import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import { getSessionClient, requireUser } from '@/auth/session';
+import Link from 'next/link';
+import {
+  currentOutcomes,
+  listEventOptions,
+  listLinksForObject,
+  listReadingOutcomes,
+  loadLinkedObjects,
+} from '@/db/queries/events';
 import { getInterpretationState, listSafetyFlags } from '@/db/queries/interpretations';
 import { getReadingJourneys } from '@/db/queries/journeys';
 import { getReadingMemory } from '@/db/queries/memory';
@@ -15,6 +23,9 @@ import { ReadingControls, FollowUpControl, NotesEditor, RevisitChips } from './c
 import { InterpretationPanel } from './interpretation-panel';
 import { JourneyPanel } from './journey-panel';
 import { MemoryPanel } from './memory-panel';
+import { OutcomePanel } from './outcome-panel';
+import { ConnectionReview, type ConnectionItem } from '../../event/connection-review';
+import { Button } from '@/ui/components/button';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,6 +57,9 @@ export default async function ReadingPage({
     memory,
     extractionFlag,
     journeys,
+    outcomes,
+    links,
+    eventOptions,
   ] = await Promise.all([
     getProfile(client, user.id),
     getInterpretationState(client, id),
@@ -55,7 +69,19 @@ export default async function ReadingPage({
     getReadingMemory(client, reading),
     flag('ai_extraction', { userId: user.id }),
     getReadingJourneys(client, id),
+    listReadingOutcomes(client, id),
+    listLinksForObject(client, { type: 'reading', id }),
+    listEventOptions(client),
   ]);
+  const linked = await loadLinkedObjects(client, links);
+  const linkItems: ConnectionItem[] = links.map((link) => {
+    const e = linked.events.get(link.to_id);
+    return { link, other: e ? { kind: 'event', ...e } : { kind: 'missing' } };
+  });
+  const current = currentOutcomes(outcomes);
+  const openPossibilities = memory.predictions
+    .filter((p) => !p.dismissed_at)
+    .map((p) => ({ id: p.id, text: p.text, current: current.byPrediction.get(p.id) ?? null }));
   const consent = profile ? hasAiConsent(profile) : false;
   const depth = profile
     ? selectDepth({
@@ -111,6 +137,26 @@ export default async function ReadingPage({
             initial={interpretation}
             safetyFlags={safetyFlags}
             autoStart={justSaved && consent && interpretation.latest === null}
+          />
+        ),
+        outcomes: (
+          <div className="flex flex-col gap-4">
+            <OutcomePanel
+              readingId={reading.id}
+              current={current.reading}
+              history={outcomes.filter((o) => o.prediction_id === null)}
+              possibilities={openPossibilities}
+              events={eventOptions}
+            />
+            <Button asChild variant="secondary" className="self-start">
+              <Link href={`/event/new?reading=${reading.id}`}>Something happened about this</Link>
+            </Button>
+          </div>
+        ),
+        links: (
+          <ConnectionReview
+            items={linkItems}
+            emptyText="No life events connected yet. When you log one that seems related, it will be suggested here with its reasons — and “Something happened about this” below links one directly."
           />
         ),
         journeys: (

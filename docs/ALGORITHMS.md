@@ -116,6 +116,10 @@ boundary is covered by `__tests__/affinity.test.ts`, `cluster.test.ts` and the
 `fixtures/history/journeys/journey-arcs.json` arc.
 
 ### Assignment of a new reading/event to existing journeys
+
+Phase 08: a life event is assigned exactly like a reading (`assignObject`), with its
+extracted entities and themes and no question; events never seed new journeys (discovery
+reads the reading pool only). Live event members count for activity and progression.
 ```
 affinity = 0.35·entity_overlap        // overlap coefficient vs the journey's core entities
          + 0.25·semantic_similarity   // retrieval-document cosine vs journey centroid (Phase 09)
@@ -203,48 +207,111 @@ are not Pentacles. No archetype mapping is consulted on any render path.
 
 ## 3. Correlation scoring (§8.2, FR-12, FR-13)
 
-Candidate pairs: reading↔event, reading↔reading, event↔outcome.
+Implemented in `src/domain/correlation/` (pure: `score.ts`, `resurface.ts`,
+`thresholds.ts`) and run by `src/correlation/run.ts` as the model-free `correlate_object`
+job after an event's or a reading's extraction (both directions). Candidate pairs today:
+reading ↔ event. The pure engine also scores reading ↔ reading (card overlap only exists
+there) but nothing runs it yet; event ↔ outcome is a user act, not a score.
 
 ```
 score = 0.30·journey_overlap        // strongest structural signal
       + 0.25·entity_overlap         // resolved entities only; tentative counts at 0.5 weight
-      + 0.20·semantic_similarity    // retrieval-document cosine
+      + 0.20·semantic_similarity    // retrieval-document cosine (Phase 09)
       + 0.10·theme_overlap
       + 0.10·timeframe_fit          // 1.0 if event falls inside the reading's stated horizon
       + 0.05·temporal_proximity     // exp(-days_apart / 45)
       + 0.05·card_symbol_overlap    // capped, and see guard below
 ```
 
+The weights are used exactly as written (they sum to 1.05); the score is always
+**normalised over the signals that have data**, so only the ratios matter. A signal without
+data is unavailable, not zero (the Phase 06/07 rule): `journey_overlap` when either side is
+in no journey, `semantic_similarity` until Phase 09, `timeframe_fit` when the reading
+states no horizon, `card_symbol_overlap` when either side has no cards (every reading ↔
+event pair). Reading ↔ event today therefore scores over
+`0.30 + 0.25 + 0.10 + 0.10 + 0.05` at most.
+
+**Signal definitions as built** (each pinned by `__tests__/score.test.ts`):
+- `entity_overlap` = Σ shared weight / max(1, min(resolved count A, resolved count B)),
+  weight 1 for `auto`/`user` mentions, 0.5 for `tentative`. Normalising by the *resolved*
+  count is what makes the tentative discount real (a weighted-total denominator cancelled
+  it: a tentative-only shared mention scored 1.0) and keeps a tentatively shared second
+  entity from lowering the score (a raw-count denominator did: the demo's Leeds event
+  ranked below a Maya-only reading three weeks further away).
+- `theme_overlap` = weighted Jaccard over slug → weight.
+- `journey_overlap` = |shared| / min(|A|, |B|) over live (`auto` / `confirmed`) memberships.
+- `timeframe_fit` = 1 inside the reading's horizon; outside it, linear to 0 over a grace
+  period as long as the horizon itself (≥ 14 days). The horizon is the extraction's
+  `timeframe` when it has ISO dates, else the user's own **revisit date** (`[occurred_at,
+  revisit_at]` — a stated "come back to this in a month").
+- `temporal_proximity` = exp(−days / 45).
+- `card_symbol_overlap` = Jaccard of deck-native card ids (never archetypes).
+
 ### Hard guards
-1. **Card overlap is never sufficient alone** (§8.2). A suggestion requires ≥ 2 non-card signals each
-   > 0.2. Unit test asserts a pair whose only signal is a shared card never surfaces.
-2. **No self-validating loops** (§10). An `interpretation` or `period_summary` may never be the sole
-   evidence that a real-life event occurred. Evidence sets are filtered before scoring.
-3. **No forced correlation** (§10). Returning zero candidates is a valid, common result, and the UI
-   says so plainly rather than showing weak links.
-4. At most **3** suggestions surfaced per new object (§6.4 "strongest 1–3").
+1. **Card overlap is never sufficient alone** (§8.2). A suggestion requires ≥ 2 non-card
+   signals each > 0.2, **and one of them must be temporal** (`timeframe_fit` or
+   `temporal_proximity`). The temporal half is an addition: on the demo journal a shared
+   journey plus a shared employer paired an August event with an April reading at 0.88
+   ("Likely") — the journey already relates them; a per-pair connection months apart is
+   noise. `card-overlap-alone-never-correlates` asserts the card half.
+2. **No self-validating loops** (§10). Evidence whose provenance is an `interpretation` or a
+   `period_summary` is **dropped before scoring** — stronger than "never the sole evidence",
+   and provable: a generated-only bundle yields nothing, a mixed bundle scores exactly like
+   its user-text part. The feature loader only reads extractions of the user's words and
+   marks everything `user_text`. `summary-never-sole-evidence` asserts both.
+3. **No forced correlation** (§10). Zero candidates is a valid, common result; the event's
+   `correlated_at` is set so the screen says "No connection found. That is a normal result".
+4. At most **3** suggestions surfaced per new object (§6.4), counted across runs
+   (`offered_at`); a decision never promotes a hidden row.
+5. Candidates are limited to ±365 days and the closest 300 objects.
 
 ### Display bands
 | Score | Behaviour |
 |---|---|
-| < **0.55** | invisible. Stored only if ≥ 0.40, for future re-scoring; never shown. |
+| < **0.55** | invisible. Stored only if ≥ 0.40 (and eligible), for future re-scoring; never shown. |
 | 0.55–0.75 | shown as **"Possible connection"**, clearly labeled inferred, with its reasons |
-| ≥ 0.75 | shown as **"Likely connection"**, still labeled inferred, still one-tap rejectable |
+| ≥ 0.75 **and** a temporal signal ≥ 0.5 | shown as **"Likely connection"**, still labeled inferred, still one-tap rejectable |
+| ≥ 0.75 without one | shown as **"Possible connection"** |
 | user confirmed | `state='confirmed'`, treated as the highest-confidence evidence everywhere |
 | user rejected | `state='rejected'` + `evidence_fingerprint` recorded |
 
+The temporal condition on "Likely" (`LIKELY_TEMPORAL_MIN = 0.5`: inside the window, or
+within about a month) is an addition from the demo read: same-journey, same-person pairs
+seven weeks apart reached 0.94 and read as more certain than the evidence was. Everything
+that still says "Likely" on the demo journal is within a month and shares the person or
+employer, usually inside the stated window.
+
+`reasons` are sentences without numbers ("Both mention the agency", "The reading's “next
+month” window covers this date", "About three weeks apart"); the `evidence_fingerprint` is
+FNV-1a over the sorted shared entity / theme / journey / card ids, the timeframe relation
+and a coarse proximity bucket (week / month / quarter / year), so a day's drift is not "new
+evidence".
+
 ### Feedback → confidence
-- **Confirm** → `state='confirmed'`, score pinned to 1.0, and the pair's signal profile is recorded as
-  a positive exemplar for threshold tuning (offline, not online learning — no silent drift).
+- **Confirm** → `state='confirmed'`; the stored score is kept as computed and the link is
+  *used* as 1.0 (the journey's outcomes section, exports). A re-run refreshes its signals
+  and reasons, never its state.
 - **Maybe** → `state='maybe'`, visible in the Journey's *Possible connections*, excluded from
-  summaries' factual claims.
-- **Reject** → `state='rejected'`. Re-suggestion requires a new `evidence_fingerprint` **and**
-  `new_score ≥ old_score + 0.15`, **or** the arrival of a user-confirmed entity/journey overlap that
-  did not exist before. Test asserts an identical re-run after rejection produces nothing (§19).
-- Rejections also suppress the same pair's inclusion in period summaries.
+  summaries' factual claims (Phase 10).
+- **Reject** → `state='rejected'`; `rejected_score` and `rejected_fingerprint` recorded.
+  Re-suggestion (`shouldResurface`) requires a new fingerprint **and** `new_score ≥
+  rejected_score + 0.15`, **or** a user-confirmed entity / journey overlap (a `user`
+  mention, a pinned entity, a `confirmed` membership) that was not in the evidence at the
+  rejection. `rejected-link-not-resuggested` asserts an identical re-run produces nothing
+  and that the return happens once.
+- Every decision is undoable (back to an offered suggestion).
+- Rejections also suppress the same pair's inclusion in period summaries (Phase 10).
+
+**Measured** (`pnpm eval`, model-free section, and `score.test.ts`): precision 1.00, recall
+0.86 on the 18 hand-labelled pairs in `fixtures/history/correlation/labeled-pairs.json`.
+The one miss is theme-only (health reading ↔ doctor's visit inside its window): without
+semantic similarity a themes-and-window pair cannot reach 0.55 — missing-but-quiet, as the
+phase file allows. On the demo journal, 21 offered connections read by hand: none wrong
+and confident (see the 08 report).
 
 `signals` and `reasons` are always persisted so the UI can answer "why are you showing me this?" —
-this is §3.3's *make memory explainable*.
+this is §3.3's *make memory explainable*. `explain_correlation` may only put those reasons
+into a sentence; it writes the `explanation` column and nothing else.
 
 ---
 

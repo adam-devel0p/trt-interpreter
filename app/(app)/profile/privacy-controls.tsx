@@ -130,9 +130,10 @@ export function DeleteAiArtifactsControl({ counts }: { counts: AiArtifactCounts 
         `${plural(memory, 'suggested theme, mention or possibility', 'suggested themes, mentions and possibilities')} and ` +
         `${plural(counts.entities, 'unconfirmed person or place', 'unconfirmed people and places')}` +
         (counts.journeys + counts.journey_members > 0
-          ? ` and ${plural(counts.journeys, 'automatically gathered journey')} (with ${plural(counts.journey_members, 'suggested membership')}) `
-          : ' ') +
-        'will be removed. Every reading, card and note you wrote stays exactly as it is, and so do your own corrections. This cannot be undone.';
+          ? ` and ${plural(counts.journeys, 'automatically gathered journey')} (with ${plural(counts.journey_members, 'suggested membership')})`
+          : '') +
+        (counts.links > 0 ? ` and ${plural(counts.links, 'suggested connection')}` : '') +
+        ' will be removed. Every reading, card and note you wrote stays exactly as it is, and so do your own corrections. This cannot be undone.';
   return (
     <div className="flex flex-col items-end gap-2">
       <ConfirmDestructive
@@ -164,6 +165,7 @@ export function DeleteAiArtifactsControl({ counts }: { counts: AiArtifactCounts 
 
 const SCOPE_LABEL: Record<DeletionReceiptRow['scope'], string> = {
   reading: 'A reading',
+  life_event: 'A life event',
   ai_artifacts: 'AI artifacts',
   history: 'All history',
   account: 'Account',

@@ -49,7 +49,19 @@ export default async function JournalPage({
 
   return (
     <>
-      <PageHeader title="Journal" />
+      <PageHeader
+        title="Journal"
+        action={
+          <div className="flex flex-col items-end gap-1">
+            <Button asChild size="sm" variant="secondary">
+              <Link href="/event/new">Something happened</Link>
+            </Button>
+            <Link href="/event" className="text-xs text-fg-muted underline underline-offset-4">
+              Life events
+            </Link>
+          </div>
+        }
+      />
       {total === 0 ? (
         <EmptyState
           title="Your readings will collect here"

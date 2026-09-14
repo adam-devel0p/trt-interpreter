@@ -9,8 +9,9 @@ import { z } from 'zod';
 /**
  * 1.1.0 (Phase 06): extractions, overrides, themes, entities, mentions, predictions joined.
  * 1.2.0 (Phase 07): journeys (with progression steps nested) and journey members.
+ * 1.3.0 (Phase 08): life events, event media (paths), outcomes and connections (scored links).
  */
-export const EXPORT_SCHEMA_VERSION = 'export/1.2.0';
+export const EXPORT_SCHEMA_VERSION = 'export/1.3.0';
 
 export const EXPORT_FILES = [
   'profile.json',
@@ -32,6 +33,10 @@ export const EXPORT_FILES = [
   'predictions.json',
   'journeys.json',
   'journey_members.json',
+  'life_events.json',
+  'event_media.json',
+  'outcomes.json',
+  'connections.json',
   'links.json',
 ] as const;
 export type ExportFile = (typeof EXPORT_FILES)[number];
@@ -397,6 +402,85 @@ export const exportJourneyMemberSchema = z
   })
   .strict();
 
+/** A life event: the user's own sentence and date; CONFIRMED_FACT unless a model proposed it. */
+export const exportLifeEventSchema = z
+  .object({
+    id: uuid,
+    description: z.string(),
+    occurred_on: z.string(),
+    note: z.string().nullable(),
+    reading_id: uuid.nullable(),
+    event_type: z.string().nullable(),
+    importance: z.number().int().nullable(),
+    emotional_tone: z.string().nullable(),
+    life_area: z.string().nullable(),
+    fact_status: z.enum(['CONFIRMED_FACT', 'INFERRED_EVENT']),
+    source: z.string(),
+    confirmed_at: iso.nullable(),
+    metadata_version: z.number().int(),
+    created_at: iso,
+    updated_at: iso,
+  })
+  .strict();
+
+export const exportEventMediaSchema = z
+  .object({
+    id: uuid,
+    life_event_id: uuid,
+    storage_path: z.string(),
+    kind: z.string(),
+    mime_type: z.string(),
+    size_bytes: z.number().int(),
+    alt_text: z.string().nullable(),
+    created_at: iso,
+  })
+  .strict();
+
+/** An outcome: always the user's, always CONFIRMED_FACT. */
+export const exportOutcomeSchema = z
+  .object({
+    id: uuid,
+    reading_id: uuid,
+    prediction_id: uuid.nullable(),
+    life_event_id: uuid.nullable(),
+    status: z.string(),
+    note: z.string().nullable(),
+    fact_status: z.literal('CONFIRMED_FACT'),
+    recorded_by: z.literal('user'),
+    user_confirmed_at: iso,
+    created_at: iso,
+  })
+  .strict();
+
+/** A scored connection with its full evidence; never created by a model. */
+export const exportConnectionSchema = z
+  .object({
+    id: uuid,
+    from_type: z.string(),
+    from_id: uuid,
+    to_type: z.string(),
+    to_id: uuid,
+    link_type: z.string(),
+    score: z.number(),
+    signals: z.unknown().nullable(),
+    reasons: z.array(z.string()),
+    evidence: z.unknown().nullable(),
+    created_by: z.enum(['user', 'rule']),
+    state: z.string(),
+    user_acted_at: iso.nullable(),
+    evidence_fingerprint: z.string(),
+    rejected_score: z.number().nullable(),
+    offered_at: iso.nullable(),
+    explanation: z.string().nullable(),
+    explained_model_id: z.string().nullable(),
+    explained_prompt_version: z.string().nullable(),
+    explained_schema_version: z.string().nullable(),
+    explained_at: iso.nullable(),
+    created_at: iso,
+    updated_at: iso,
+  })
+  .strict();
+
 export const LINK_KINDS = [
   'reading_uses_spread',
   'reading_uses_deck',
@@ -421,6 +505,14 @@ export const LINK_KINDS = [
   'progression_theme_is',
   'progression_source',
   'journey_merged_into',
+  // Phase 08
+  'event_about_reading',
+  'media_of',
+  'outcome_of',
+  'outcome_for_possibility',
+  'outcome_event',
+  'connection_from',
+  'connection_to',
 ] as const;
 
 export const exportLinkSchema = z
@@ -452,6 +544,10 @@ export const EXPORT_FILE_SCHEMAS = {
   'predictions.json': z.array(exportPredictionSchema),
   'journeys.json': z.array(exportJourneySchema),
   'journey_members.json': z.array(exportJourneyMemberSchema),
+  'life_events.json': z.array(exportLifeEventSchema),
+  'event_media.json': z.array(exportEventMediaSchema),
+  'outcomes.json': z.array(exportOutcomeSchema),
+  'connections.json': z.array(exportConnectionSchema),
   'links.json': z.array(exportLinkSchema),
 } as const satisfies Record<ExportFile, z.ZodType>;
 

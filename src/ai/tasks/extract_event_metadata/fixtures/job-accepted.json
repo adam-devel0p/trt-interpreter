@@ -1,0 +1,18 @@
+{
+  "name": "job-accepted",
+  "description": "A one-sentence work event naming an employer. Expect the organisation as a mention, a work type, high importance, no possibilities, no timeframe.",
+  "description_text": "I accepted the job at the agency today.",
+  "note": "Start on the first Monday of June. Told Sam over dinner.",
+  "occurred_on": "2026-05-14",
+  "expect": {
+    "event_type": "work",
+    "importance_min": 4,
+    "entities": [
+      { "mention": "the agency", "kind": "organization" },
+      { "mention": "Sam", "kind": "person" }
+    ],
+    "forbidden_mentions": ["I", "today"],
+    "themes_any": ["Decision", "Ambition", "Change"],
+    "possibilities_max": 0
+  }
+}

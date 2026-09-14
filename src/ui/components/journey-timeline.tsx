@@ -105,17 +105,32 @@ function ReadingEntry({
   );
 }
 
+/** A life event (a fact the user wrote) or an outcome (the user's own record). Never inferred. */
 function OtherEntry({ entry }: { entry: Extract<TimelineEntry, { kind: 'event' | 'outcome' }> }) {
   return (
-    <article className="rounded-card border-l-2 border-hairline-strong bg-surface px-4 py-3 hairline">
+    <article
+      className={cn(
+        'rounded-card border-l-2 bg-surface px-4 py-3 hairline',
+        entry.kind === 'event' ? 'border-fg' : 'border-hairline-strong',
+      )}
+    >
       <p className="text-xs font-medium tracking-wide text-fg-muted uppercase">
         <LocalTime iso={entry.at} dateOnly />
         <span className="tracking-normal normal-case">
           {' '}
-          · {entry.kind === 'event' ? 'life event' : 'outcome'}
+          · {entry.kind === 'event' ? 'life event' : 'what happened'}
         </span>
       </p>
-      <p className="mt-1 font-serif text-lg leading-snug">{entry.description}</p>
+      {entry.kind === 'event' ? (
+        <Link
+          href={`/event/${entry.id}`}
+          className="mt-1 block font-serif text-lg leading-snug hover:underline"
+        >
+          {entry.description}
+        </Link>
+      ) : (
+        <p className="mt-1 font-serif text-lg leading-snug">{entry.description}</p>
+      )}
     </article>
   );
 }

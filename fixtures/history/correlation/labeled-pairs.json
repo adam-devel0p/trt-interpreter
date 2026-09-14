@@ -1,0 +1,396 @@
+{
+  "name": "labeled-pairs",
+  "description": "Hand-labelled reading ↔ event pairs for the correlation engine (docs/ALGORITHMS.md §3). `related` is the human judgement; a pair the engine shows (band possible or likely) that is labelled false is a wrong-and-confident suggestion. Entities are resolved names; `tentative` marks a tentative link; `provenance` marks evidence that came from generated text (never counted). Dates are ISO.",
+  "pairs": [
+    {
+      "id": "job-offer-accepted",
+      "related": true,
+      "note": "The canonical loop: a reading about the agency's offer with a stated month, the acceptance three weeks later.",
+      "reading": {
+        "at": "2026-04-25",
+        "entities": ["the agency"],
+        "themes": [
+          ["decision", 0.8],
+          ["ambition", 0.7]
+        ],
+        "journeys": ["career"],
+        "horizon": {
+          "start": "2026-04-25",
+          "end": "2026-05-31",
+          "text": "next month"
+        }
+      },
+      "event": {
+        "at": "2026-05-14",
+        "entities": ["the agency"],
+        "themes": [
+          ["decision", 0.6],
+          ["ambition", 0.6],
+          ["change", 0.5]
+        ],
+        "journeys": ["career"]
+      }
+    },
+    {
+      "id": "maya-talk-after-distance-reading",
+      "related": true,
+      "note": "Same person, same themes, two weeks apart, both in the relationship journey.",
+      "reading": {
+        "at": "2026-06-01",
+        "entities": ["Maya"],
+        "themes": [
+          ["distance", 0.8],
+          ["communication", 0.7]
+        ],
+        "journeys": ["maya"]
+      },
+      "event": {
+        "at": "2026-06-14",
+        "entities": ["Maya"],
+        "themes": [
+          ["communication", 0.8],
+          ["distance", 0.5]
+        ],
+        "journeys": ["maya"]
+      }
+    },
+    {
+      "id": "same-person-no-journey",
+      "related": true,
+      "note": "Same person and a shared theme, no journeys yet (a new user).",
+      "reading": {
+        "at": "2026-03-10",
+        "entities": ["Sam"],
+        "themes": [["conflict", 0.7]],
+        "journeys": []
+      },
+      "event": {
+        "at": "2026-03-20",
+        "entities": ["Sam"],
+        "themes": [
+          ["conflict", 0.6],
+          ["communication", 0.5]
+        ],
+        "journeys": []
+      }
+    },
+    {
+      "id": "flat-move-in-window",
+      "related": true,
+      "note": "A place named in both, inside the reading's 'this spring' horizon.",
+      "reading": {
+        "at": "2026-03-19",
+        "entities": ["Leeds"],
+        "themes": [
+          ["home", 0.8],
+          ["change", 0.7]
+        ],
+        "journeys": [],
+        "horizon": {
+          "start": "2026-03-19",
+          "end": "2026-06-20",
+          "text": "this spring"
+        }
+      },
+      "event": {
+        "at": "2026-05-02",
+        "entities": ["Leeds"],
+        "themes": [
+          ["home", 0.9],
+          ["change", 0.6]
+        ],
+        "journeys": []
+      }
+    },
+    {
+      "id": "health-theme-only-close",
+      "related": true,
+      "note": "Theme and horizon only, no entities: a fair 'possible' at most.",
+      "reading": {
+        "at": "2026-07-30",
+        "entities": [],
+        "themes": [
+          ["health", 0.9],
+          ["stability", 0.5]
+        ],
+        "journeys": [],
+        "horizon": {
+          "start": "2026-07-30",
+          "end": "2026-08-31",
+          "text": "this month"
+        }
+      },
+      "event": {
+        "at": "2026-08-27",
+        "entities": [],
+        "themes": [["health", 0.8]],
+        "journeys": []
+      }
+    },
+    {
+      "id": "same-person-far-apart",
+      "related": false,
+      "note": "Same person but five months later and no shared theme: not this reading's outcome.",
+      "reading": {
+        "at": "2026-01-05",
+        "entities": ["Maya"],
+        "themes": [["hope", 0.6]],
+        "journeys": []
+      },
+      "event": {
+        "at": "2026-06-14",
+        "entities": ["Maya"],
+        "themes": [["communication", 0.8]],
+        "journeys": []
+      }
+    },
+    {
+      "id": "unrelated-walk",
+      "related": false,
+      "note": "A quiet event with nothing in common ten days after a job reading.",
+      "reading": {
+        "at": "2026-04-25",
+        "entities": ["the agency"],
+        "themes": [
+          ["decision", 0.8],
+          ["ambition", 0.7]
+        ],
+        "journeys": ["career"]
+      },
+      "event": {
+        "at": "2026-05-05",
+        "entities": [],
+        "themes": [],
+        "journeys": []
+      }
+    },
+    {
+      "id": "unrelated-different-person-same-week",
+      "related": false,
+      "note": "Different people, different themes, same week: proximity alone.",
+      "reading": {
+        "at": "2026-05-16",
+        "entities": ["Maya"],
+        "themes": [["distance", 0.8]],
+        "journeys": ["maya"]
+      },
+      "event": {
+        "at": "2026-05-18",
+        "entities": ["Dad"],
+        "themes": [["family", 0.7]],
+        "journeys": []
+      }
+    },
+    {
+      "id": "unrelated-theme-only-far",
+      "related": false,
+      "note": "One weak shared theme, four months apart.",
+      "reading": {
+        "at": "2026-02-01",
+        "entities": [],
+        "themes": [
+          ["change", 0.5],
+          ["uncertainty", 0.6]
+        ],
+        "journeys": []
+      },
+      "event": {
+        "at": "2026-06-05",
+        "entities": [],
+        "themes": [["change", 0.4]],
+        "journeys": []
+      }
+    },
+    {
+      "id": "tentative-only-mention",
+      "related": false,
+      "note": "The only shared entity is tentative on the event side and nothing else agrees.",
+      "reading": {
+        "at": "2026-08-11",
+        "entities": ["Sam"],
+        "themes": [["endings", 0.7]],
+        "journeys": []
+      },
+      "event": {
+        "at": "2026-09-30",
+        "entities": [
+          {
+            "id": "Sam",
+            "tentative": true
+          }
+        ],
+        "themes": [["hope", 0.6]],
+        "journeys": []
+      }
+    },
+    {
+      "id": "outside-window-same-place",
+      "related": false,
+      "note": "The reading asked about 'this week'; the event is two months on. Same place, no journey.",
+      "reading": {
+        "at": "2026-03-01",
+        "entities": ["Lisbon"],
+        "themes": [["travel", 0.6]],
+        "journeys": [],
+        "horizon": {
+          "start": "2026-03-01",
+          "end": "2026-03-08",
+          "text": "this week"
+        }
+      },
+      "event": {
+        "at": "2026-05-06",
+        "entities": ["Lisbon"],
+        "themes": [["home", 0.5]],
+        "journeys": []
+      }
+    },
+    {
+      "id": "interpretation-only-evidence",
+      "related": false,
+      "note": "Guard 2: every shared item came from an interpretation, not the user's words. Must never link.",
+      "reading": {
+        "at": "2026-04-01",
+        "entities": [
+          {
+            "id": "the agency",
+            "provenance": "interpretation"
+          }
+        ],
+        "themes": [["decision", 0.8, "interpretation"]],
+        "journeys": []
+      },
+      "event": {
+        "at": "2026-04-10",
+        "entities": ["the agency"],
+        "themes": [["decision", 0.8]],
+        "journeys": []
+      }
+    },
+    {
+      "id": "journey-and-person",
+      "related": true,
+      "note": "Both in the career journey, same employer, six weeks apart, no horizon.",
+      "reading": {
+        "at": "2026-08-13",
+        "entities": ["the agency"],
+        "themes": [["ambition", 0.7]],
+        "journeys": ["career"]
+      },
+      "event": {
+        "at": "2026-09-24",
+        "entities": ["the agency"],
+        "themes": [["work_life", 0.6]],
+        "journeys": ["career"]
+      }
+    },
+    {
+      "id": "journey-only-different-subject",
+      "related": false,
+      "note": "Both filed in a broad journey but about different people and themes, ten weeks apart.",
+      "reading": {
+        "at": "2026-02-10",
+        "entities": ["Dad"],
+        "themes": [["family", 0.8]],
+        "journeys": ["family-year"]
+      },
+      "event": {
+        "at": "2026-04-25",
+        "entities": ["Mum"],
+        "themes": [["care", 0.7]],
+        "journeys": ["family-year"]
+      }
+    },
+    {
+      "id": "broke-up-after-relationship-reading",
+      "related": true,
+      "note": "The reading asked whether to end it; a month later it ended. Same person, endings theme, revisit horizon.",
+      "reading": {
+        "at": "2026-07-10",
+        "entities": ["Maya"],
+        "themes": [
+          ["endings", 0.7],
+          ["decision", 0.6]
+        ],
+        "journeys": ["maya"],
+        "horizon": {
+          "start": "2026-07-10",
+          "end": "2026-08-09",
+          "text": "revisit"
+        }
+      },
+      "event": {
+        "at": "2026-08-05",
+        "entities": ["Maya"],
+        "themes": [["endings", 0.9]],
+        "journeys": ["maya"]
+      }
+    },
+    {
+      "id": "birthday-vs-money-reading",
+      "related": false,
+      "note": "Nothing shared; the same fortnight.",
+      "reading": {
+        "at": "2026-09-01",
+        "entities": [],
+        "themes": [["money_pressure", 0.8]],
+        "journeys": []
+      },
+      "event": {
+        "at": "2026-09-12",
+        "entities": ["Gran"],
+        "themes": [["family", 0.6]],
+        "journeys": []
+      }
+    },
+    {
+      "id": "same-journey-same-employer-four-months",
+      "related": false,
+      "note": "Found on the demo journal: both in the career journey and both about the agency, but four months apart and about different things. A shared journey already relates them; a per-pair connection here is noise.",
+      "reading": {
+        "at": "2026-04-26",
+        "entities": ["the agency"],
+        "themes": [
+          ["decision", 0.8],
+          ["ambition", 0.7]
+        ],
+        "journeys": ["career"]
+      },
+      "event": {
+        "at": "2026-08-17",
+        "entities": ["the agency"],
+        "themes": [
+          ["ambition", 0.7],
+          ["decision", 0.5]
+        ],
+        "journeys": ["career"]
+      }
+    },
+    {
+      "id": "extra-tentative-entity-two-days",
+      "related": true,
+      "note": "Two days apart, one resolved shared person and a second, tentatively shared place plus a theme: must outrank a person-only match weeks away, never score below it.",
+      "reading": {
+        "at": "2026-05-17",
+        "entities": ["Maya", "Leeds"],
+        "themes": [
+          ["home", 0.7],
+          ["change", 0.6]
+        ],
+        "journeys": []
+      },
+      "event": {
+        "at": "2026-05-19",
+        "entities": [
+          "Maya",
+          {
+            "id": "Leeds",
+            "tentative": true
+          }
+        ],
+        "themes": [["home", 0.6]],
+        "journeys": []
+      }
+    }
+  ]
+}

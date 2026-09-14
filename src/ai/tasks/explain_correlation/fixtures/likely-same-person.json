@@ -1,0 +1,23 @@
+{
+  "name": "likely-same-person",
+  "description": "A reading about a job offer at the agency and, three weeks later inside its stated window, the event of accepting the job. Expect a hedged one- or two-sentence explanation that names the shared reason and adds nothing.",
+  "reading": {
+    "occurred_on": "2026-04-25",
+    "question": "Should I take the offer from the agency?"
+  },
+  "event": {
+    "occurred_on": "2026-05-14",
+    "description": "I accepted the job at the agency today."
+  },
+  "band": "likely",
+  "reasons": [
+    "Both mention the agency",
+    "Related themes: Decision and Ambition",
+    "The reading’s “next month” window covers this date",
+    "About three weeks apart"
+  ],
+  "expect": {
+    "must_mention_any": ["agency"],
+    "forbid": ["predicted", "foresaw", "card", "definitely", "will"]
+  }
+}

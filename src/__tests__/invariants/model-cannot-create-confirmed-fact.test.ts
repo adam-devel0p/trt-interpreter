@@ -3,6 +3,7 @@ import path from 'node:path';
 import { getTableConfig } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
 import { interpretations } from '@/db/schema/ai';
+import { lifeEvents, links, outcomes } from '@/db/schema/events';
 import { journeyMembers, journeys } from '@/db/schema/journeys';
 import { entities, entityMentions, objectThemes, predictions } from '@/db/schema/memory';
 import {
@@ -212,5 +213,82 @@ describe('model-cannot-create-confirmed-fact', () => {
     expect(propose).toMatch(/ne\(journeys\.titleSource, 'user'\)/);
     expect(propose).not.toMatch(/userConfirmed/);
     expect(propose).not.toMatch(/acceptedAt/);
+  });
+
+  it('6 · events, outcomes and links (Phase 08): a model can propose an event, never confirm one; never record an outcome; never create or decide a link', () => {
+    const checks = (t: Parameters<typeof getTableConfig>[0]) =>
+      getTableConfig(t).checks.map((c) => c.name);
+    // life_events: fact_status ∈ {CONFIRMED_FACT, INFERRED_EVENT}; confirmed ⇔ confirmed_at;
+    // a user session can only insert confirmed user events (policy); the write gate refuses
+    // CONFIRMED_FACT for a model.
+    expect(checks(lifeEvents)).toEqual(
+      expect.arrayContaining([
+        'life_events_fact_status_check',
+        'life_events_confirmed_check',
+        'life_events_user_confirmed_check',
+      ]),
+    );
+    expect(() => modelBorn({ factStatus: 'CONFIRMED_FACT', source: 'model' })).toThrow(
+      WriteGateError,
+    );
+    expect(modelBorn({ factStatus: 'INFERRED_EVENT', source: 'model' }).factStatus).toBe(
+      'INFERRED_EVENT',
+    );
+    // outcomes: recorded_by = 'user' and fact_status = CONFIRMED_FACT fixed by check.
+    expect(checks(outcomes)).toEqual(
+      expect.arrayContaining(['outcomes_fact_status_check', 'outcomes_recorded_by_check']),
+    );
+    // links: created_by ∈ {user, rule} (never model); a decided state ⇔ a user act.
+    expect(checks(links)).toEqual(
+      expect.arrayContaining(['links_created_by_check', 'links_state_acted_check']),
+    );
+    const migration = readFileSync(
+      path.resolve('src/db/migrations/0009_events_outcomes.sql'),
+      'utf8',
+    );
+    expect(migration).toMatch(
+      /"life_events_insert"[^;]*"life_events"\."source" = 'user' and "life_events"\."fact_status" = 'CONFIRMED_FACT'/,
+    );
+    expect(migration).toMatch(
+      /"outcomes_recorded_by_check" CHECK \("outcomes"\."recorded_by" = 'user'\)/,
+    );
+    expect(migration).toMatch(
+      /"outcomes_fact_status_check" CHECK \("outcomes"\."fact_status" = 'CONFIRMED_FACT'\)/,
+    );
+    expect(migration).toMatch(
+      /"links_created_by_check" CHECK \("links"\."created_by" in \('user', 'rule'\)\)/,
+    );
+    expect(migration).toMatch(
+      /"links_state_acted_check" CHECK \(\("links"\."state" in \('confirmed', 'maybe', 'rejected'\)\) = \("links"\."user_acted_at" is not null\)\)/,
+    );
+    // Rule code inserts links pending and rule-created; it never confirms, and the model's
+    // explainer writes prose columns only.
+    const run = readFileSync(path.resolve('src/correlation/run.ts'), 'utf8');
+    expect(run).toMatch(/createdBy: 'rule',\s*state: 'pending'/);
+    expect(run).not.toMatch(/state: 'confirmed'/);
+    expect(run).not.toMatch(/createdBy: 'user'/);
+    expect(run).not.toMatch(/\.insert\(outcomes\)|\.insert\(lifeEvents\)/);
+    const explain = readFileSync(path.resolve('src/correlation/explain.ts'), 'utf8');
+    const write = explain.match(/\.update\(links\)\s*\.set\(\{([\s\S]*?)\}\)/);
+    expect(write).not.toBeNull();
+    expect(write![1]).toMatch(/explanation: res\.value\.explanation/);
+    for (const col of [
+      'state',
+      'score',
+      'signals',
+      'reasons',
+      'userActedAt',
+      'offeredAt',
+      'evidence',
+    ])
+      expect(write![1], col).not.toContain(`${col}:`);
+    expect(explain).not.toMatch(/\.insert\(/);
+    // Nothing under src/ai/ or src/events/ or src/correlation/ writes an outcome.
+    for (const f of [
+      'src/events/extract.ts',
+      'src/correlation/run.ts',
+      'src/correlation/explain.ts',
+    ])
+      expect(readFileSync(path.resolve(f), 'utf8')).not.toMatch(/outcomes/);
   });
 });

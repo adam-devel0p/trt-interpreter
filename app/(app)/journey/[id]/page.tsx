@@ -3,11 +3,19 @@ import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import { getSessionClient, requireUser } from '@/auth/session';
 import {
+  currentOutcomes,
+  listLinksForObjects,
+  listOutcomesForReadings,
+  loadLinkedObjects,
+} from '@/db/queries/events';
+import {
   getJourney,
   listJourneys,
   listMergedInto,
   type JourneyMemberView,
 } from '@/db/queries/journeys';
+import { OUTCOME_LABEL, OUTCOME_SHORT } from '@/domain/outcomes/followUp';
+import { ConnectionReview, type ConnectionItem } from '../../event/connection-review';
 import { journalHref } from '@/domain/journal/filters';
 import { narrativeHeader } from '@/domain/journeys/narrative';
 import { recurringSymbols } from '@/domain/journeys/symbols';
@@ -49,7 +57,7 @@ export default async function JourneyPage({ params }: { params: Promise<{ id: st
   const client = await getSessionClient();
   const detail = await getJourney(client, id);
   if (!detail) notFound();
-  const { journey, members, pending, progression } = detail;
+  const { journey, members, pending, events, pendingEvents, progression } = detail;
 
   if (detail.merged_into) {
     return (
@@ -69,7 +77,15 @@ export default async function JourneyPage({ params }: { params: Promise<{ id: st
     );
   }
 
-  const [others, merged] = await Promise.all([listJourneys(client), listMergedInto(client, id)]);
+  const memberReadingIds = members.map((m) => m.reading.id);
+  const memberEventIds = events.map((e) => e.event.id);
+  const [others, merged, outcomeRows, linkRows] = await Promise.all([
+    listJourneys(client),
+    listMergedInto(client, id),
+    listOutcomesForReadings(client, memberReadingIds),
+    listLinksForObjects(client, { readings: memberReadingIds, events: memberEventIds }),
+  ]);
+  const linked = await loadLinkedObjects(client, linkRows);
   const titleOf = (m: JourneyMemberView) =>
     m.reading.is_open_reflection ? 'Open reflection' : (m.reading.question ?? 'Reading');
   const titles = new Map(members.map((m) => [m.reading.id, titleOf(m)]));
@@ -92,7 +108,41 @@ export default async function JourneyPage({ params }: { params: Promise<{ id: st
     revisitAt: m.reading.revisit_at,
     membership: { state: m.state as 'auto' | 'confirmed', reasons: m.reasons },
   }));
+  // Phase 08: events and the current outcome of each reading interleave with the readings.
+  for (const e of events)
+    entries.push({
+      kind: 'event',
+      id: e.event.id,
+      at: `${e.event.occurred_on}T12:00:00.000Z`,
+      description: e.event.description,
+    });
+  const outcomesByReading = new Map<string, ReturnType<typeof currentOutcomes>>();
+  for (const rid of memberReadingIds)
+    outcomesByReading.set(rid, currentOutcomes(outcomeRows.filter((o) => o.reading_id === rid)));
+  const confirmedOutcomes = memberReadingIds
+    .map((rid) => ({ readingId: rid, outcome: outcomesByReading.get(rid)!.reading }))
+    .filter((x): x is { readingId: string; outcome: NonNullable<typeof x.outcome> } => !!x.outcome);
+  for (const { readingId, outcome } of confirmedOutcomes)
+    entries.push({
+      kind: 'outcome',
+      id: outcome.id,
+      at: outcome.user_confirmed_at,
+      description: `${OUTCOME_LABEL[outcome.status]} — ${titles.get(readingId) ?? 'reading'}`,
+      status: outcome.status,
+    });
   const groups = buildTimeline(entries);
+  const connections: ConnectionItem[] = linkRows.map((link) => {
+    const inJourneyReading = memberReadingIds.includes(link.from_id);
+    // Show the side that is *not* already a member, so the card adds information.
+    if (inJourneyReading) {
+      const e = linked.events.get(link.to_id);
+      return { link, other: e ? { kind: 'event', ...e } : { kind: 'missing' } };
+    }
+    const r = linked.readings.get(link.from_id);
+    return { link, other: r ? { kind: 'reading', ...r } : { kind: 'missing' } };
+  });
+  const possibleConnections = connections.filter((c) => c.link.state !== 'confirmed');
+  const confirmedConnections = connections.filter((c) => c.link.state === 'confirmed');
   const memberById = new Map(members.map((m) => [m.reading.id, m]));
 
   const symbols = recurringSymbols(
@@ -114,12 +164,17 @@ export default async function JourneyPage({ params }: { params: Promise<{ id: st
   const openLoops = members.filter((m) =>
     isOpenLoop({ followUpStatus: m.reading.follow_up_status, revisitAt: m.reading.revisit_at }),
   );
+  const earliest = [
+    ...members.map((m) => m.reading.occurred_at),
+    ...events.map((e) => `${e.event.occurred_on}T12:00:00.000Z`),
+  ].sort()[0];
   const header = narrativeHeader({
     readings: members.length,
-    confirmedOutcomes: 0,
+    events: events.length,
+    confirmedOutcomes: confirmedOutcomes.length,
     openLoops: openLoops.length,
     deckSystems: new Set(members.map((m) => m.reading.deck.system)).size,
-    since: members.length ? members[members.length - 1]!.reading.occurred_at : null,
+    since: earliest ?? null,
   });
   const steps = progression
     .filter((s) => s.source_object_ids.length >= 2)
@@ -196,12 +251,32 @@ export default async function JourneyPage({ params }: { params: Promise<{ id: st
             />
           )}
         </UndoProvider>
-        {pending.length ? (
+        {pending.length || pendingEvents.length ? (
           <div className="mt-4 rounded-card border border-dashed border-hairline-strong bg-surface-ai px-4 py-3">
             <p className="text-xs font-medium tracking-wide text-fg-muted uppercase">
               Might belong here
             </p>
             <ul className="mt-2 flex flex-col gap-3">
+              {pendingEvents.map((m) => (
+                <li key={m.id} className="text-sm">
+                  <Link
+                    href={`/event/${m.event.id}`}
+                    className="font-serif text-base hover:underline"
+                  >
+                    {m.event.description}
+                  </Link>
+                  <span className="text-fg-muted">
+                    {' '}
+                    · <LocalTime iso={`${m.event.occurred_on}T12:00:00Z`} dateOnly /> · life event
+                  </span>
+                  {m.reasons.length ? (
+                    <p className="mt-0.5 text-xs text-fg-muted">{m.reasons.join('. ')}.</p>
+                  ) : null}
+                  <div className="mt-1.5">
+                    <PendingMemberControls memberId={m.id} />
+                  </div>
+                </li>
+              ))}
               {pending.map((m) => (
                 <li key={m.id} className="text-sm" data-deck={m.reading.deck.system}>
                   <Link
@@ -286,22 +361,68 @@ export default async function JourneyPage({ params }: { params: Promise<{ id: st
         )}
       </Section>
 
-      <Section id="outcomes" title="Confirmed outcomes">
-        <Empty>
-          When you record what actually happened, confirmed outcomes will sit here with the readings
-          they answer.
-        </Empty>
+      <Section
+        id="outcomes"
+        title="Confirmed outcomes"
+        lead="What you recorded actually happened — your word, never a model’s."
+      >
+        {confirmedOutcomes.length === 0 && confirmedConnections.length === 0 ? (
+          <Empty>
+            When you record what actually happened, confirmed outcomes will sit here with the
+            readings they answer.
+          </Empty>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {confirmedOutcomes.map(({ readingId, outcome }) => (
+              <li key={outcome.id} className="rounded-card bg-surface px-4 py-3 text-sm hairline">
+                <p className="text-xs font-medium tracking-wide text-fg-muted uppercase">
+                  <LocalTime iso={outcome.user_confirmed_at} dateOnly />
+                  <span className="tracking-normal normal-case">
+                    {' '}
+                    · {OUTCOME_SHORT[outcome.status]}
+                  </span>
+                </p>
+                <Link
+                  href={`/reading/${readingId}`}
+                  className="mt-1 block font-serif text-base hover:underline"
+                >
+                  {titles.get(readingId) ?? 'Reading'}
+                </Link>
+                {outcome.note ? <p className="mt-1 whitespace-pre-wrap">{outcome.note}</p> : null}
+                {outcome.event ? (
+                  <p className="mt-1 text-fg-muted">
+                    Event:{' '}
+                    <Link
+                      href={`/event/${outcome.event.id}`}
+                      className="text-accent underline underline-offset-4"
+                    >
+                      {outcome.event.description}
+                    </Link>
+                  </p>
+                ) : null}
+              </li>
+            ))}
+            {confirmedConnections.length ? (
+              <li>
+                <p className="mt-2 mb-2 text-xs font-medium tracking-wide text-fg-muted uppercase">
+                  Connections you confirmed
+                </p>
+                <ConnectionReview items={confirmedConnections} />
+              </li>
+            ) : null}
+          </ul>
+        )}
       </Section>
 
       <Section
         id="connections"
         title="Possible connections"
-        lead="Inferred, never certain — each with its evidence."
+        lead="Inferred, never certain — each with its evidence. You decide."
       >
-        <Empty>
-          Once life events can be recorded, possible links between them and these readings will be
-          suggested here, labelled as suggestions.
-        </Empty>
+        <ConnectionReview
+          items={possibleConnections}
+          emptyText="Nothing suggested right now. When a life event seems to relate to one of these readings, the possible link will be offered here with its reasons."
+        />
       </Section>
 
       <Section id="ask" title="Ask about this journey">

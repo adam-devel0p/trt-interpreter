@@ -77,7 +77,7 @@ export function hasPendingExport(rows: readonly ExportRequestRow[]): boolean {
 
 export interface DeletionReceiptRow {
   id: string;
-  scope: 'reading' | 'ai_artifacts' | 'history' | 'account';
+  scope: 'reading' | 'life_event' | 'ai_artifacts' | 'history' | 'account';
   object_type: string | null;
   object_id: string | null;
   requested_at: string;

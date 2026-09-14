@@ -2,6 +2,7 @@ import './_env';
 import { parseArgs } from 'node:util';
 import { authAdmin, closeAdmin, platformSql } from '../src/db/admin';
 import { seedBulkReadings, seedReadings } from './seed-demo-readings';
+import { seedEvents } from './seed-demo-events';
 import { seedInterpretations } from './seed-demo-interpretations';
 import { seedJourneys } from './seed-demo-journeys';
 import { seedMemory } from './seed-demo-memory';
@@ -110,6 +111,7 @@ const SEEDERS: Seeder[] = [
   { name: 'bulk readings', phase: '05', run: seedBulk },
   { name: 'structured memory', phase: '06', run: seedMemory },
   { name: 'journeys', phase: '07', run: seedJourneys },
+  { name: 'life events, outcomes, connections', phase: '08', run: seedEvents },
 ];
 
 async function main() {

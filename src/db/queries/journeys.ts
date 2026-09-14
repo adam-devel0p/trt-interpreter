@@ -49,8 +49,10 @@ export interface JourneyRow {
 }
 
 export interface JourneyListItem extends JourneyRow {
-  /** Live members (not removed), by type. */
+  /** Live reading members (auto + confirmed). */
   member_count: number;
+  /** Live life-event members (Phase 08). */
+  event_count: number;
   pending_count: number;
 }
 
@@ -70,19 +72,21 @@ function toJourney(raw: Record<string, unknown>): JourneyRow {
 export async function listJourneys(client: UserClient): Promise<JourneyListItem[]> {
   const { data, error } = await client
     .from('journeys')
-    .select(`${JOURNEY_COLUMNS}, journey_members(state)`)
+    .select(`${JOURNEY_COLUMNS}, journey_members(state, object_type)`)
     .is('merged_into_id', null)
     .order('last_activity_at', { ascending: false });
   if (error) fail('journeys read', error);
   return (
     (data ?? []) as unknown as (Record<string, unknown> & {
-      journey_members: { state: MemberState }[];
+      journey_members: { state: MemberState; object_type: string }[];
     })[]
   ).map((raw) => {
     const members = raw.journey_members ?? [];
+    const live = members.filter((m) => m.state !== 'removed' && m.state !== 'pending');
     return {
       ...toJourney(raw),
-      member_count: members.filter((m) => m.state !== 'removed' && m.state !== 'pending').length,
+      member_count: live.filter((m) => m.object_type === 'reading').length,
+      event_count: live.filter((m) => m.object_type === 'life_event').length,
       pending_count: members.filter((m) => m.state === 'pending').length,
     };
   });
@@ -123,12 +127,27 @@ export interface ProgressionStepView {
   source_object_ids: string[];
 }
 
+export interface JourneyEventMemberView {
+  id: string;
+  state: MemberState;
+  confidence: number;
+  created_by: 'user' | 'model' | 'rule';
+  reasons: string[];
+  added_at: string;
+  event: { id: string; description: string; occurred_on: string; event_type: string | null };
+  themes: { slug: string; label: string; weight: number }[];
+}
+
 export interface JourneyDetail {
   journey: JourneyRow;
   /** Auto + confirmed members whose reading still exists, newest first. */
   members: JourneyMemberView[];
   /** Pending suggestions awaiting the user. */
   pending: JourneyMemberView[];
+  /** Phase 08: life events that are live members (auto + confirmed), newest first. */
+  events: JourneyEventMemberView[];
+  /** Phase 08: events asked about ("part of this?"). */
+  pendingEvents: JourneyEventMemberView[];
   progression: ProgressionStepView[];
   /** The journey this one was merged into, if any. */
   merged_into: { id: string; title: string } | null;
@@ -146,9 +165,9 @@ interface RawMember {
 }
 
 /**
- * One journey with everything its screen shows. A fixed five round trips whatever the member
- * count — journey, members, readings (embedded deck / spread / cards), themes, progression —
- * asserted by the integration test's query counter.
+ * One journey with everything its screen shows. A fixed six round trips whatever the member
+ * count — journey, members, readings (embedded deck / spread / cards), events, themes,
+ * progression — asserted by the integration test's query counter.
  */
 export async function getJourney(client: UserClient, id: string): Promise<JourneyDetail | null> {
   const j = await client.from('journeys').select(JOURNEY_COLUMNS).eq('id', id).maybeSingle();
@@ -178,10 +197,12 @@ export async function getJourney(client: UserClient, id: string): Promise<Journe
   if (p.error) fail('progression read', p.error);
   const memberRows = (m.data ?? []) as unknown as RawMember[];
   const readingIds = memberRows.filter((r) => r.object_type === 'reading').map((r) => r.object_id);
+  const eventIds = memberRows.filter((r) => r.object_type === 'life_event').map((r) => r.object_id);
+  const objectIds = [...readingIds, ...eventIds];
 
-  const [r, t] = readingIds.length
-    ? await Promise.all([
-        client
+  const [r, ev, t] = await Promise.all([
+    readingIds.length
+      ? client
           .from('readings')
           .select(
             ITEM_SELECT.replace(
@@ -190,19 +211,28 @@ export async function getJourney(client: UserClient, id: string): Promise<Journe
             ),
           )
           .in('id', readingIds)
-          .is('deleted_at', null),
-        client
+          .is('deleted_at', null)
+      : Promise.resolve({ data: [], error: null }),
+    eventIds.length
+      ? client
+          .from('life_events')
+          .select('id, description, occurred_on, event_type')
+          .in('id', eventIds)
+          .is('deleted_at', null)
+      : Promise.resolve({ data: [], error: null }),
+    objectIds.length
+      ? client
           .from('object_themes')
           .select('object_id, weight, themes(slug, label)')
-          .eq('object_type', 'reading')
-          .in('object_id', readingIds),
-      ])
-    : [
-        { data: [], error: null },
-        { data: [], error: null },
-      ];
+          .in('object_id', objectIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
   if (r.error) fail('member readings read', r.error);
+  if (ev.error) fail('member events read', ev.error);
   if (t.error) fail('member themes read', t.error);
+  const eventsById = new Map(
+    ((ev.data ?? []) as JourneyEventMemberView['event'][]).map((e) => [e.id, e]),
+  );
 
   type RawReading = RawItem & {
     spreads: RawItem['spreads'] & { positions: { key: string; name: string }[] };
@@ -226,7 +256,23 @@ export async function getJourney(client: UserClient, id: string): Promise<Journe
   }
 
   const views: JourneyMemberView[] = [];
+  const eventViews: JourneyEventMemberView[] = [];
   for (const row of memberRows) {
+    if (row.object_type === 'life_event') {
+      const event = eventsById.get(row.object_id);
+      if (!event) continue;
+      eventViews.push({
+        id: row.id,
+        state: row.state,
+        confidence: Number(row.confidence),
+        created_by: row.created_by,
+        reasons: row.reasons ?? [],
+        added_at: row.added_at,
+        event,
+        themes: themesByReading.get(row.object_id) ?? [],
+      });
+      continue;
+    }
     const reading = readingsById.get(row.object_id);
     if (!reading) continue; // deleted (soft) — out of every view before the purge runs
     views.push({
@@ -241,7 +287,11 @@ export async function getJourney(client: UserClient, id: string): Promise<Journe
     });
   }
   views.sort((a, b) => Date.parse(b.reading.occurred_at) - Date.parse(a.reading.occurred_at));
-  const live = new Set(views.filter((v) => v.state !== 'pending').map((v) => v.reading.id));
+  eventViews.sort((a, b) => (a.event.occurred_on < b.event.occurred_on ? 1 : -1));
+  const live = new Set([
+    ...views.filter((v) => v.state !== 'pending').map((v) => v.reading.id),
+    ...eventViews.filter((v) => v.state !== 'pending').map((v) => v.event.id),
+  ]);
 
   const progression: ProgressionStepView[] = (
     (p.data ?? []) as unknown as {
@@ -267,6 +317,8 @@ export async function getJourney(client: UserClient, id: string): Promise<Journe
     journey,
     members: views.filter((v) => v.state !== 'pending'),
     pending: views.filter((v) => v.state === 'pending'),
+    events: eventViews.filter((v) => v.state !== 'pending'),
+    pendingEvents: eventViews.filter((v) => v.state === 'pending'),
     progression,
     merged_into: (into.data as { id: string; title: string } | null) ?? null,
   };
@@ -282,10 +334,11 @@ export interface ReadingJourneyMembership {
   journey: { id: string; title: string; status: JourneyStatus; dismissed: boolean };
 }
 
-/** The journeys a reading sits in (any live state), plus the ones it could be added to. */
+/** The journeys a reading (or life event) sits in, any live state, plus the ones it could be added to. */
 export async function getReadingJourneys(
   client: UserClient,
   readingId: string,
+  objectType: 'reading' | 'life_event' = 'reading',
 ): Promise<{ memberships: ReadingJourneyMembership[]; options: { id: string; title: string }[] }> {
   const [m, j] = await Promise.all([
     client
@@ -293,7 +346,7 @@ export async function getReadingJourneys(
       .select(
         'id, state, confidence, reasons, journeys(id, title, status, dismissed_at, merged_into_id)',
       )
-      .eq('object_type', 'reading')
+      .eq('object_type', objectType)
       .eq('object_id', readingId)
       .neq('state', 'removed'),
     client
@@ -409,6 +462,7 @@ export async function createJourney(
   userId: string,
   title: string,
   readingIds: string[] = [],
+  eventIds: string[] = [],
 ): Promise<string> {
   const t = clip(titleSchema.parse(title));
   const { data, error } = await client
@@ -429,6 +483,8 @@ export async function createJourney(
   if (error || !data) fail('journey create', error);
   const id = (data as { id: string }).id;
   for (const readingId of readingIds) await addReadingToJourney(client, userId, id, readingId);
+  for (const eventId of eventIds)
+    await addReadingToJourney(client, userId, id, eventId, 'life_event');
   return id;
 }
 
@@ -437,12 +493,13 @@ export async function addReadingToJourney(
   userId: string,
   journeyId: string,
   readingId: string,
+  objectType: 'reading' | 'life_event' = 'reading',
 ): Promise<void> {
   const { error } = await client.from('journey_members').upsert(
     {
       user_id: userId,
       journey_id: journeyId,
-      object_type: 'reading',
+      object_type: objectType,
       object_id: readingId,
       confidence: 1,
       created_by: 'user',

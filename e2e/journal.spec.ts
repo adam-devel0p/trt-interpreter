@@ -211,7 +211,7 @@ test.describe('journal', () => {
       schema_version: string;
       counts: Record<string, number>;
     };
-    expect(manifest.schema_version).toBe('export/1.2.0');
+    expect(manifest.schema_version).toBe('export/1.3.0');
     expect(manifest.counts['readings.json']).toBe(3);
     const readings = JSON.parse(strFromU8(files['readings.json']!)) as { id: string }[];
     expect(readings.map((r) => r.id).sort()).toEqual([...ids].sort());

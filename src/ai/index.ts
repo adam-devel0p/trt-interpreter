@@ -13,6 +13,10 @@ import { routingFromEnv, validateRouting } from './registry';
 import { createAiRunner, type AiRunner } from './run';
 import * as classifySafety from './tasks/classify_safety';
 import { mockSafety } from './tasks/classify_safety/mock';
+import * as explainCorrelation from './tasks/explain_correlation';
+import { mockExplanation } from './tasks/explain_correlation/mock';
+import * as extractEvent from './tasks/extract_event_metadata';
+import { mockEventExtraction } from './tasks/extract_event_metadata/mock';
 import * as extractReading from './tasks/extract_reading_metadata';
 import { mockExtraction } from './tasks/extract_reading_metadata/mock';
 import * as interpretReading from './tasks/interpret_reading';
@@ -43,6 +47,14 @@ const VERSIONS: Record<string, { promptVersion: string; schemaVersion: string }>
     promptVersion: proposeJourney.PROMPT_VERSION,
     schemaVersion: proposeJourney.SCHEMA_VERSION,
   },
+  extract_event_metadata: {
+    promptVersion: extractEvent.PROMPT_VERSION,
+    schemaVersion: extractEvent.SCHEMA_VERSION,
+  },
+  explain_correlation: {
+    promptVersion: explainCorrelation.PROMPT_VERSION,
+    schemaVersion: explainCorrelation.SCHEMA_VERSION,
+  },
 };
 
 export function taskVersions(task: string): { promptVersion: string; schemaVersion: string } {
@@ -56,6 +68,8 @@ export function mockFixtures() {
     classify_safety: { default: mockSafety },
     extract_reading_metadata: { default: mockExtraction },
     propose_journey: { default: mockJourneyProposal },
+    extract_event_metadata: { default: mockEventExtraction },
+    explain_correlation: { default: mockExplanation },
   };
 }
 

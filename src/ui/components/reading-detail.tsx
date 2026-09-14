@@ -34,6 +34,13 @@ export interface ReadingDetailSlots {
    * (suggested / asked / yours) and the manual add. Rendered inside Connections.
    */
   journeys?: React.ReactNode;
+  /**
+   * Life events (Phase 08): suggested and decided connections to events, with reasons and
+   * the one-tap review. Rendered inside Connections.
+   */
+  links?: React.ReactNode;
+  /** What happened (Phase 08): the outcome record and the "something happened" entry point. */
+  outcomes?: React.ReactNode;
 }
 
 export interface ReadingDetailProps {
@@ -172,6 +179,14 @@ export function ReadingDetail({ reading, justSaved = false, slots, cardHref }: R
             {slots.journeys}
           </div>
         ) : null}
+        {slots.links ? (
+          <div className="mb-4" data-testid="reading-links">
+            <h3 className="mb-1.5 text-xs font-medium tracking-wide text-fg-muted uppercase">
+              Life events
+            </h3>
+            {slots.links}
+          </div>
+        ) : null}
         {slots.connections ?? (
           <p className="rounded-card border border-dashed border-hairline-strong px-4 py-3 text-sm text-fg-muted">
             The people, places and themes in this reading — and later, life events, journeys and
@@ -186,6 +201,7 @@ export function ReadingDetail({ reading, justSaved = false, slots, cardHref }: R
           Follow-up
         </h2>
         {slots.followUp}
+        {slots.outcomes ? <div className="mt-4">{slots.outcomes}</div> : null}
       </section>
 
       <section aria-labelledby="controls-h" className="mt-8">

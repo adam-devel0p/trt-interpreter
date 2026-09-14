@@ -16,6 +16,23 @@ import type { ExtractionPayload } from '../src/domain/extraction/schema';
 import * as extractVersion from '../src/ai/tasks/extract_reading_metadata/version';
 import { buildProposeJourneyRequest, type JourneyProposal } from '../src/ai/tasks/propose_journey';
 import * as proposeVersion from '../src/ai/tasks/propose_journey/version';
+import {
+  buildExplainCorrelationRequest,
+  explanationIssues,
+  type CorrelationExplanation,
+} from '../src/ai/tasks/explain_correlation';
+import * as explainVersion from '../src/ai/tasks/explain_correlation/version';
+import {
+  buildExtractEventRequest,
+  type EventExtractionPayload,
+} from '../src/ai/tasks/extract_event_metadata';
+import * as extractEventVersion from '../src/ai/tasks/extract_event_metadata/version';
+import { bandFor, scorePair } from '../src/domain/correlation/score';
+import {
+  loadLabeledPairs,
+  scoreLabels,
+  toObject,
+} from '../src/domain/correlation/__tests__/fixtures';
 import { normalizeAlias } from '../src/domain/entities/normalize';
 import { resolveThemeLabel } from '../src/domain/themes/taxonomy';
 import { closeAdmin } from '../src/db/admin';
@@ -95,6 +112,32 @@ interface ProposeFixture {
 interface SafetyFixture {
   name: string;
   cases: { question: string; category: SafetyCategory }[];
+}
+
+interface ExtractEventFixture {
+  name: string;
+  description: string;
+  description_text: string;
+  note: string | null;
+  occurred_on: string;
+  expect: {
+    event_type: string | null;
+    importance_min: number;
+    entities: { mention: string; kind: string }[];
+    forbidden_mentions: string[];
+    themes_any: string[];
+    possibilities_max: number;
+  };
+}
+
+interface ExplainFixture {
+  name: string;
+  description: string;
+  reading: { occurred_on: string; question: string | null };
+  event: { occurred_on: string; description: string };
+  band: 'possible' | 'likely';
+  reasons: string[];
+  expect: { must_mention_any: string[]; forbid: string[] };
 }
 
 const TASKS_DIR = path.resolve('src/ai/tasks');
@@ -439,6 +482,179 @@ async function main() {
         2,
       ),
     );
+  }
+
+  // ── extract_event_metadata (Phase 08) ──────────────────────────────────────────────────
+  // Same family as reading extraction: entity recall/precision over normalised mentions,
+  // pronouns never proposed, a type and importance band, no possibilities, no timeframe.
+  const eventDir = path.join(TASKS_DIR, 'extract_event_metadata/fixtures/__baselines__');
+  mkdirSync(eventDir, { recursive: true });
+  for (const fx of loadFixtures<ExtractEventFixture>('extract_event_metadata')) {
+    const started = Date.now();
+    const req = buildExtractEventRequest(
+      { description: fx.description_text, note: fx.note, occurred_on: fx.occurred_on },
+      { userId: 'eval', eventId: fx.name },
+    );
+    const r = await runner.runObject({ ...req, userId: undefined });
+    const checks: Record<string, { pass: boolean; detail?: unknown }> = {};
+    let value: EventExtractionPayload | null = null;
+    if (r.ok) {
+      value = r.value;
+      const got = new Set(value.entities.map((e) => `${normalizeAlias(e.mention)}|${e.kind}`));
+      const expected = fx.expect.entities.map((e) => `${normalizeAlias(e.mention)}|${e.kind}`);
+      const hits = expected.filter((e) => got.has(e));
+      checks.schema = { pass: true };
+      checks.entity_recall = {
+        pass: expected.length === 0 || hits.length === expected.length,
+        detail: { expected, got: [...got] },
+      };
+      checks.no_forbidden_mentions = {
+        pass: !value.entities.some((e) =>
+          fx.expect.forbidden_mentions.some((f) => normalizeAlias(f) === normalizeAlias(e.mention)),
+        ),
+      };
+      checks.event_type = {
+        pass: fx.expect.event_type === null ? true : value.event_type === fx.expect.event_type,
+        detail: value.event_type,
+      };
+      checks.importance = {
+        pass: value.importance === null || value.importance >= fx.expect.importance_min,
+        detail: value.importance,
+      };
+      checks.themes = {
+        pass:
+          fx.expect.themes_any.length === 0 ||
+          value.themes.some((t) =>
+            fx.expect.themes_any.some(
+              (label) => resolveThemeLabel(t.label)?.slug === resolveThemeLabel(label)?.slug,
+            ),
+          ),
+        detail: value.themes.map((t) => t.label),
+      };
+      checks.no_possibilities = {
+        pass: value.possibilities.length <= fx.expect.possibilities_max,
+        detail: value.possibilities.length,
+      };
+      checks.no_timeframe = { pass: value.timeframe === null };
+      checks.no_probability = { pass: !JSON.stringify(value).match(/probab/i) };
+    } else {
+      checks.schema = { pass: false, detail: { status: r.status, errorClass: r.errorClass } };
+    }
+    const failed = Object.entries(checks)
+      .filter(([, c]) => !c.pass)
+      .map(([k]) => k);
+    hardFailures += failed.length;
+    const line = `  event     ${failed.length === 0 ? '✓' : '✗'} ${fx.name.padEnd(32)} ${r.ok ? `${r.value.event_type ?? '—'} · importance ${r.value.importance ?? '—'} · ${r.value.entities.length} mention(s)` : `${r.status}/${r.errorClass}`} ${(Date.now() - started) / 1000}s${failed.length ? `  FAILED: ${failed.join(', ')}` : ''}`;
+    console.log(line);
+    summary.push(line.trim());
+    writeFileSync(
+      path.join(eventDir, `${fx.name}.json`),
+      JSON.stringify(
+        {
+          fixture: fx.name,
+          description: fx.description,
+          provider,
+          model: r.ok ? r.meta.modelId : null,
+          prompt_version: extractEventVersion.PROMPT_VERSION,
+          schema_version: extractEventVersion.SCHEMA_VERSION,
+          ran_at: new Date().toISOString(),
+          checks,
+          output: value,
+          human_review: { reviewed_by: null, reviewed_at: null, verdict: null, notes: null },
+        },
+        null,
+        2,
+      ),
+    );
+  }
+
+  // ── explain_correlation (Phase 08) ─────────────────────────────────────────────────────
+  // Prose for a score the code computed: the register validator the run uses, plus "names
+  // the shared thing" and "no forbidden claim".
+  const explainDir = path.join(TASKS_DIR, 'explain_correlation/fixtures/__baselines__');
+  mkdirSync(explainDir, { recursive: true });
+  for (const fx of loadFixtures<ExplainFixture>('explain_correlation')) {
+    const started = Date.now();
+    const req = buildExplainCorrelationRequest(
+      { reading: fx.reading, event: fx.event, band: fx.band, reasons: fx.reasons },
+      { userId: 'eval', linkId: fx.name },
+    );
+    const r = await runner.runObject({ ...req, userId: undefined });
+    const checks: Record<string, { pass: boolean; detail?: unknown }> = {};
+    let value: CorrelationExplanation | null = null;
+    if (r.ok) {
+      value = r.value;
+      const issues = explanationIssues(value.explanation);
+      checks.schema = { pass: true };
+      checks.register = { pass: issues.length === 0, detail: issues };
+      checks.names_evidence = {
+        pass: fx.expect.must_mention_any.some((w) =>
+          value!.explanation.toLowerCase().includes(w.toLowerCase()),
+        ),
+        detail: value.explanation,
+      };
+      checks.no_forbidden = {
+        pass: !fx.expect.forbid.some((w) =>
+          new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(
+            value!.explanation,
+          ),
+        ),
+      };
+      checks.hedged = {
+        pass: /\b(may|might|seems|looks|could|possibly|perhaps)\b/i.test(value.explanation),
+      };
+    } else {
+      checks.schema = { pass: false, detail: { status: r.status, errorClass: r.errorClass } };
+    }
+    const failed = Object.entries(checks)
+      .filter(([, c]) => !c.pass)
+      .map(([k]) => k);
+    hardFailures += failed.length;
+    const line = `  explain   ${failed.length === 0 ? '✓' : '✗'} ${fx.name.padEnd(32)} ${r.ok ? `"${r.value.explanation.slice(0, 80)}${r.value.explanation.length > 80 ? '…' : ''}"` : `${r.status}/${r.errorClass}`} ${(Date.now() - started) / 1000}s${failed.length ? `  FAILED: ${failed.join(', ')}` : ''}`;
+    console.log(line);
+    summary.push(line.trim());
+    writeFileSync(
+      path.join(explainDir, `${fx.name}.json`),
+      JSON.stringify(
+        {
+          fixture: fx.name,
+          description: fx.description,
+          provider,
+          model: r.ok ? r.meta.modelId : null,
+          prompt_version: explainVersion.PROMPT_VERSION,
+          schema_version: explainVersion.SCHEMA_VERSION,
+          ran_at: new Date().toISOString(),
+          checks,
+          output: value,
+          human_review: { reviewed_by: null, reviewed_at: null, verdict: null, notes: null },
+        },
+        null,
+        2,
+      ),
+    );
+  }
+
+  // ── correlation engine (Phase 08) — model-free, the same numbers in every mode ──────────
+  // Precision and recall of "shown" against the hand-labelled pairs. Precision below ~0.8
+  // means the display threshold must rise before shipping (phase-08 test plan).
+  {
+    const results = loadLabeledPairs().map((p) => {
+      const c = scorePair(
+        toObject(`r-${p.id}`, 'reading', p.reading),
+        toObject(`e-${p.id}`, 'life_event', p.event),
+      );
+      return {
+        id: p.id,
+        related: p.related,
+        shown: c.eligible && bandFor(c.score, c.signals) !== 'hidden',
+      };
+    });
+    const { precision, recall, wrongShown, missed } = scoreLabels(results);
+    const ok = precision >= 0.8;
+    if (!ok) hardFailures += 1;
+    const line = `  correlate ${ok ? '✓' : '✗'} labeled-pairs                    precision ${(precision * 100).toFixed(0)}% · recall ${(recall * 100).toFixed(0)}% over ${results.length} pairs${wrongShown.length ? `  WRONGLY SHOWN: ${wrongShown.join(', ')}` : ''}${missed.length ? `  missed: ${missed.join(', ')}` : ''}`;
+    console.log(line);
+    summary.push(line.trim());
   }
 
   // ── interpret_reading ──────────────────────────────────────────────────────────────────

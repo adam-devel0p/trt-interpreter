@@ -377,10 +377,52 @@ describe('journeys (integration)', () => {
     const detail = (await getJourney(counting, big))!;
     const ms = Date.now() - started;
     expect(detail.members).toHaveLength(100);
-    expect(requests).toBeLessThanOrEqual(5);
+    expect(requests).toBeLessThanOrEqual(6);
     expect(ms).toBeLessThan(5_000);
     // Every card keeps its own deck's name: Thoth members render Thoth names, RWS ones RWS.
     for (const m of detail.members)
       for (const c of m.reading.cards) expect(c.card.deck_system).toBe(m.reading.deck.system);
   }, 120_000);
+
+  it('a life event about the journey’s person joins it by assignment, shows in the detail, and counts for activity (Phase 08)', async () => {
+    const { createEvent } = await import('@/db/queries/events');
+    const { runEventExtraction } = await import('@/events/extract');
+    const { journeysOfObjects } = await import('@/journeys/refresh');
+    const maya = (await myJourneys()).find((j) => /maya/i.test(j.title))!;
+    expect(maya).toBeDefined();
+    const eventId = await createEvent(user.client, user.id, {
+      description: 'Maya and I finally talked about the distance.',
+      occurred_on: at(20).slice(0, 10),
+      note: null,
+      reading_id: null,
+    });
+    expect((await runEventExtraction(eventId)).status).toBe('complete');
+    // Assignment ran inside materialisation (the journey step is object-type aware).
+    const filed = await journeysOfObjects('life_event', [eventId]);
+    expect(filed).toContain(maya.id);
+    const [member] = await platformDb()
+      .select()
+      .from(journeyMembers)
+      .where(
+        and(eq(journeyMembers.objectType, 'life_event'), eq(journeyMembers.objectId, eventId)),
+      );
+    expect(['auto', 'pending']).toContain(member!.state);
+    expect(member!.createdBy).toBe('rule');
+    expect(member!.reasons).toContain('Both mention Maya');
+    const detail = (await getJourney(user.client, maya.id))!;
+    const inDetail = [...detail.events, ...detail.pendingEvents].find(
+      (e) => e.event.id === eventId,
+    );
+    expect(inDetail?.event.description).toBe('Maya and I finally talked about the distance.');
+    // Events never seed journeys of their own: only readings are in the discovery pool.
+    const before = (await myJourneys()).length;
+    const lone = await createEvent(user.client, user.id, {
+      description: 'Coffee with Priya about the studio.',
+      occurred_on: at(21).slice(0, 10),
+      note: null,
+      reading_id: null,
+    });
+    expect((await runEventExtraction(lone)).status).toBe('complete');
+    expect((await myJourneys()).length).toBe(before);
+  });
 });

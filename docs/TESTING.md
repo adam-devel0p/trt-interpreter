@@ -37,10 +37,10 @@ checks were actually performed.
   - `thoth-never-substitutes-rws.test.tsx` (live since Phase 02: seed data, a source scan of every render path for archetype references, and the rendered `Card` markup)
   - `opening-reading-makes-no-ai-call.test.tsx` (live since Phase 03: a transitive import-graph scan proves nothing under the reading routes, queries or detail component reaches `src/ai/`; with every AI entry point stubbed to throw, `getReading` against a PostgREST-shaped fake touches only `readings` and `ReadingDetail` renders both decks' readings complete from stored data)
   - `reading-survives-ai-failure.test.ts` (live since Phase 04: the interpretation service against an in-memory store and the fault-injecting mock through invalid output ×2, timeout → downgrade → timeout, 429 ×3, 5xx ×3, refusal, deck purity ×2, budget denied, circuit open, no consent and cancellation — the reading is byte-identical after each, the row records the class; repeated against Postgres in `src/interpretation/__tests__/interpretation.integration.test.ts`)
-  - `card-overlap-alone-never-correlates.test.ts`
-  - `rejected-link-not-resuggested.test.ts`
-  - `summary-never-sole-evidence.test.ts`
-  - `deleting-reading-purges-derived.test.ts` (live since Phase 05: the purge job has a counter and remover for every registry target, every table with a `reading_id` FK is registered, delete is soft delete + `purge_deleted`, every read path filters `deleted_at`; `…integration.test.ts` soft-deletes a reading carrying every derived artifact, runs the job, asserts zero rows in every registry table and a receipt with the counts)
+  - `card-overlap-alone-never-correlates.test.ts` (live since Phase 08: identical spreads on any two dates are never eligible; a shared card plus one weak non-card signal is not enough, two are; the card weight is the smallest and the guard needs two non-card signals, one temporal; the runtime stores only eligible pairs)
+  - `rejected-link-not-resuggested.test.ts` (live since Phase 08: an identical re-run after a rejection yields the same fingerprint and is not re-surfaced, a day of drift neither; new evidence needs +0.15 or a user-confirmed overlap that did not exist before, and returns it once; the query layer records the rejection point and the run consults `shouldResurface` and never deletes a rejected row; the database half — reject, re-run unchanged → nothing, hand-link the mention → back once, reject again → gone for good — is `src/correlation/__tests__/correlation.integration.test.ts`)
+  - `summary-never-sole-evidence.test.ts` (live since Phase 08: a bundle whose only evidence came from an interpretation or a summary produces no link even inside the stated window; generated evidence adds nothing to a bundle that has the user's words — identical score, signals and fingerprint; the feature loader reads only extractions of the user's words and marks them `user_text`, and the engine filters regardless)
+  - `deleting-reading-purges-derived.test.ts` (live since Phase 05: the purge job has a counter and remover for every registry target, every table with a `reading_id` FK is registered (a `set null` FK is a cleared pointer, not a dependent — Phase 08's `life_events.reading_id`), delete is soft delete + `purge_deleted`, every read path filters `deleted_at`; Phase 08 adds the `life_event` root on the same terms; `…integration.test.ts` soft-deletes a reading carrying every derived artifact — since 08 an outcome and a user link too — runs the job, asserts zero rows in every registry table, the event surviving with its pointer cleared, and a receipt with the counts)
   - `archive-readable-without-subscription.test.ts` (live since Phase 05: no journal, detail, search, export or delete path references the plan, a subscription, a budget or a paywall; `…integration.test.ts` sets `plan = 'free'`, withdraws consent and proves list, search, detail with stored interpretation, history and export still work — Phase 11 must extend it to exhausted limits)
   - `no-journal-content-in-logs.test.ts`
   - `raw-text-never-overwritten.test.ts` (live since Phase 05: no derived-side module writes `readings` or `reading_cards`, every `modelWrite()` payload is free of user-text columns, the `readings_keep_text` trigger and the revisions policies are in the migration; `…integration.test.ts`: three note edits keep three versions + current, a question edit is kept and bumps `metadata_version`, a raw service-role update still leaves history, derived artifacts leave the words byte-identical, revisions cannot be forged or edited)
@@ -57,6 +57,13 @@ checks were actually performed.
   (`src/db/queries/__tests__/journal-perf.integration.test.ts`) seeds 1000 readings with the
   demo generator and asserts p95 < 300 ms per query; the scroll check in `e2e/journal.spec.ts`
   signs in as `demo-cleo` (needs `pnpm demo:seed`) and records frame times as an annotation.
+- **Phase 08 fixtures.** `attachDerived(user, reading, { event: true })` adds a life event
+  logged about the reading (a user-confirmed link) and an outcome pointing at it;
+  `enableCorrelation(userId)` turns the `correlation_suggestions` flag on like a rollout;
+  `e2e/_helpers.ts` gained the `correlation` option on `createReadyUser` and `revisitAt` on
+  `seedReadings`. The mock event extractor (`src/ai/tasks/extract_event_metadata/mock.ts`)
+  layers event verbs ("accepted", "talked", "moved") and a type / importance over the
+  reading rules, so the whole loop runs without a model.
 - **Phase 06 fixtures.** `fixtures/history/*.json` are the hand-authored arcs (relationship,
   career, relocation) the resolver is walked through by `src/domain/entities/__tests__/resolve.test.ts`
   with an in-memory store (`simulate.ts`) that executes the same `planApply()` mutations as the
@@ -94,7 +101,11 @@ checks were actually performed.
   responses were not needed, the mock's fixture *functions* answer for any reading.
 - `fixtures/history/` — hand-authored user histories (a relationship arc, a career arc, a relocation
   arc) with expected entity resolutions, journey clusters and correlation verdicts. These are the
-  ground truth for §8 behaviour and are extended as thresholds are tuned.
+  ground truth for §8 behaviour and are extended as thresholds are tuned. Phase 08:
+  `correlation/labeled-pairs.json` — 18 reading ↔ event pairs with a human `related` label,
+  scored by `src/domain/correlation/__tests__/score.test.ts` (precision must be 1.0 on the set;
+  the one allowed miss is named) and by the model-free `correlate` section of `pnpm eval`,
+  which prints precision and recall in every mode.
 - `fixtures/ai/` — recorded model responses per task/version for deterministic unit tests.
 
 ## CI gates

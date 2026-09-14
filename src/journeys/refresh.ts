@@ -5,7 +5,8 @@ import { journeyMembers, journeys, journeyThemeProgression, readings } from '@/d
 import { classifyCluster } from '@/domain/journeys/cluster';
 import { themeProgression } from '@/domain/journeys/progression';
 import { DORMANT_AFTER_DAYS } from '@/domain/journeys/thresholds';
-import { loadReadingFeatures } from './features';
+import { loadMembersByJourney, type LiveMembers } from './assign';
+import { loadObjectFeatures } from './features';
 
 /**
  * Recompute what a journey derives from its live members: the activity window, the
@@ -24,7 +25,12 @@ export interface RefreshResult {
   status: string;
 }
 
-/** Live members of a journey: `auto` or `confirmed` (a pending question is not yet part of it), reading not soft-deleted. */
+/** Live members of a journey — `auto` or `confirmed` (a pending question is not yet part of it), not soft-deleted — by type. */
+export async function liveMembers(journeyId: string): Promise<LiveMembers> {
+  return (await loadMembersByJourney([journeyId])).get(journeyId) ?? { readings: [], events: [] };
+}
+
+/** Live member readings only (the naming context reads questions; events have none). */
 export async function liveMemberReadingIds(journeyId: string): Promise<string[]> {
   const rows = await platformDb()
     .select({ objectId: journeyMembers.objectId })
@@ -49,8 +55,8 @@ export async function refreshJourney(
   const [journey] = await db.select().from(journeys).where(eq(journeys.id, journeyId)).limit(1);
   if (!journey) return null;
   const now = opts.now ?? new Date();
-  const ids = await liveMemberReadingIds(journeyId);
-  const { features, themeIds } = await loadReadingFeatures(journey.userId, ids);
+  const ids = await liveMembers(journeyId);
+  const { features, themeIds } = await loadObjectFeatures(journey.userId, ids);
   const members = [...features.values()];
 
   const dates = members.map((m) => Date.parse(m.occurredAt));
@@ -105,14 +111,21 @@ export async function refreshJourneys(journeyIds: readonly string[]): Promise<vo
 
 /** Journeys a set of readings belong to (any state but removed) — the ones a purge touches. */
 export async function journeysOfReadings(readingIds: readonly string[]): Promise<string[]> {
-  if (readingIds.length === 0) return [];
+  return journeysOfObjects('reading', readingIds);
+}
+
+export async function journeysOfObjects(
+  objectType: 'reading' | 'life_event',
+  objectIds: readonly string[],
+): Promise<string[]> {
+  if (objectIds.length === 0) return [];
   const rows = await platformDb()
     .select({ journeyId: journeyMembers.journeyId })
     .from(journeyMembers)
     .where(
       and(
-        eq(journeyMembers.objectType, 'reading'),
-        inArray(journeyMembers.objectId, [...readingIds]),
+        eq(journeyMembers.objectType, objectType),
+        inArray(journeyMembers.objectId, [...objectIds]),
       ),
     );
   return [...new Set(rows.map((r) => r.journeyId))];

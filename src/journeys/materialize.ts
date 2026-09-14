@@ -1,11 +1,11 @@
 import 'server-only';
 import { eq } from 'drizzle-orm';
 import { platformDb } from '@/db/admin';
-import { profiles, readings } from '@/db/schema';
+import { lifeEvents, profiles, readings } from '@/db/schema';
 import { flagForUser } from '@/flags/server';
 import { enqueue } from '@/jobs/enqueue';
 import { errorClassOf, logger } from '@/observability/logger';
-import { assignReading } from './assign';
+import { assignObject, type MemberObjectType } from './assign';
 import { discoverJourneys } from './discover';
 import { refreshJourneys } from './refresh';
 
@@ -22,6 +22,8 @@ import { refreshJourneys } from './refresh';
 
 export interface JourneyMaterializeResult {
   readingId: string;
+  objectType: MemberObjectType;
+  objectId: string;
   skipped?: 'flag' | 'missing';
   assigned: number;
   created: number;
@@ -30,19 +32,44 @@ export interface JourneyMaterializeResult {
 export async function materializeJourneysForReading(
   readingId: string,
 ): Promise<JourneyMaterializeResult> {
+  return materializeJourneysForObject('reading', readingId);
+}
+
+/**
+ * Readings assign and may seed new journeys; a life event (Phase 08) assigns to existing
+ * journeys only — journeys are formed from what a person asks about, and events join them.
+ */
+export async function materializeJourneysForObject(
+  objectType: MemberObjectType,
+  objectId: string,
+): Promise<JourneyMaterializeResult> {
   const db = platformDb();
-  const empty: JourneyMaterializeResult = { readingId, assigned: 0, created: 0 };
-  const [reading] = await db
-    .select({ userId: readings.userId, deletedAt: readings.deletedAt })
-    .from(readings)
-    .where(eq(readings.id, readingId))
-    .limit(1);
-  if (!reading || reading.deletedAt) return { ...empty, skipped: 'missing' };
-  const userId = reading.userId;
+  const empty: JourneyMaterializeResult = {
+    readingId: objectId,
+    objectType,
+    objectId,
+    assigned: 0,
+    created: 0,
+  };
+  const [object] =
+    objectType === 'reading'
+      ? await db
+          .select({ userId: readings.userId, deletedAt: readings.deletedAt })
+          .from(readings)
+          .where(eq(readings.id, objectId))
+          .limit(1)
+      : await db
+          .select({ userId: lifeEvents.userId, deletedAt: lifeEvents.deletedAt })
+          .from(lifeEvents)
+          .where(eq(lifeEvents.id, objectId))
+          .limit(1);
+  if (!object || object.deletedAt) return { ...empty, skipped: 'missing' };
+  const userId = object.userId;
   if (!(await flagForUser('journey_autocreate', userId))) return { ...empty, skipped: 'flag' };
 
-  const assignment = await assignReading(userId, readingId);
-  const discovery = await discoverJourneys(userId);
+  const assignment = await assignObject(userId, objectType, objectId);
+  const discovery =
+    objectType === 'reading' ? await discoverJourneys(userId) : { created: [], grown: [] };
   await refreshJourneys([
     ...assignment.touched,
     ...discovery.created.map((c) => c.journeyId),
@@ -70,20 +97,23 @@ export async function materializeJourneysForReading(
     }
   }
   return {
-    readingId,
+    ...empty,
     assigned: assignment.added.length,
     created: discovery.created.length,
   };
 }
 
 /** Wrapper for the memory materialiser: never throws. */
-export async function materializeJourneysSafely(readingId: string): Promise<void> {
+export async function materializeJourneysSafely(
+  objectType: MemberObjectType,
+  objectId: string,
+): Promise<void> {
   try {
-    await materializeJourneysForReading(readingId);
+    await materializeJourneysForObject(objectType, objectId);
   } catch (err) {
     logger.warn('journeys.materialize_failed', {
-      objectType: 'reading',
-      objectId: readingId,
+      objectType,
+      objectId,
       errorClass: errorClassOf(err),
     });
   }

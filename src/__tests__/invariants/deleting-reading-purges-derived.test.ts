@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DELETION_REGISTRY } from '@/domain/privacy/deletionRegistry';
+import * as purge from '@/privacy/purge';
 import { READING_DEPENDENT_COUNTERS, readingRegistryTables } from '@/privacy/purge';
 
 /**
@@ -32,6 +33,7 @@ describe('deleting-reading-purges-derived', () => {
       'object_themes',
       'entity_mentions',
       'journey_members',
+      'links',
     ]);
     const purgeSrc = read('src/privacy/purge.ts');
     for (const t of jobTargets) expect(purgeSrc).toMatch(new RegExp(`delete from public\\.${t}`));
@@ -44,14 +46,18 @@ describe('deleting-reading-purges-derived', () => {
       '0006_journal',
       '0007_structured_memory',
       '0008_journeys',
+      '0009_events_outcomes',
     ]
       .map((m) => read(`src/db/migrations/${m}.sql`))
       .join('\n');
     const referencing = new Set<string>();
+    const detached = new Set<string>();
     for (const m of migrations.matchAll(
-      /ALTER TABLE "(\w+)" ADD CONSTRAINT "\w+" FOREIGN KEY \("reading_id"\) REFERENCES "public"\."readings"/g,
+      /ALTER TABLE "(\w+)" ADD CONSTRAINT "\w+" FOREIGN KEY \("reading_id"\) REFERENCES "public"\."readings"\("id"\) ON DELETE (\w+(?: \w+)?)/g,
     )) {
-      referencing.add(m[1]!);
+      // `set null` is a pointer that is cleared, not a dependent that must die (Phase 08:
+      // life_events.reading_id, the user's "about this reading" origin).
+      (m[2] === 'set null' ? detached : referencing).add(m[1]!);
     }
     expect([...referencing].sort()).toEqual(
       [
@@ -60,8 +66,10 @@ describe('deleting-reading-purges-derived', () => {
         'reading_cards',
         'reading_note_revisions',
         'predictions',
+        'outcomes',
       ].sort(),
     );
+    expect([...detached]).toEqual(['life_events']);
     const registered = new Set(readingRegistryTables());
     for (const t of referencing) expect(registered.has(t), `${t} registered`).toBe(true);
   });
@@ -91,5 +99,42 @@ describe('deleting-reading-purges-derived', () => {
       );
     expect(journalSql).toMatch(/replace_reading_cards[\s\S]*deleted_at IS NULL/);
     expect(read('src/export/build.ts')).toContain('isNull(readings.deletedAt)');
+  });
+
+  it('4 · life events (Phase 08) take the same path: registry-driven purge, soft delete, filtered reads', () => {
+    const { EVENT_DEPENDENT_COUNTERS, eventRegistryTables } = purge;
+    const tables = eventRegistryTables();
+    expect(tables.length).toBeGreaterThanOrEqual(6);
+    for (const t of tables) expect(EVENT_DEPENDENT_COUNTERS, `counter for ${t}`).toHaveProperty(t);
+    const jobTargets = DELETION_REGISTRY.life_event
+      .filter((t) => t.via === 'job')
+      .map((t) => t.table);
+    expect(jobTargets).toEqual([
+      'event_media',
+      'extractions',
+      'metadata_overrides',
+      'object_themes',
+      'entity_mentions',
+      'journey_members',
+      'links',
+    ]);
+    const purgeSrc = read('src/privacy/purge.ts');
+    expect(purgeSrc).toMatch(/removeEventMedia\(/); // bytes go before rows
+    expect(purgeSrc).toMatch(
+      /where \(from_type = 'life_event' and from_id = \$\{id\}\) or \(to_type = 'life_event' and to_id = \$\{id\}\)/,
+    );
+    const actions = read('app/(app)/event/actions.ts');
+    expect(actions).toContain('softDeleteEvent(');
+    expect(actions).toMatch(/queue\('purge_deleted', \{ eventId/);
+    const queries = read('src/db/queries/events.ts');
+    expect(queries).not.toMatch(/from\('life_events'\)\s*\.delete\(/);
+    const selects = queries.match(/from\('life_events'\)\s*\.select\(/g)?.length ?? 0;
+    const filtered = queries.match(/\.is\('deleted_at', null\)/g)?.length ?? 0;
+    expect(selects).toBeGreaterThan(0);
+    expect(filtered).toBeGreaterThanOrEqual(selects);
+    expect(read('src/export/build.ts')).toContain('isNull(lifeEvents.deletedAt)');
+    // The reading purge also removes the links on either side.
+    expect(READING_DEPENDENT_COUNTERS).toHaveProperty('links');
+    expect(READING_DEPENDENT_COUNTERS).toHaveProperty('outcomes');
   });
 });

@@ -35,3 +35,29 @@ export const proposeJourneyPayload = z
   })
   .strict();
 export type ProposeJourneyPayload = z.infer<typeof proposeJourneyPayload>;
+
+/** Phase 08: extract a life event's metadata. Ids only. */
+export const extractEventPayload = z
+  .object({
+    eventId: z.string().uuid(),
+    force: z.boolean().default(false),
+  })
+  .strict();
+export type ExtractEventPayload = z.infer<typeof extractEventPayload>;
+
+/** Phase 08: score one object against the other kind (model-free). */
+export const correlateObjectPayload = z
+  .object({
+    objectType: z.enum(['reading', 'life_event']),
+    objectId: z.string().uuid(),
+  })
+  .strict();
+export type CorrelateObjectPayload = z.infer<typeof correlateObjectPayload>;
+
+/** Phase 08: put a computed link's reasons into a sentence. */
+export const explainCorrelationPayload = z
+  .object({
+    linkId: z.string().uuid(),
+  })
+  .strict();
+export type ExplainCorrelationPayload = z.infer<typeof explainCorrelationPayload>;

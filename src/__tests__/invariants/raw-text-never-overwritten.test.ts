@@ -42,6 +42,10 @@ describe('raw-text-never-overwritten', () => {
       'src/memory',
       // Phase 07: journeys derive from derived rows and the question; they never write it.
       'src/journeys',
+      // Phase 08: correlation and event extraction read the words; the only life_events
+      // columns they touch are derived (promoted extraction fields, correlated_at).
+      'src/correlation',
+      'src/events',
     ].flatMap(files);
     expect(derived.length).toBeGreaterThan(20);
     const offenders: string[] = [];
@@ -95,5 +99,32 @@ describe('raw-text-never-overwritten', () => {
     // The user's own edits keep the text column as the user typed it (trim only).
     const readings = read('src/db/queries/readings.ts');
     expect(readings).toMatch(/updateReadingNotes[\s\S]*\.parse\(notes\)\.trim\(\) \|\| null/);
+  });
+
+  it('4 · a life event’s sentence and note (Phase 08) are immutable by trigger and untouched by derived code', () => {
+    const sql = read('src/db/migrations/0009_events_outcomes.sql');
+    expect(sql).toMatch(
+      /CREATE TRIGGER life_events_text_immutable BEFORE UPDATE ON public\.life_events/,
+    );
+    expect(sql).toMatch(
+      /IF NEW\.description IS DISTINCT FROM OLD\.description OR NEW\.note IS DISTINCT FROM OLD\.note THEN\s+RAISE EXCEPTION/,
+    );
+    // The derived side updates life_events only for promoted extraction fields and the
+    // correlation stamp — never the words.
+    for (const f of [
+      'src/memory/materialize.ts',
+      'src/correlation/run.ts',
+      'src/events/extract.ts',
+    ]) {
+      const src = read(f);
+      for (const block of src.match(/\.update\(lifeEvents\)\s*\.set\(\{[\s\S]*?\}\)/g) ?? []) {
+        expect(block, f).not.toMatch(/description|note:/);
+      }
+    }
+    // The user-side query layer never updates the text either (the date is the one edit).
+    const events = read('src/db/queries/events.ts');
+    for (const block of events.match(/from\('life_events'\)\s*\.update\(\{[\s\S]*?\}\)/g) ?? [])
+      expect(block).not.toMatch(/description|note/);
+    expect(events.match(/from\('life_events'\)\s*\.update\(/g)?.length).toBe(2); // date, soft delete
   });
 });

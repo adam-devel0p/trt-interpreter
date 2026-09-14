@@ -51,6 +51,8 @@ export function FollowUpControl({
 }) {
   const router = useRouter();
   const [current, setCurrent] = React.useState(status);
+  // An outcome recorded below (Phase 08) moves the status on the server; follow it.
+  React.useEffect(() => setCurrent(status), [status]);
   const [pending, start] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
   const choose = (next: FollowUpStatus) => {

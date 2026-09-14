@@ -58,7 +58,11 @@ describe('deleting-reading-purges-derived (integration)', () => {
     });
     await updateReadingNotes(user.client, reading.id, 'second words about my girlfriend in Leeds');
     await updateReadingNotes(user.client, reading.id, 'third words about my girlfriend in Leeds');
-    await attachDerived(user, reading, { memory: true, journey: true });
+    const { event } = await attachDerived(user, reading, {
+      memory: true,
+      journey: true,
+      event: true,
+    });
     const keep = await makeReading(user, refs, { question: 'Keep me, Alex' });
     await attachDerived(user, keep, { memory: true });
 
@@ -74,6 +78,8 @@ describe('deleting-reading-purges-derived (integration)', () => {
       entity_mentions: await countRows('entity_mentions', 'object_id', reading.id),
       predictions: await countRows('predictions', 'reading_id', reading.id),
       journey_members: await countRows('journey_members', 'object_id', reading.id),
+      outcomes: await countRows('outcomes', 'reading_id', reading.id),
+      links: await countRows('links', 'from_id', reading.id),
     };
     expect(before).toMatchObject({
       reading_cards: 3,
@@ -88,6 +94,8 @@ describe('deleting-reading-purges-derived (integration)', () => {
     expect(before.object_themes).toBeGreaterThanOrEqual(2);
     expect(before.entity_mentions).toBeGreaterThanOrEqual(2);
     expect(before.journey_members).toBe(1);
+    expect(before.outcomes).toBe(1);
+    expect(before.links).toBe(1);
     // The entities themselves are the user's memory, not the reading's: they survive the purge.
     const entitiesBefore = await countRows('entities', 'user_id', user.id);
 
@@ -119,9 +127,13 @@ describe('deleting-reading-purges-derived (integration)', () => {
       'journey_members',
     ]);
     for (const table of DELETION_REGISTRY.reading.map((t) => t.table)) {
-      const column = POLYMORPHIC.has(table) ? 'object_id' : 'reading_id';
+      const column =
+        table === 'links' ? 'from_id' : POLYMORPHIC.has(table) ? 'object_id' : 'reading_id';
       expect(await countRows(table, column, reading.id), `${table} after purge`).toBe(0);
     }
+    // The life event is the user's own record and stays; its pointer at the reading clears.
+    expect(await countRows('life_events', 'id', event!)).toBe(1);
+    expect(await countRows('life_events', 'reading_id', reading.id)).toBe(0);
     expect(await countRows('entities', 'user_id', user.id)).toBe(entitiesBefore);
     expect(await countRows('readings', 'id', reading.id)).toBe(0);
     expect((await getInterpretationState(user.client, reading.id)).latest).toBeNull();

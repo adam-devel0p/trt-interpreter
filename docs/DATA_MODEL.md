@@ -367,34 +367,78 @@ new user-created journey (refuses moving every member). `search_readings(p)` gai
 
 ## Events, predictions, outcomes, links — Phase 08
 
-**`life_events`** — `id`, `user_id`, `description text` (raw sentence, immutable),
-`occurred_on date`, `occurred_range daterange null`, `note text null`, `importance smallint`,
-`emotional_tone text`, `fact_status` (`CONFIRMED_FACT` when user-entered, `INFERRED_EVENT` when
-model-proposed and unconfirmed), `source created_by`, `metadata_version`, `deleted_at`.
-**`event_media`** — `life_event_id`, `storage_path`, `kind`. Private bucket, signed URLs only.
+Built in `0009_events_outcomes` (Drizzle: `src/db/schema/events.ts`). The reading-to-reality
+loop: a life event is the user's own sentence, an outcome is the user's own record, a link
+is the scored evidence edge between a reading and an event. Nothing here is ever written by a
+model except the one-sentence `explanation` on a link the code already scored.
 
-**`predictions`** — `id`, `user_id`, `reading_id`, `text`, `category`, `timeframe_start`,
-`timeframe_end`, `timeframe_text`, `kind enum('possibility','prediction')`,
-`fact_status` fixed to `POSSIBILITY`, `extracted_from uuid fk extractions`, `user_edited boolean`.
-No probability field, ever (§10: no certainty score for the future).
+**`life_events`** — `id`, `user_id`, `description text` (the one sentence, **immutable** by
+the `life_events_text_immutable` trigger — a wrong entry is deleted and re-entered),
+`occurred_on date`, `note text null` (immutable too), `reading_id null` (FK readings, set
+null: the "something happened about this reading" origin; the action also writes a
+user-confirmed link), `event_type`, `importance smallint` (1–5), `emotional_tone`,
+`life_area` (all four promoted from the extraction payload; derived, never user text),
+`fact_status` (`CONFIRMED_FACT | INFERRED_EVENT` by check), `source created_by` (`user |
+model` by check), `confirmed_at` (default now; check: `fact_status = CONFIRMED_FACT ⇔
+confirmed_at not null`, and a user-sourced row must be confirmed), `metadata_version`,
+`correlated_at` (the correlation job ran — the screen can say "nothing found" honestly),
+`deleted_at` (soft delete; `purge_deleted {eventId}` hard-deletes), `created_at`,
+`updated_at`. Partial timeline index `(user_id, occurred_on desc, id desc) where deleted_at
+is null`. RLS: four policies; **the insert policy only admits `source = 'user'` and
+`fact_status = 'CONFIRMED_FACT'`** — a user session cannot write an inferred event, and the
+write gate (`modelBorn`) refuses `CONFIRMED_FACT` for a model. No code path creates
+`INFERRED_EVENT` rows yet (see the 08 report's deferred list); the constraints are in place
+for when one does. `occurred_range` from the original design was dropped: a date is enough.
 
-**`outcomes`** — `id`, `user_id`, `reading_id null`, `prediction_id null`, `status outcome_status`,
-`description text`, `notes`, `user_confirmed_at`, `recorded_by created_by`. Check: at least one of
-`reading_id`/`prediction_id` is present.
+**`event_media`** — `id`, `user_id`, `life_event_id` (cascade), `storage_path` (unique;
+`<user_id>/<event_id>/<media_id>.<ext>` in the private **`event-media`** bucket, 10 MB,
+image types only), `kind` (`photo`), `mime_type`, `size_bytes`, `alt_text` (the user's own
+description, asked for on upload), `created_at`. Four policies, parent must be own. The
+bucket has no `storage.objects` policies: bytes are reachable only through
+`GET /api/events/media/[id]`, which reads the row through RLS and then mints a 5-minute
+signed URL with the service role. The purge job removes the bytes before the rows; the
+prefix is in `STORAGE_PREFIXES` for the account job.
 
-**`links`** — the evidence edge, the heart of §8.2.
-`id`, `user_id`, `from_type`, `from_id`, `to_type`, `to_id`, `link_type text`
-(`reading_event`, `reading_reading`, `event_outcome`, `entity_object`, …),
-`score numeric`, `signals jsonb` (per-signal contributions, for explainability),
-`reasons text[]` (human-readable, shown in UI), `created_by created_by`,
-`state link_state default 'pending'`, `user_acted_at`, `evidence_fingerprint text`,
-`superseded_by uuid null`, `created_at`.
-Unique `(user_id, from_type, from_id, to_type, to_id, link_type)`.
-`evidence_fingerprint` = stable hash of the signal set that produced the suggestion; a rejected link
-is only re-surfaced when a *new* fingerprint scores materially higher (§19: "not repeatedly
-re-suggested without materially new evidence").
+**`predictions`** — unchanged from Phase 06 (`fact_status` fixed to `POSSIBILITY`, no
+probability column). Outcomes point at them by id, which a reprocess keeps stable.
 
----
+**`outcomes`** — `id`, `user_id`, `reading_id` **not null** (cascade; the original design's
+"reading or prediction" became "reading, optionally a prediction of it"), `prediction_id
+null` (cascade), `life_event_id null` (set null — the event that *was* the outcome),
+`status outcome_status` (`happened | partly | did_not_happen | unresolved | irrelevant`),
+`note`, `fact_status` **fixed to `CONFIRMED_FACT` by check**, `recorded_by` **fixed to
+`'user'` by check** — a model cannot record an outcome even through the service role —
+`user_confirmed_at`, `created_at`. **Append-only**: recording again adds a row, the newest
+per target (the reading, or each possibility) is current, and the earlier note is never
+overwritten. `recordOutcome()` then derives `readings.follow_up_status`
+(`domain/outcomes/followUp.ts`) and clears `revisit_at` — the reminder's question was
+answered. Four policies; insert/update require the reading (and the event, if set) to be own.
+
+**`links`** — the evidence edge (§8.2). `id`, `user_id`, `from_type`, `from_id`, `to_type`,
+`to_id` (`reading | life_event` by check; a `reading_event` link always runs reading →
+event), `link_type` (`reading_event | reading_reading` by check; only `reading_event` is
+produced today), `score numeric(4,3)` (the computed score — a confirmed link is *used* as 1
+but keeps the number), `signals jsonb` (the seven per-signal values), `reasons text[]`
+(plain sentences, no numbers), `evidence jsonb` (shared entity / theme / journey / card ids,
+which of them are user-confirmed, the timeframe relation and days apart — what the
+fingerprint hashes and what §19 compares), `created_by` (**`user | rule` by check — never
+`model`**), `state link_state` (`pending | confirmed | maybe | rejected`), `user_acted_at`
+(**check: a decided state ⇔ `user_acted_at` set**), `evidence_fingerprint` (indexed),
+`rejected_score` / `rejected_fingerprint` (recorded at rejection; the §19 comparison
+point), `offered_at` (the at-most-three suggestions shown for a new object; rows without it
+are stored for re-scoring and never shown), `explanation` + `explained_model_id` /
+`explained_prompt_version` / `explained_schema_version` / `explained_at` (the
+`explain_correlation` task's sentence and provenance — the only columns a model ever
+touches), `created_at`, `updated_at`. Unique `(user_id, from_type, from_id, to_type, to_id,
+link_type)`; indexes on the fingerprint and on each side. Four policies; **the insert policy
+admits only `created_by = 'user'`** (rule rows come from the correlation job with the
+service role) and both sides must be the caller's, whichever type they are.
+`superseded_by` from the original design was dropped: a re-run updates the row in place.
+
+**Polymorphic parents.** `journey_members`, `object_themes`, `entity_mentions` and
+`metadata_overrides` policies now check ownership of the object for both `reading` and
+`life_event` rows (the 0008/0007 policies checked readings only); `deletion_receipts.scope`
+gained `life_event`.
 
 ## Retrieval & summaries — Phases 09, 10
 

@@ -1,0 +1,37 @@
+{
+  "fixture": "possible-theme-only",
+  "description": "A reading about rest and, a month later, a doctor's appointment — only a shared theme and proximity. Expect a modest 'possible' phrasing that does not claim the reading foresaw anything.",
+  "provider": "mock",
+  "model": "mock/claude-haiku-4-5",
+  "prompt_version": "explain_correlation/1.0.0",
+  "schema_version": "correlation_explanation/1.0.0",
+  "ran_at": "2026-09-14T00:10:17.674Z",
+  "checks": {
+    "schema": {
+      "pass": true
+    },
+    "register": {
+      "pass": true,
+      "detail": []
+    },
+    "names_evidence": {
+      "pass": true,
+      "detail": "This event may be connected to the reading: related themes: Health, and they happened about a month apart."
+    },
+    "no_forbidden": {
+      "pass": true
+    },
+    "hedged": {
+      "pass": true
+    }
+  },
+  "output": {
+    "explanation": "This event may be connected to the reading: related themes: Health, and they happened about a month apart."
+  },
+  "human_review": {
+    "reviewed_by": null,
+    "reviewed_at": null,
+    "verdict": null,
+    "notes": null
+  }
+}

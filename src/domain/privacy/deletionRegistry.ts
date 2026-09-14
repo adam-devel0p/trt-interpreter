@@ -26,8 +26,13 @@
  * by the purge job (which then refreshes the journeys they sat in, so progression steps
  * lose the deleted source); the `journey` root holds members and progression steps
  * (cascade). Deleting a journey never deletes its readings.
- * The `purge_deleted` job (`src/privacy/purge.ts`) is driven by the `reading` root of this
- * registry and a test asserts its receipt names every table listed here.
+ * Phase 08: life events. The `life_event` root mirrors the reading's derived tables (keyed by
+ * `(object_type, object_id)`, removed by the purge job) plus `event_media` (rows cascade; the
+ * bytes in the `event-media` bucket are removed by the job first), `links` (either side) and
+ * `outcomes` (the user's record on the reading stays; its `life_event_id` is set null). The
+ * `reading` root gains `outcomes` (cascade) and `links` (job, either side).
+ * The `purge_deleted` job (`src/privacy/purge.ts`) is driven by the `reading` and
+ * `life_event` roots of this registry and a test asserts its receipt names every table listed.
  */
 
 export type RootType = 'reading' | 'life_event' | 'journey' | 'entity' | 'user';
@@ -64,8 +69,35 @@ export const DELETION_REGISTRY: Record<RootType, readonly CascadeTarget[]> = {
       via: 'job',
       note: 'keyed by (object_type, object_id); the journeys they sat in are refreshed after',
     },
+    { table: 'outcomes', via: 'cascade', note: 'FK readings.id on delete cascade' },
+    {
+      table: 'links',
+      via: 'job',
+      note: 'either side; keyed by (from_type, from_id) / (to_type, to_id)',
+    },
   ],
-  life_event: [],
+  life_event: [
+    {
+      table: 'event_media',
+      via: 'job',
+      note: 'rows cascade from life_events; the storage objects under event-media/<user>/<event>/ are removed by the job first',
+    },
+    { table: 'extractions', via: 'job', note: 'keyed by (object_type, object_id)' },
+    { table: 'metadata_overrides', via: 'job', note: 'keyed by (object_type, object_id)' },
+    { table: 'object_themes', via: 'job', note: 'keyed by (object_type, object_id)' },
+    { table: 'entity_mentions', via: 'job', note: 'keyed by (object_type, object_id)' },
+    {
+      table: 'journey_members',
+      via: 'job',
+      note: 'keyed by (object_type, object_id); the journeys it sat in are refreshed after',
+    },
+    { table: 'links', via: 'job', note: 'either side' },
+    {
+      table: 'outcomes',
+      via: 'cascade',
+      note: 'FK life_events.id on delete set null — the outcome is the user’s record on the reading and stays',
+    },
+  ],
   journey: [
     { table: 'journey_members', via: 'cascade', note: 'FK journeys.id on delete cascade' },
     {
@@ -141,6 +173,14 @@ export const DELETION_REGISTRY: Record<RootType, readonly CascadeTarget[]> = {
     { table: 'journeys', via: 'cascade' },
     { table: 'journey_members', via: 'cascade' },
     { table: 'journey_theme_progression', via: 'cascade', note: 'evidence ids only' },
+    { table: 'life_events', via: 'cascade', note: 'auth.users FK; cascades to event_media' },
+    {
+      table: 'event_media',
+      via: 'job',
+      note: 'rows cascade; the bytes under event-media/<user_id>/ are in STORAGE_PREFIXES for the account job',
+    },
+    { table: 'outcomes', via: 'cascade', note: 'user-recorded facts' },
+    { table: 'links', via: 'cascade', note: 'scores, signals and reasons; ids only' },
   ],
 };
 
@@ -150,6 +190,7 @@ export const DELETION_REGISTRY: Record<RootType, readonly CascadeTarget[]> = {
  */
 export const STORAGE_PREFIXES: readonly { bucket: string; prefix: (userId: string) => string }[] = [
   { bucket: 'exports', prefix: (userId) => `${userId}/` },
+  { bucket: 'event-media', prefix: (userId) => `${userId}/` },
 ];
 
 /** Tables that are global reference data (no user rows) and therefore exempt from the check. */

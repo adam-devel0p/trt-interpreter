@@ -165,7 +165,7 @@ export async function recentAiCalls(limit = 50) {
 
 export interface ReceiptInsert {
   userId: string;
-  scope: 'reading' | 'ai_artifacts' | 'history' | 'account';
+  scope: 'reading' | 'life_event' | 'ai_artifacts' | 'history' | 'account';
   objectType?: string;
   objectId?: string;
   jobId?: string;
@@ -251,4 +251,52 @@ export async function removeUserStorage(userId: string): Promise<number> {
     removed += paths.length;
   }
   return removed;
+}
+
+// ── Event photos (Phase 08): the private `event-media` bucket ───────────────────────────
+
+export const EVENT_MEDIA_BUCKET = 'event-media';
+
+/** `<user_id>/<event_id>/<media_id>.<ext>` — the prefix is the user, so account deletion can sweep it. */
+export function eventMediaStoragePath(
+  userId: string,
+  eventId: string,
+  mediaId: string,
+  ext: string,
+): string {
+  return `${userId}/${eventId}/${mediaId}.${ext}`;
+}
+
+export async function uploadEventMedia(
+  path: string,
+  bytes: Uint8Array,
+  contentType: string,
+): Promise<void> {
+  const { error } = await adminSupabase()
+    .storage.from(EVENT_MEDIA_BUCKET)
+    .upload(path, bytes, { contentType, upsert: false });
+  if (error) throw new Error(`event media upload failed: ${error.message}`);
+}
+
+/**
+ * A short-lived signed URL for one photo. The caller must already have read the
+ * `event_media` row through the user client (RLS), so only the owner ever gets here.
+ */
+export async function createEventMediaSignedUrl(
+  path: string,
+  expiresInSeconds: number,
+): Promise<string> {
+  const { data, error } = await adminSupabase()
+    .storage.from(EVENT_MEDIA_BUCKET)
+    .createSignedUrl(path, expiresInSeconds);
+  if (error || !data?.signedUrl) throw new Error(`signed url failed: ${error?.message}`);
+  return data.signedUrl;
+}
+
+export async function removeEventMedia(paths: readonly string[]): Promise<void> {
+  if (paths.length === 0) return;
+  const { error } = await adminSupabase()
+    .storage.from(EVENT_MEDIA_BUCKET)
+    .remove([...paths]);
+  if (error) throw new Error(`event media remove failed: ${error.message}`);
 }

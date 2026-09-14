@@ -13,7 +13,11 @@ import {
   journeys,
   journeyThemeProgression,
   entityRoles,
+  eventMedia,
   extractions,
+  lifeEvents,
+  links as linkRows,
+  outcomes,
   interpretations,
   metadataOverrides,
   objectThemes,
@@ -172,8 +176,19 @@ export async function buildExportArchive(
   // Phase 06: structured memory — every extraction (including superseded), the user's
   // corrections, themes (curated ones referenced + the user's own), entities with aliases
   // and roles nested, mentions, predictions. Rows on deleted readings are excluded with them.
+  // Phase 08: life events (not soft-deleted) are objects of the same derived tables.
+  const eventRowsAll = await db
+    .select()
+    .from(lifeEvents)
+    .where(and(eq(lifeEvents.userId, userId), isNull(lifeEvents.deletedAt)))
+    .orderBy(lifeEvents.occurredOn, lifeEvents.id);
+  const eventIds = eventRowsAll.map((e) => e.id);
   const liveObject = (r: { objectType: string; objectId: string }) =>
-    r.objectType !== 'reading' || readingIds.includes(r.objectId);
+    r.objectType === 'reading'
+      ? readingIds.includes(r.objectId)
+      : r.objectType === 'life_event'
+        ? eventIds.includes(r.objectId)
+        : true;
   const extractionRows = (
     await db
       .select()
@@ -266,6 +281,32 @@ export async function buildExportArchive(
         .where(inArray(journeyThemeProgression.journeyId, journeyIds))
         .orderBy(journeyThemeProgression.journeyId, journeyThemeProgression.sequenceIndex)
     : [];
+
+  const mediaRows = eventIds.length
+    ? await db
+        .select()
+        .from(eventMedia)
+        .where(inArray(eventMedia.lifeEventId, eventIds))
+        .orderBy(eventMedia.createdAt, eventMedia.id)
+    : [];
+  const outcomeRows = readingIds.length
+    ? await db
+        .select()
+        .from(outcomes)
+        .where(inArray(outcomes.readingId, readingIds))
+        .orderBy(outcomes.createdAt, outcomes.id)
+    : [];
+  const connectionRows = (
+    await db
+      .select()
+      .from(linkRows)
+      .where(eq(linkRows.userId, userId))
+      .orderBy(linkRows.createdAt, linkRows.id)
+  ).filter(
+    (l) =>
+      liveObject({ objectType: l.fromType, objectId: l.fromId }) &&
+      liveObject({ objectType: l.toType, objectId: l.toId }),
+  );
 
   const cardsByReading = new Map<string, typeof cardRows>();
   for (const c of cardRows) {
@@ -611,6 +652,88 @@ export async function buildExportArchive(
         added_at: isoReq(m.addedAt),
       };
     }),
+    'life_events.json': eventRowsAll.map((e) => {
+      if (e.readingId && readingIds.includes(e.readingId))
+        link('event_about_reading', ['life_event', e.id], ['reading', e.readingId]);
+      return {
+        id: e.id,
+        description: e.description,
+        occurred_on: e.occurredOn,
+        note: e.note,
+        reading_id: e.readingId && readingIds.includes(e.readingId) ? e.readingId : null,
+        event_type: e.eventType,
+        importance: e.importance,
+        emotional_tone: e.emotionalTone,
+        life_area: e.lifeArea,
+        fact_status: e.factStatus,
+        source: e.source,
+        confirmed_at: iso(e.confirmedAt),
+        metadata_version: e.metadataVersion,
+        created_at: isoReq(e.createdAt),
+        updated_at: isoReq(e.updatedAt),
+      };
+    }),
+    'event_media.json': mediaRows.map((m) => {
+      link('media_of', ['event_media', m.id], ['life_event', m.lifeEventId]);
+      return {
+        id: m.id,
+        life_event_id: m.lifeEventId,
+        storage_path: m.storagePath,
+        kind: m.kind,
+        mime_type: m.mimeType,
+        size_bytes: m.sizeBytes,
+        alt_text: m.altText,
+        created_at: isoReq(m.createdAt),
+      };
+    }),
+    'outcomes.json': outcomeRows.map((o) => {
+      link('outcome_of', ['outcome', o.id], ['reading', o.readingId]);
+      if (o.predictionId)
+        link('outcome_for_possibility', ['outcome', o.id], ['prediction', o.predictionId]);
+      if (o.lifeEventId && eventIds.includes(o.lifeEventId))
+        link('outcome_event', ['outcome', o.id], ['life_event', o.lifeEventId]);
+      return {
+        id: o.id,
+        reading_id: o.readingId,
+        prediction_id: o.predictionId,
+        life_event_id: o.lifeEventId && eventIds.includes(o.lifeEventId) ? o.lifeEventId : null,
+        status: o.status,
+        note: o.note,
+        fact_status: o.factStatus,
+        recorded_by: o.recordedBy,
+        user_confirmed_at: isoReq(o.userConfirmedAt),
+        created_at: isoReq(o.createdAt),
+      };
+    }),
+    'connections.json': connectionRows.map((l) => {
+      link('connection_from', ['connection', l.id], [l.fromType, l.fromId]);
+      link('connection_to', ['connection', l.id], [l.toType, l.toId]);
+      return {
+        id: l.id,
+        from_type: l.fromType,
+        from_id: l.fromId,
+        to_type: l.toType,
+        to_id: l.toId,
+        link_type: l.linkType,
+        score: Number(l.score),
+        signals: l.signals ?? null,
+        reasons: l.reasons,
+        evidence: l.evidence ?? null,
+        created_by: l.createdBy,
+        state: l.state,
+        user_acted_at: iso(l.userActedAt),
+        evidence_fingerprint: l.evidenceFingerprint,
+        rejected_score: l.rejectedScore === null ? null : Number(l.rejectedScore),
+        offered_at: iso(l.offeredAt),
+        explanation: l.explanation,
+        explained_model_id: l.explainedModelId,
+        explained_prompt_version: l.explainedPromptVersion,
+        explained_schema_version: l.explainedSchemaVersion,
+        explained_at: iso(l.explainedAt),
+        created_at: isoReq(l.createdAt),
+        updated_at: isoReq(l.updatedAt),
+      };
+    }),
     'links.json': links,
   };
 
@@ -635,6 +758,7 @@ export async function buildExportArchive(
       'Readings you deleted are not included.',
       'extractions.json, entities.json, entity_mentions.json, object_themes.json and predictions.json are derived by the app and can be regenerated; metadata_overrides.json holds your corrections to them.',
       'journeys.json and journey_members.json are gathered by the app from those; a journey you accepted, renamed or built carries user_confirmed = true.',
+      'life_events.json and outcomes.json are your own words and records (CONFIRMED_FACT). connections.json holds the app’s scored suggestions between readings and events with their reasons; state says what you decided. event_media.json lists photo paths; the bytes are not in this archive.',
     ],
   } satisfies ExportManifest);
 

@@ -58,12 +58,25 @@ journeys the reading sat in, so every progression step loses the vanished source
 `journey` root holds `journey_members` and `journey_theme_progression` (cascade) — deleting
 a journey never deletes its readings. "Delete AI artifacts" removes journeys the user never
 touched (`user_confirmed = false`) and `auto` / `pending` memberships of the rest. The
-`life_event` root is still empty. The purge job
-(`src/privacy/purge.ts`) is *driven by* the `reading` root: it counts every registered table
-before the delete, runs the `job` steps, deletes the reading (cascades do the rest), verifies
-every count is zero afterwards and writes the counts into a receipt — a registry table with no
-counter fails the `deleting-reading-purges-derived` unit test, and a table with a `reading_id`
-FK missing from the registry fails it too.
+**Phase 08:** the `life_event` root is populated — `event_media` (`via: 'job'`: the bytes in
+the `event-media` bucket are removed before the rows), the four derived tables keyed by
+`(object_type, object_id)`, `journey_members`, `links` on either side (all `via: 'job'`) and
+`outcomes` (`life_event_id` set null: the outcome is the user's record on the reading and
+stays). The `reading` root gained `outcomes` (cascade) and `links` (either side, job);
+`life_events.reading_id` is set null (the event is the user's and survives its reading).
+`purgeEvent()` mirrors `purgeReading()` exactly — count, remove, delete, verify zero, receipt
+with scope `life_event` — and the `purge_deleted` job takes `{eventId}` as well as
+`{readingId}`; the sweep covers both. "Delete AI artifacts" also removes `pending` links (the
+suggestions); confirmed, maybe and rejected links are the user's decisions and stay — a
+rejection is the memory that keeps the same suggestion from returning. Events and outcomes
+are the user's words and are never touched by it. The `event-media/<user_id>/` prefix is in
+`STORAGE_PREFIXES` for the account job. The purge job
+(`src/privacy/purge.ts`) is *driven by* the `reading` and `life_event` roots: it counts every
+registered table before the delete, runs the `job` steps, deletes the object (cascades do the
+rest), verifies every count is zero afterwards and writes the counts into a receipt — a
+registry table with no counter fails the `deleting-reading-purges-derived` unit test, and a
+table with a `reading_id` FK missing from the registry fails it too (a `set null` FK is a
+cleared pointer, not a dependent).
 
 **Summary handling.** A summary whose `source_object_ids` lose a member is not silently left standing:
 the deleted ID is removed, and if the remaining set is empty or below 2 the summary is deleted;

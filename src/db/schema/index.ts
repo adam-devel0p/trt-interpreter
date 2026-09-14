@@ -7,3 +7,4 @@ export * from './ai';
 export * from './journal';
 export * from './memory';
 export * from './journeys';
+export * from './events';

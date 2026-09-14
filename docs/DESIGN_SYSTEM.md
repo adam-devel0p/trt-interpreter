@@ -217,8 +217,8 @@ bar above the timeline, so it survives the item disappearing); pending suggestio
 conflict…", then a wrapped `<ol>` of `<details>` steps with arrows, each opening to its
 source readings — never a chart); **recurring symbols** (`RecurringSymbols`: `<details>` rows
 labelled with kind and deck — "card · Thoth" — a context sentence and the source readings);
-**open loops** (linked cards); **confirmed outcomes** and **possible connections** as honest
-placeholders until Phase 08; **Ask about this journey** as a disabled button "coming soon";
+**open loops** (linked cards); **confirmed outcomes** and **possible connections** (filled in
+Phase 08, below); **Ask about this journey** as a disabled button "coming soon";
 and **Manage**: rename (the hint says whether the title is a placeholder, a suggestion or
 yours; renaming pins it), close/reopen, a journal link, merge (a `<select>` + the destructive
 confirmation, undo from the target's notice), split (checkboxes + a name), delete (names what
@@ -226,4 +226,40 @@ stays). On the reading detail, **Connections** gained a *Journeys* row: a solid 
 `InferredChip` "suggested" with why / keep / ×, or the inline question "Part of *X*?" with
 *Yes* / *No*, plus *Add to a journey* (a select, or a new one). Home's *Worth a look* shows
 the single suggestion card. The journal's filter panel gained *Journey*.
+
+**Phase 08 — events, connections, outcomes.** *Something happened* is one tap from Home,
+the Journal header and every reading (the reading's version pre-links). The entry form
+(`EventForm`) is a sentence and a date on screen, a note and a photo folded under one
+disclosure, nothing about tarot — the hint says "No need to mention a reading"; the photo
+control is a labelled `<input type=file>` and asks for a description of the picture. The
+event detail (`/event/[id]`) is the sentence as the `h1`, the date, the inferred type as a
+word ("home — suggested"), the photo (owner-scoped signed URL through `/api/events/media/`),
+then **Connections to readings**: the review island (`ConnectionReview`) renders at most
+three dashed `bg-surface-ai` cards, each with the band *in words* ("Likely connection ·
+inferred" / "Possible connection · inferred"), the reading's question, date, spread, deck
+and every card under its own deck's name, the AI sentence when one arrived (marked "AI
+wording of the reasons below"), the actual reasons as chips, a `<details>` "Why am I seeing
+this?" with the signal table in words (strong / some / faint / none — never a number), and
+three buttons *Confirm* / *Maybe* / *Unrelated* in a `role=group` named after the reading.
+Every decision shows an undo bar; decided cards move under **Decided** as "Connected — you
+confirmed it" / "Maybe — you left it open" / "Unrelated — you said so" with *Change my
+mind*. Zero results say so: "No connection found. That is a normal result — not everything
+relates to a reading." While the jobs run the screen says "Looking through your past
+readings…" and refreshes itself a dozen times, then stops. The event list (`/event`) is
+month-grouped like the journal, each row saying whether it is connected. On the reading
+detail, **Follow-up** gained the `OutcomePanel`: five status chips (*It happened · Partly ·
+It did not happen · Still unresolved · No longer relevant*), then an optional note and an
+optional life event (none / log one now / pick an existing one), a *Record* button, the
+current record shown as "What happened · you, <date>" with earlier records under a
+disclosure, per-possibility selects, and the *Something happened about this* button;
+**Connections** gained a *Life events* row with the same review island (the event on the
+other side). Home shows **You asked to come back to this**: overdue revisits as calm,
+content-anchored cards ("You asked about this 32 days ago — what happened? Say so when you
+know; no rush.") that clear when an outcome is recorded — never a count of missed days,
+never a badge. The journey detail's timeline interleaves life events (a solid left border,
+"life event") and outcomes ("what happened") with the readings; **Confirmed outcomes**
+lists the user's records with the reading they answer and "Connections you confirmed";
+**Possible connections** shows the pending and maybe links with the same review cards; an
+event asked about appears under "Might belong here" like a pending reading. The journey
+list says "4 readings · 3 life events".
 

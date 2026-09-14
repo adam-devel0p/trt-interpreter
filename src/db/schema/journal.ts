@@ -92,7 +92,7 @@ export const deletionReceipts = pgTable(
   (t) => [
     check(
       'deletion_receipts_scope_check',
-      sql`${t.scope} in ('reading', 'ai_artifacts', 'history', 'account')`,
+      sql`${t.scope} in ('reading', 'life_event', 'ai_artifacts', 'history', 'account')`,
     ),
     index('deletion_receipts_user_idx').on(t.userId, t.completedAt.desc()),
     pgPolicy('deletion_receipts_select', {

@@ -25,7 +25,9 @@ export type LogNamespace =
   | 'billing'
   | 'app'
   | 'memory'
-  | 'journeys';
+  | 'journeys'
+  | 'correlation'
+  | 'events';
 export type LogEvent = `${LogNamespace}.${string}`;
 
 /** The complete set of props a log line may carry. Extend deliberately; never add prose fields. */
@@ -56,6 +58,11 @@ export interface LogProps {
   jobId?: string;
   jobKind?: string;
   journeyId?: string;
+  linkId?: string;
+  /** Correlation: how many suggestions were offered (a count, never content). */
+  offered?: number;
+  /** A short machine reason (`stronger_new_evidence`), never prose. */
+  reason?: string;
   state?: string;
   flag?: string;
   enabled?: boolean;
@@ -107,6 +114,9 @@ const ALLOWED_KEYS: ReadonlySet<string> = new Set<keyof LogProps>([
   'jobId',
   'jobKind',
   'journeyId',
+  'linkId',
+  'offered',
+  'reason',
   'state',
   'flag',
   'enabled',

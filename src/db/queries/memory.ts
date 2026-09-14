@@ -293,12 +293,13 @@ export async function upsertOverride(
   objectId: string,
   fieldPath: string,
   value: OverrideValue,
+  objectType: 'reading' | 'life_event' = 'reading',
 ): Promise<void> {
   const parsed = overrideValueSchema.parse(value);
   const { error } = await client.from('metadata_overrides').upsert(
     {
       user_id: userId,
-      object_type: 'reading',
+      object_type: objectType,
       object_id: objectId,
       field_path: fieldPath,
       value: parsed,
@@ -312,11 +313,12 @@ export async function deleteOverride(
   client: UserClient,
   objectId: string,
   fieldPath: string,
+  objectType: 'reading' | 'life_event' = 'reading',
 ): Promise<void> {
   const { error } = await client
     .from('metadata_overrides')
     .delete()
-    .eq('object_type', 'reading')
+    .eq('object_type', objectType)
     .eq('object_id', objectId)
     .eq('field_path', fieldPath);
   if (error) fail('override delete', error);

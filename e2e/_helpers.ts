@@ -64,7 +64,12 @@ export async function latestEmailLink(to: string): Promise<string> {
  */
 export async function createReadyUser(
   tag: string,
-  opts: { aiConsent?: boolean; extraction?: boolean; journeys?: boolean } = {},
+  opts: {
+    aiConsent?: boolean;
+    extraction?: boolean;
+    journeys?: boolean;
+    correlation?: boolean;
+  } = {},
 ) {
   const { createClient } = await import('@supabase/supabase-js');
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -99,6 +104,19 @@ export async function createReadyUser(
         { user_id: data.user.id, flag: 'ai_extraction', enabled: true, set_by: 'rollout' },
         { onConflict: 'user_id,flag' },
       );
+    if (flag.error) throw new Error(`flag upsert failed: ${flag.error.message}`);
+  }
+  // Phase 08: connection suggestions too.
+  if (opts.correlation) {
+    const flag = await admin.from('user_flags').upsert(
+      {
+        user_id: data.user.id,
+        flag: 'correlation_suggestions',
+        enabled: true,
+        set_by: 'rollout',
+      },
+      { onConflict: 'user_id,flag' },
+    );
     if (flag.error) throw new Error(`flag upsert failed: ${flag.error.message}`);
   }
   // Phase 07: journeys are flag-gated the same way.
@@ -157,6 +175,8 @@ export interface SeedReadingSpec {
   notes?: string | null;
   occurredAt?: string;
   source?: 'digital' | 'physical';
+  /** Phase 08: a revisit date (in the past = due on Home). */
+  revisitAt?: string;
 }
 
 /**
@@ -197,6 +217,7 @@ export async function seedReadings(userId: string, specs: SeedReadingSpec[]): Pr
         uses_reversals: false,
         user_notes: spec.notes ?? null,
         occurred_at: spec.occurredAt ?? new Date().toISOString(),
+        revisit_at: spec.revisitAt ?? null,
       })
       .select('id')
       .single();

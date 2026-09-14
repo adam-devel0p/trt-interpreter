@@ -95,3 +95,36 @@ export type ExtractionPayload = z.infer<typeof extractionPayloadSchema>;
 
 /** The empty payload: what a reading with no usable text extracts to. */
 export const EMPTY_PAYLOAD: ExtractionPayload = extractionPayloadSchema.parse({});
+
+// ── Life events (Phase 08) ─────────────────────────────────────────────────────────────────
+
+/** The types the event extractor may propose (stable keys; labels in `domain/events/types.ts`). */
+export const EVENT_TYPE_KEYS = [
+  'work',
+  'relationship',
+  'home',
+  'health',
+  'money',
+  'family',
+  'travel',
+  'learning',
+  'loss',
+  'milestone',
+  'other',
+] as const;
+export type EventTypeKey = (typeof EVENT_TYPE_KEYS)[number];
+
+export const EVENT_EXTRACTION_SCHEMA_VERSION = 'event_extraction/1.0.0';
+
+/**
+ * What `extract_event_metadata` returns (spec §6.4): the same family as a reading's payload —
+ * it is materialised by the same code into the same tables — plus what only an event has:
+ * a type and an importance band (1 passing – 5 life-changing). Strict; no probability.
+ */
+export const eventExtractionPayloadSchema = extractionPayloadSchema
+  .extend({
+    event_type: z.enum(EVENT_TYPE_KEYS).nullable().default(null),
+    importance: z.number().int().min(1).max(5).nullable().default(null),
+  })
+  .strict();
+export type EventExtractionPayload = z.infer<typeof eventExtractionPayloadSchema>;

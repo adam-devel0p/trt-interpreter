@@ -81,10 +81,10 @@ Each task is a directory `src/ai/tasks/<task>/` containing `prompt.ts`, `schema.
 | `classify_safety` | 04 ✅ | fast | category + severity | Runs on the question before interpretation (§10). `classify_safety/1.0.0` · `safety_classification/1.0.0` |
 | `detect_repeat_question` | 04 ✅ | fast (embedding + rule) | similarity verdict | Mostly deterministic; no generation needed (FR-25). Embedding request only; the rule is `domain/interpretation/repeat.ts` |
 | `extract_reading_metadata` | 06 ✅ | standard | extraction payload | Themes, entities (mentions + relations), possibilities, timeframe (§7.2). Runs as the `extract_reading_metadata` job after save, never in the request path. `extract_reading_metadata/1.0.0` · `extraction/1.0.0` |
-| `extract_event_metadata` | 08 | standard | extraction payload | Same schema family as above (§6.4) |
+| `extract_event_metadata` | 08 ✅ | standard | event extraction payload | Same family as above (`extractionPayloadSchema` + `event_type`, `importance`); materialised by the same code keyed `life_event`. Runs as the `extract_event_metadata` job after save, never in the request path. `extract_event_metadata/1.0.0` · `event_extraction/1.0.0` |
 | `propose_entity_candidates` | 06 (folded) | fast | — | Folded into `extract_reading_metadata`'s `entities[]` (one call per save instead of two); resolution is decided in `domain/entities/resolve.ts`. The `TaskId` stays reserved. |
 | `propose_journey` | 07 ✅ | standard | title + rationale + confidence band | Naming only; assignment decided in `domain/journeys`. Runs as the `propose_journey` job after discovery (consent + `journey_autocreate`), never in the request path; a user rename pins the title (`title_source = 'user'`); `low` confidence keeps the placeholder. Context is the minimum (§11): dates, questions, resolved entities from `entityContextForObjects`, theme labels — no notes. `propose_journey/1.0.0` · `journey_proposal/1.0.0` |
-| `explain_correlation` | 08 | fast | 1–2 sentence reason | Explains a score the code computed; may not invent the link |
+| `explain_correlation` | 08 ✅ | fast | one hedged sentence | Puts the engine's `reasons` into words for an *offered* link; writes the `explanation` column and nothing else (structurally asserted). Register-checked: no numbers, no "predicted / foresaw / confirmed / will", no card talk; a failing sentence is dropped and the deterministic reasons stay. Runs as the `explain_correlation` job the correlation run queues (consent + `correlation_suggestions`). `explain_correlation/1.0.0` · `correlation_explanation/1.0.0` |
 | `parse_history_query` | 09 | fast | intent, time range, entities, journey hints | Step 1 of §8.1 |
 | `answer_from_evidence` | 09 | deep | answer + citations + sufficiency | Citations validated against the package |
 | `summarize_period` | 10 | standard | summary + highlights + source IDs | Source IDs must be a subset of inputs |
@@ -185,6 +185,27 @@ itself while work remains (`pnpm jobs:reprocess`).
 Prompt context for later tasks takes entities only from `src/memory/context.ts`
 (`auto` and `user` resolutions — never `tentative`, asserted by a test).
 
+## extract_event_metadata and explain_correlation — the runs (Phase 08)
+
+`src/events/extract.ts` (`runEventExtraction`) is the reading run's sibling with the same
+six-step contract (exists and not deleted → consent + `ai_extraction` → freshness by
+schema, `metadata_version` and the hash of description + note → `pending` row before the
+call → validated payload → materialise-then-complete). The prompt sends the sentence, the
+note and the date — nothing else. `event_type` and `importance` are promoted onto
+`life_events`; entities and themes go through the same resolver and tables as a reading's.
+The handler (`extract_event_metadata` job) queues the model-free `correlate_object` job
+whatever the outcome, so an event without consent still gets `correlated_at` set and an
+honest "nothing found".
+
+`src/correlation/run.ts` (`correlateObject`) is **not** an AI task: it scores with
+`domain/correlation` and writes `links`. For each newly offered link it queues
+`explain_correlation`; `src/correlation/explain.ts` (`runExplainCorrelation`) gates on
+consent and the flag, refuses rejected links, sends the two entries' own words plus the
+band and the reasons (minimum context, §11), validates the sentence
+(`explanationIssues`), and updates `explanation` + provenance only. The mock explainer
+joins the reasons into one hedged sentence and adds nothing — which is what the real prompt
+is told to do.
+
 ## Write gate
 
 The mechanism behind invariant 7 / §9.2.
@@ -209,9 +230,17 @@ const MODEL_ALLOWED: FactStatus[] = ['INFERRED_EVENT','TAROT_INTERPRETATION',
   structurally by the invariant test).
 - Tests: attempt `CONFIRMED_FACT` through `modelWrite()` → rejected; promote an `INFERRED_EVENT` via
   user confirmation → allowed and audited; a model-authored link may never be born `confirmed`.
+- Phase 08 tables: `life_events.fact_status` is `CONFIRMED_FACT | INFERRED_EVENT` by check with
+  `confirmed_at` tied to it, and the RLS insert policy admits only confirmed user events from
+  a session; `outcomes.recorded_by = 'user'` and `fact_status = 'CONFIRMED_FACT'` are fixed by
+  check — no code path, not even the service role, can record an outcome for a model;
+  `links.created_by ∈ {user, rule}` and a decided `state` ⇔ `user_acted_at`. The correlation
+  run inserts `pending` rule rows only; the explainer touches prose columns only (both
+  asserted structurally in `model-cannot-create-confirmed-fact`).
 - Related invariant (§10 no self-validating loops): a `links` row may not use an `interpretation` or
-  `period_summary` as its sole evidence for a real-life event. Enforced in the correlation builder and
-  asserted by a test.
+  `period_summary` as its sole evidence for a real-life event. Enforced in the correlation engine —
+  generated-provenance evidence is dropped before scoring — and asserted by
+  `summary-never-sole-evidence`.
 
 ## Failure handling (§13 AI resilience)
 

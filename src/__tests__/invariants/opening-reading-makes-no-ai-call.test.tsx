@@ -73,6 +73,15 @@ const ENTRY_POINTS = [
   'src/ui/components/journey-timeline.tsx',
   'src/ui/components/theme-progression.tsx',
   'src/ui/components/recurring-symbols.tsx',
+  // Phase 08: events, outcomes, connections — pages, actions, media route, query layer and
+  // the model-free correlation run. Extraction and explanation are reached only through the
+  // lazy registry.
+  'app/(app)/event',
+  'app/api/events',
+  'src/db/queries/events.ts',
+  'src/correlation/run.ts',
+  'src/correlation/features.ts',
+  'src/domain/correlation/score.ts',
 ];
 
 function listFiles(p: string): string[] {
@@ -205,9 +214,18 @@ describe('opening-reading-makes-no-ai-call', () => {
     expect(graph.has(path.resolve(ROOT, 'src/journeys/discover.ts'))).toBe(true);
     expect(graph.has(path.resolve(ROOT, 'src/journeys/propose.ts'))).toBe(false);
     expect(graph.has(path.resolve(ROOT, 'src/jobs/handlers/propose-journey.ts'))).toBe(false);
+    // Phase 08: the event pages, the query layer and the model-free correlation run are on
+    // the graph; event extraction and the explainer are not.
+    expect(graph.has(path.resolve(ROOT, 'src/db/queries/events.ts'))).toBe(true);
+    expect(graph.has(path.resolve(ROOT, 'src/correlation/run.ts'))).toBe(true);
+    expect(graph.has(path.resolve(ROOT, 'src/domain/correlation/score.ts'))).toBe(true);
+    expect(graph.has(path.resolve(ROOT, 'src/correlation/explain.ts'))).toBe(false);
+    expect(graph.has(path.resolve(ROOT, 'src/events/extract.ts'))).toBe(false);
+    expect(graph.has(path.resolve(ROOT, 'src/jobs/handlers/extract-event.ts'))).toBe(false);
+    expect(graph.has(path.resolve(ROOT, 'src/jobs/handlers/explain-correlation.ts'))).toBe(false);
     const registry = readFileSync(LAZY_REGISTRY, 'utf8');
     expect(registry).not.toMatch(
-      /^import .*(extract-reading|reprocess-extractions|propose-journey)/m,
+      /^import .*(extract-reading|reprocess-extractions|propose-journey|extract-event|explain-correlation|correlate-object)/m,
     );
   });
 

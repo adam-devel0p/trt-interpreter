@@ -7,7 +7,7 @@ import { ENTITY_KINDS, THEME_CATEGORIES } from '@/domain/extraction/schema';
 import { LIFE_AREAS } from '@/domain/readings/types';
 import { themeSlugFor } from '@/domain/extraction/overrides';
 import { logger } from '@/observability/logger';
-import { materializeReading, type MaterializeResult } from './materialize';
+import { materializeObject, type MaterializeResult, type MemoryObjectType } from './materialize';
 
 /**
  * User corrections to extracted metadata (FR-26). Each correction is one `metadata_overrides`
@@ -67,49 +67,92 @@ export async function applyCorrection(
   userId: string,
   readingId: string,
   raw: unknown,
+  objectType: MemoryObjectType = 'reading',
 ): Promise<{ correction: Correction['type']; materialized: MaterializeResult }> {
   const c = correctionSchema.parse(raw);
   switch (c.type) {
     case 'set_life_area':
-      await upsertOverride(client, userId, readingId, overrideKey.lifeArea(), {
-        kind: 'life_area',
-        value: c.value,
-      });
+      await upsertOverride(
+        client,
+        userId,
+        readingId,
+        overrideKey.lifeArea(),
+        {
+          kind: 'life_area',
+          value: c.value,
+        },
+        objectType,
+      );
       break;
     case 'dismiss_theme':
-      await upsertOverride(client, userId, readingId, overrideKey.theme(c.slug), {
-        kind: 'theme',
-        state: 'dismissed',
-      });
+      await upsertOverride(
+        client,
+        userId,
+        readingId,
+        overrideKey.theme(c.slug),
+        {
+          kind: 'theme',
+          state: 'dismissed',
+        },
+        objectType,
+      );
       break;
     case 'confirm_theme':
-      await upsertOverride(client, userId, readingId, overrideKey.theme(c.slug), {
-        kind: 'theme',
-        state: 'confirmed',
-      });
+      await upsertOverride(
+        client,
+        userId,
+        readingId,
+        overrideKey.theme(c.slug),
+        {
+          kind: 'theme',
+          state: 'confirmed',
+        },
+        objectType,
+      );
       break;
     case 'add_theme': {
       const slug = themeSlugFor(c.label);
-      await upsertOverride(client, userId, readingId, overrideKey.theme(slug), {
-        kind: 'theme',
-        state: 'added',
-        label: c.label,
-        ...(c.category ? { category: c.category } : {}),
-      });
+      await upsertOverride(
+        client,
+        userId,
+        readingId,
+        overrideKey.theme(slug),
+        {
+          kind: 'theme',
+          state: 'added',
+          label: c.label,
+          ...(c.category ? { category: c.category } : {}),
+        },
+        objectType,
+      );
       break;
     }
     case 'dismiss_entity':
-      await upsertOverride(client, userId, readingId, overrideKey.entity(c.mention), {
-        kind: 'entity',
-        state: 'dismissed',
-      });
+      await upsertOverride(
+        client,
+        userId,
+        readingId,
+        overrideKey.entity(c.mention),
+        {
+          kind: 'entity',
+          state: 'dismissed',
+        },
+        objectType,
+      );
       break;
     case 'link_entity':
-      await upsertOverride(client, userId, readingId, overrideKey.entity(c.mention), {
-        kind: 'entity',
-        state: 'linked',
-        entityId: c.entityId,
-      });
+      await upsertOverride(
+        client,
+        userId,
+        readingId,
+        overrideKey.entity(c.mention),
+        {
+          kind: 'entity',
+          state: 'linked',
+          entityId: c.entityId,
+        },
+        objectType,
+      );
       break;
     case 'new_entity': {
       const created = await createEntity(client, userId, {
@@ -117,47 +160,82 @@ export async function applyCorrection(
         kind: c.kind,
         alias: c.mention,
       });
-      await upsertOverride(client, userId, readingId, overrideKey.entity(c.mention), {
-        kind: 'entity',
-        state: 'linked',
-        entityId: created.id,
-      });
+      await upsertOverride(
+        client,
+        userId,
+        readingId,
+        overrideKey.entity(c.mention),
+        {
+          kind: 'entity',
+          state: 'linked',
+          entityId: created.id,
+        },
+        objectType,
+      );
       break;
     }
     case 'dismiss_possibility':
-      await upsertOverride(client, userId, readingId, `possibilities/${c.key}`, {
-        kind: 'possibility',
-        state: 'dismissed',
-      });
+      await upsertOverride(
+        client,
+        userId,
+        readingId,
+        `possibilities/${c.key}`,
+        {
+          kind: 'possibility',
+          state: 'dismissed',
+        },
+        objectType,
+      );
       break;
     case 'edit_possibility':
-      await upsertOverride(client, userId, readingId, `possibilities/${c.key}`, {
-        kind: 'possibility',
-        state: 'edited',
-        text: c.text,
-      });
+      await upsertOverride(
+        client,
+        userId,
+        readingId,
+        `possibilities/${c.key}`,
+        {
+          kind: 'possibility',
+          state: 'edited',
+          text: c.text,
+        },
+        objectType,
+      );
       break;
     case 'dismiss_timeframe':
-      await upsertOverride(client, userId, readingId, overrideKey.timeframe(), {
-        kind: 'timeframe',
-        state: 'dismissed',
-      });
+      await upsertOverride(
+        client,
+        userId,
+        readingId,
+        overrideKey.timeframe(),
+        {
+          kind: 'timeframe',
+          state: 'dismissed',
+        },
+        objectType,
+      );
       break;
     case 'edit_timeframe':
-      await upsertOverride(client, userId, readingId, overrideKey.timeframe(), {
-        kind: 'timeframe',
-        state: 'edited',
-        text: c.text,
-      });
+      await upsertOverride(
+        client,
+        userId,
+        readingId,
+        overrideKey.timeframe(),
+        {
+          kind: 'timeframe',
+          state: 'edited',
+          text: c.text,
+        },
+        objectType,
+      );
       break;
     case 'clear':
-      await deleteOverride(client, readingId, c.fieldPath);
+      await deleteOverride(client, readingId, c.fieldPath, objectType);
       break;
   }
-  const materialized = await materializeReading(readingId);
+  const materialized = await materializeObject(objectType, readingId);
   logger.info('memory.correction.applied', {
     userId,
-    objectType: 'reading',
+    objectType,
     objectId: readingId,
     status: c.type,
   });

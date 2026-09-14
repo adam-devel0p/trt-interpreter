@@ -1,0 +1,15 @@
+{
+  "name": "relationship-quiet",
+  "description": "A quiet relationship event: a named partner and a conversation. Expect the person, a relationship type, a relational theme and a low-to-middle importance.",
+  "description_text": "Maya and I finally talked about the distance.",
+  "note": null,
+  "occurred_on": "2026-06-14",
+  "expect": {
+    "event_type": "relationship",
+    "importance_min": 2,
+    "entities": [{ "mention": "Maya", "kind": "person" }],
+    "forbidden_mentions": ["I", "we"],
+    "themes_any": ["Communication", "Distance"],
+    "possibilities_max": 0
+  }
+}

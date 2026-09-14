@@ -3,6 +3,9 @@ import type { JobHandler } from '../types';
 import { exportUserData } from './export-user-data';
 import { noopEcho } from './noop-echo';
 import {
+  correlateObjectPayload,
+  explainCorrelationPayload,
+  extractEventPayload,
   extractReadingPayload,
   proposeJourneyPayload,
   reprocessExtractionsPayload,
@@ -11,8 +14,9 @@ import { purgeDeleted } from './purge-deleted';
 
 /**
  * Handler registry. Phase 05 added `purge_deleted` and `export_user_data`; Phase 06 adds
- * `extract_reading_metadata` and `reprocess_extractions`; Phase 07 `propose_journey`. The AI-backed handlers are loaded
- * lazily: their payload schemas live in `./payloads` so `enqueue()` can validate without the
+ * `extract_reading_metadata` and `reprocess_extractions`; Phase 07 `propose_journey`; Phase 08
+ * `extract_event_metadata`, `correlate_object` (model-free, but it enqueues) and
+ * `explain_correlation`. The AI-backed handlers are loaded lazily: their payload schemas live in `./payloads` so `enqueue()` can validate without the
  * model layer on the import graph, and the worker only loads the module when it claims a job
  * of that kind. A job whose kind is not registered is marked dead immediately.
  */
@@ -43,6 +47,21 @@ const entries: HandlerEntry[] = [
     kind: 'propose_journey',
     schema: proposeJourneyPayload,
     load: async () => (await import('./propose-journey')).proposeJourney as JobHandler,
+  },
+  {
+    kind: 'extract_event_metadata',
+    schema: extractEventPayload,
+    load: async () => (await import('./extract-event')).extractEvent as JobHandler,
+  },
+  {
+    kind: 'correlate_object',
+    schema: correlateObjectPayload,
+    load: async () => (await import('./correlate-object')).correlateObjectJob as JobHandler,
+  },
+  {
+    kind: 'explain_correlation',
+    schema: explainCorrelationPayload,
+    load: async () => (await import('./explain-correlation')).explainCorrelation as JobHandler,
   },
   {
     kind: 'reprocess_extractions',

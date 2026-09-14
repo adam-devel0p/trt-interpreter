@@ -18,3 +18,11 @@ export async function enableJourneys(userId: string): Promise<void> {
     values (${userId}, 'journey_autocreate', true, 'rollout')
     on conflict (user_id, flag) do update set enabled = true`;
 }
+
+/** Phase 08 fixtures: connection suggestions are flag-gated (`correlation_suggestions`). */
+export async function enableCorrelation(userId: string): Promise<void> {
+  await platformSql()`
+    insert into public.user_flags (user_id, flag, enabled, set_by)
+    values (${userId}, 'correlation_suggestions', true, 'rollout')
+    on conflict (user_id, flag) do update set enabled = true`;
+}

@@ -73,6 +73,28 @@ describe('export (integration)', () => {
     // Phase 07: the deleted reading also sat in the journey; its membership must not export.
     const { addReadingToJourney } = await import('@/db/queries/journeys');
     await addReadingToJourney(user.client, user.id, journey!, gone.id);
+    // Phase 08: a life event logged about reading A (a user-confirmed connection), an outcome
+    // pointing at it, and an event on the deleted reading that must export without the link.
+    const { createEvent, recordOutcome } = await import('@/db/queries/events');
+    const eventId = await createEvent(user.client, user.id, {
+      description: 'We moved to Leeds.',
+      occurred_on: '2026-09-01',
+      note: 'Keys on the first.',
+      reading_id: a.id,
+    });
+    await recordOutcome(user.client, user.id, {
+      readingId: a.id,
+      predictionId: null,
+      lifeEventId: eventId,
+      status: 'happened',
+      note: null,
+    });
+    const orphanEvent = await createEvent(user.client, user.id, {
+      description: 'Something about the deleted one.',
+      occurred_on: '2026-09-02',
+      note: null,
+      reading_id: gone.id,
+    });
 
     const exportId = await requestExport(user.client, user.id);
     const job = await enqueue('export_user_data', { exportId }, { userId: user.id });
@@ -224,7 +246,47 @@ describe('export (integration)', () => {
     expect(
       links.some((l) => l.kind === 'journey_holds' && l.from.id === journey && l.to.id === a.id),
     ).toBe(true);
-    expect(manifest.schema_version).toBe('export/1.2.0');
+    // Phase 08: events, outcomes and connections, with the deleted reading scrubbed.
+    const events = files['life_events.json'] as {
+      id: string;
+      reading_id: string | null;
+      fact_status: string;
+    }[];
+    expect(events.find((e) => e.id === eventId)).toMatchObject({
+      reading_id: a.id,
+      fact_status: 'CONFIRMED_FACT',
+    });
+    expect(events.find((e) => e.id === orphanEvent)?.reading_id).toBeNull();
+    const outcomesOut = files['outcomes.json'] as {
+      reading_id: string;
+      life_event_id: string | null;
+      recorded_by: string;
+    }[];
+    expect(outcomesOut).toEqual([
+      expect.objectContaining({ reading_id: a.id, life_event_id: eventId, recorded_by: 'user' }),
+    ]);
+    const connections = files['connections.json'] as {
+      from_id: string;
+      to_id: string;
+      state: string;
+      created_by: string;
+    }[];
+    expect(connections).toEqual([
+      expect.objectContaining({
+        from_id: a.id,
+        to_id: eventId,
+        state: 'confirmed',
+        created_by: 'user',
+      }),
+    ]);
+    expect(
+      links.some(
+        (l) => l.kind === 'event_about_reading' && l.from.id === eventId && l.to.id === a.id,
+      ),
+    ).toBe(true);
+    expect(links.some((l) => l.kind === 'outcome_event' && l.to.id === eventId)).toBe(true);
+    expect(links.some((l) => l.kind === 'connection_to' && l.to.id === eventId)).toBe(true);
+    expect(manifest.schema_version).toBe('export/1.3.0');
     expect(JSON.stringify(files)).not.toContain(gone.id);
     expect(JSON.stringify(files)).not.toContain('Deleted before export');
     expect(JSON.stringify(files)).not.toMatch(/ai_calls/);

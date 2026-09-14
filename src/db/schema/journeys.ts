@@ -28,7 +28,7 @@ import { readings } from './readings';
  * and a removed member stays as a `removed` row so assignment never re-adds it.
  *
  * Policies: keyed on `user_id = auth.uid()`; members and progression steps additionally
- * require the parent journey (and, for reading members, the reading) to be the caller's.
+ * require the parent journey and the member's object (reading or life event) to be the caller's.
  * Rule-side writes come from the assignment step after extraction (service role).
  */
 
@@ -97,8 +97,9 @@ export type Journey = typeof journeys.$inferSelect;
 
 const ownsJourney = (t: { journeyId: AnyPgColumn }) =>
   sql`exists (select 1 from ${journeys} j where j.id = ${t.journeyId} and j.user_id = ${authUid})`;
+/** A member's object — reading or (Phase 08) life event — must be the caller's. */
 const ownsObject = (t: { objectType: AnyPgColumn; objectId: AnyPgColumn }) =>
-  sql`(${t.objectType} <> 'reading' or exists (select 1 from ${readings} r where r.id = ${t.objectId} and r.user_id = ${authUid}))`;
+  sql`((${t.objectType} = 'reading' and exists (select 1 from ${readings} r where r.id = ${t.objectId} and r.user_id = ${authUid})) or (${t.objectType} = 'life_event' and exists (select 1 from life_events e where e.id = ${t.objectId} and e.user_id = ${authUid})))`;
 
 /**
  * Membership. `state`: `auto` (affinity ≥ 0.70, rule-added, removable in one tap), `pending`

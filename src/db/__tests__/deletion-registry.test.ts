@@ -39,6 +39,10 @@ describe('deletion registry', () => {
         'journeys',
         'journey_members',
         'journey_theme_progression',
+        'life_events',
+        'event_media',
+        'outcomes',
+        'links',
       ]),
     );
     // Simulate a new user-owned table that nobody registered.
